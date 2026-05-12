@@ -1,198 +1,149 @@
 import { createServerClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
-// Map closer names to dupla
 const closerToDupla = (closer) => {
   if (closer === 'Gabriela Roma') return 'lidia_gabi';
   if (closer === 'Diego Santos') return 'joao_diego';
   return 'michel_emerson';
 };
 
-// Map to_stage to metric name
 const stageToMetric = (stage) => {
-  const mapping = {
+  const map = {
     '2. Primeiro Contato': 'primeiro_contato',
     '3. Apresentacao': 'apresentacao',
     '6. Negociacao': 'negociacao',
     '9. Contrato Assinado': 'fechadas',
   };
-  return mapping[stage] || null;
+  return map[stage] || null;
 };
 
-// Initialize realized structure
-const initializeRealizedMonth = () => ({
-  total: {
-    primeiro_contato: 0,
-    apresentacao: 0,
-    negociacao: 0,
-    fechadas: 0,
-    lojas: 0,
-  },
-  lidia_gabi: {
-    primeiro_contato: 0,
-    apresentacao: 0,
-    negociacao: 0,
-    fechadas: 0,
-    lojas: 0,
-  },
-  joao_diego: {
-    primeiro_contato: 0,
-    apresentacao: 0,
-    negociacao: 0,
-    fechadas: 0,
-    lojas: 0,
-  },
-  michel_emerson: {
-    primeiro_contato: 0,
-    apresentacao: 0,
-    negociacao: 0,
-    fechadas: 0,
-    lojas: 0,
-  },
-});
+const emptyMetrics = () => ({ primeiro_contato: 0, apresentacao: 0, negociacao: 0, fechadas: 0, lojas: 0 });
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const month = parseInt(searchParams.get('month') || '1', 10);
-    const year = parseInt(searchParams.get('year') || new Date().getFullYear(), 10);
-
+    const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1), 10);
+    const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()), 10);
     const supabase = createServerClient();
 
-    // 1. Get ALL funnel metas (jan/2026 through mar/2027)
+    // 1. Get ALL funnel metas
     const { data: metas, error: metasError } = await supabase
       .from('funnel_metas')
       .select('*')
       .order('year', { ascending: true })
       .order('month', { ascending: true });
-
     if (metasError) throw metasError;
 
-    // 2. Get pipeline history for product='3s' with relevant stages
-    const stages = [
-      '2. Primeiro Contato',
-      '3. Apresentacao',
-      '6. Negociacao',
-      '9. Contrato Assinado',
-    ];
-
-    const { data: historyData, error: historyError } = await supabase
-      .from('pipeline_history')
-      .select('brand_id, to_stage, created_at')
-      .eq('product', '3s')
-      .in('to_stage', stages);
-
-    if (historyError) throw historyError;
-
-    // 3. Get brand data (id, responsavel_closer, qtd_lojas_fisicas, base_elegivel)
-    const brandIds = [...new Set(historyData.map((h) => h.brand_id))];
-
-    let brandData = [];
-    if (brandIds.length > 0) {
-      const { data: brands, error: brandsError } = await supabase
+    // 2. Get ALL brands with their pipeline stage (for eligible count)
+    // Supabase limits to 1000 rows, so we paginate
+    let allBrands = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: batch, error: bErr } = await supabase
         .from('brands')
-        .select('id, responsavel_closer, qtd_lojas_fisicas, base_elegivel')
-        .in('id', brandIds);
-
-      if (brandsError) throw brandsError;
-      brandData = brands;
+        .select('id, marca, responsavel_closer, qtd_lojas_fisicas, base_elegivel')
+        .range(from, from + pageSize - 1);
+      if (bErr) throw bErr;
+      if (!batch || batch.length === 0) break;
+      allBrands = allBrands.concat(batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
     }
 
-    // Create brand lookup
-    const brandLookup = {};
-    brandData.forEach((b) => {
-      brandLookup[b.id] = b;
-    });
-
-    // 4. Get eligible brands count
-    // Join brands with pipelines where product='3s', base_elegivel='FY27', stage != '13. Reativado'
-    const { data: eligibleBrands, error: eligibleError } = await supabase
-      .from('brands')
-      .select('id, responsavel_closer, base_elegivel')
-      .eq('base_elegivel', 'FY27');
-
-    if (eligibleError) throw eligibleError;
-
-    // Get pipeline data for eligible brands
-    const eligibleBrandIds = eligibleBrands.map((b) => b.id);
-    let pipelineData = [];
-    if (eligibleBrandIds.length > 0) {
-      const { data: pipelines, error: pipelinesError } = await supabase
+    // 3. Get ALL pipelines for product 3s
+    let allPipelines = [];
+    from = 0;
+    while (true) {
+      const { data: batch, error: pErr } = await supabase
         .from('pipelines')
         .select('brand_id, stage')
         .eq('product', '3s')
-        .in('brand_id', eligibleBrandIds)
-        .neq('stage', '13. Reativado');
-
-      if (pipelinesError) throw pipelinesError;
-      pipelineData = pipelines;
+        .range(from, from + pageSize - 1);
+      if (pErr) throw pErr;
+      if (!batch || batch.length === 0) break;
+      allPipelines = allPipelines.concat(batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
     }
 
-    // Create pipeline lookup
+    // Build pipeline lookup: brand_id -> stage
     const pipelineLookup = {};
-    pipelineData.forEach((p) => {
-      pipelineLookup[p.brand_id] = true;
+    allPipelines.forEach(p => { pipelineLookup[p.brand_id] = p.stage; });
+
+    // 4. Count eligible brands (COUNTUNIQUEIFS equivalent)
+    // Eligible = base_elegivel contains 'FY27' AND stage != '13. Reativado'
+    // Count unique marca names per closer/dupla
+    const eligibleByDupla = { total: new Set(), lidia_gabi: new Set(), joao_diego: new Set(), michel_emerson: new Set() };
+
+    allBrands.forEach(b => {
+      if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
+      const stage = pipelineLookup[b.id];
+      if (stage === '13. Reativado') return;
+      // Count unique marca names
+      const dupla = closerToDupla(b.responsavel_closer);
+      eligibleByDupla.total.add(b.marca);
+      eligibleByDupla[dupla].add(b.marca);
     });
 
-    // Count eligible brands by dupla
-    const eligibleCounts = {
-      total: 0,
-      lidia_gabi: 0,
-      joao_diego: 0,
-      michel_emerson: 0,
+    const elegiveis = {
+      total: eligibleByDupla.total.size,
+      lidia_gabi: eligibleByDupla.lidia_gabi.size,
+      joao_diego: eligibleByDupla.joao_diego.size,
+      michel_emerson: eligibleByDupla.michel_emerson.size,
     };
 
-    eligibleBrands.forEach((brand) => {
-      if (pipelineLookup[brand.id]) {
-        eligibleCounts.total++;
-        const dupla = closerToDupla(brand.responsavel_closer);
-        eligibleCounts[dupla]++;
-      }
-    });
+    // 5. Get pipeline history for realized counts
+    const targetStages = ['2. Primeiro Contato', '3. Apresentacao', '6. Negociacao', '9. Contrato Assinado'];
+    let allHistory = [];
+    from = 0;
+    while (true) {
+      const { data: batch, error: hErr } = await supabase
+        .from('pipeline_history')
+        .select('brand_id, to_stage, created_at')
+        .eq('product', '3s')
+        .in('to_stage', targetStages)
+        .range(from, from + pageSize - 1);
+      if (hErr) throw hErr;
+      if (!batch || batch.length === 0) break;
+      allHistory = allHistory.concat(batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
 
-    // 5. Process pipeline history to build realized data
+    // Build brand lookup for history
+    const brandLookup = {};
+    allBrands.forEach(b => { brandLookup[b.id] = b; });
+
+    // Process history into realized data
     const realized = {};
-
-    historyData.forEach((entry) => {
+    allHistory.forEach(entry => {
       const brand = brandLookup[entry.brand_id];
-      if (!brand) return; // Skip if brand not found
+      if (!brand) return;
 
       const date = new Date(entry.created_at);
-      const entryMonth = date.getMonth() + 1;
-      const entryYear = date.getFullYear();
-      const yearMonth = `${entryYear}-${String(entryMonth).padStart(2, '0')}`;
+      const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-      // Initialize month if not exists
-      if (!realized[yearMonth]) {
-        realized[yearMonth] = initializeRealizedMonth();
+      if (!realized[ym]) {
+        realized[ym] = { total: emptyMetrics(), lidia_gabi: emptyMetrics(), joao_diego: emptyMetrics(), michel_emerson: emptyMetrics() };
       }
 
       const metric = stageToMetric(entry.to_stage);
       if (!metric) return;
 
       const dupla = closerToDupla(brand.responsavel_closer);
+      realized[ym].total[metric]++;
+      realized[ym][dupla][metric]++;
 
-      // Increment count
-      realized[yearMonth].total[metric]++;
-      realized[yearMonth][dupla][metric]++;
-
-      // Add lojas for fechadas
       if (metric === 'fechadas' && brand.qtd_lojas_fisicas) {
-        realized[yearMonth].total.lojas += brand.qtd_lojas_fisicas;
-        realized[yearMonth][dupla].lojas += brand.qtd_lojas_fisicas;
+        realized[ym].total.lojas += brand.qtd_lojas_fisicas;
+        realized[ym][dupla].lojas += brand.qtd_lojas_fisicas;
       }
     });
 
-    return NextResponse.json({
-      metas: metas || [],
-      realized,
-      elegiveis: eligibleCounts,
-    });
+    return NextResponse.json({ metas: metas || [], realized, elegiveis });
   } catch (error) {
     console.error('Scorecard API error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
