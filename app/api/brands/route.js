@@ -74,9 +74,14 @@ export async function GET(request) {
     brands.push({ ...active, _oldIds: oldIds });
   });
 
-  brands.sort((a, b) => (a.marca || '').localeCompare(b.marca || ''));
+  // IMPORTANT: Filter out any entry still showing as Reativado
+  // This handles cases where ALL entries for a marca are reativado,
+  // or single entries that are reativado without a matching active pair
+  const filtered = brands.filter(b => b.pipelines?.['3s']?.stage !== '13. Reativado');
 
-  return NextResponse.json({ brands, total: brands.length });
+  filtered.sort((a, b) => (a.marca || '').localeCompare(b.marca || ''));
+
+  return NextResponse.json({ brands: filtered, total: filtered.length });
 }
 
 // POST /api/brands - Create a new brand
