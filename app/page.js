@@ -532,4 +532,16 @@ export default function CRMPage() {
                       <span style={{ color: '#94a3b8' }}>{shortStage(h.from_stage)}</span>
                       <span style={{ margin: '0 6px', color: '#cbd5e1' }}>&rarr;</span>
                       <span style={{ fontWeight: 600, color: '#1e293b' }}>{shortStage(h.to_stage)}</span>
-                      <span style={{ marginLeft: 8, fontSize: 10, background: (PRODUCTS[h.product]?.color || '#6366f1') + '20', color: PRODUCTS[h.product]?.color || '#6366f1', padding: '1px 6px', borderRadius: 4 }}>{PRO
+<span style={{ marginLeft: 8, fontSize: 10, background: (PRODUCTS[h.product]?.color || '#6366f1') + '20', color: PRODUCTS[h.product]?.color || '#6366f1', padding: '1px 6px', borderRadius: 4 }}>{PRODUCTS[h.product]?.name || h.product}</span>
+                    </div>
+                    <div style={{ color: '#94a3b8', fontSize: 11 }}>{h.changed_by_name}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
