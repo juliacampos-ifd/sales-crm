@@ -203,7 +203,7 @@ export default function CRMPage() {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ width: 40, height: 40, border: '3px solid #e2e8f0', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+          <div style={{ width: 40, height: 40, border: '3px solid #e2e8f0', borderTopColor: '#EA1D2C', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
           <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
           <p style={{ color: '#64748b' }}>Carregando...</p>
         </div>
@@ -219,17 +219,17 @@ export default function CRMPage() {
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)' }}>
         <div style={{ background: '#fff', borderRadius: 24, padding: 48, width: 400, boxShadow: '0 25px 60px rgba(0,0,0,.3)' }}>
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
-            <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #EA1D2C, #DA5D69)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
               <Target size={28} color="#fff" />
             </div>
-            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#6366f1' }}>SalesCRM</h1>
+            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#EA1D2C' }}>SalesCRM</h1>
             <p style={{ margin: '4px 0 0', fontSize: 14, color: '#94a3b8' }}>3S | Saipos | Comer Fora | GetIn | Emilia Vision</p>
           </div>
           {loginError && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#dc2626' }}>{loginError}</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <input value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Email" onKeyDown={e => e.key === 'Enter' && handleLogin()} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
             <input type="password" value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="Senha" onKeyDown={e => e.key === 'Enter' && handleLogin()} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-            <button onClick={handleLogin} style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Entrar</button>
+            <button onClick={handleLogin} style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #EA1D2C, #DA5D69)', color: '#fff', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Entrar</button>
           </div>
         </div>
       </div>
@@ -240,7 +240,7 @@ export default function CRMPage() {
   // HELPERS
   // ══════════════════════════════════════════════════════════════
   const NavBtn = ({ id, icon: Icon, label }) => (
-    <button onClick={() => setView(id)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#6366f1' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+    <button onClick={() => setView(id)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
       <Icon size={16} /> {label}
     </button>
   );
@@ -285,8 +285,8 @@ export default function CRMPage() {
       {/* HEADER */}
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '10px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 40 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Target size={18} color="#fff" /></div>
-          <span style={{ fontSize: 18, fontWeight: 800, color: '#6366f1' }}>SalesCRM</span>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #EA1D2C, #DA5D69)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Target size={18} color="#fff" /></div>
+          <span style={{ fontSize: 18, fontWeight: 800, color: '#EA1D2C' }}>SalesCRM</span>
         </div>
         <div style={{ display: 'flex', gap: 4, background: '#f1f5f9', borderRadius: 10, padding: 3 }}>
           <NavBtn id="pipeline" icon={LayoutGrid} label="Pipeline" />
@@ -298,7 +298,7 @@ export default function CRMPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, background: profile?.role === 'admin' ? '#ef4444' : profile?.role === 'gestor' ? '#f59e0b' : '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: profile?.role === 'admin' ? '#ef4444' : profile?.role === 'gestor' ? '#f59e0b' : '#EA1D2C', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {profile?.role === 'admin' ? <Shield size={14} color="#fff" /> : profile?.role === 'gestor' ? <UserCheck size={14} color="#fff" /> : <Users size={14} color="#fff" />}
             </div>
             <div>
@@ -306,7 +306,7 @@ export default function CRMPage() {
               <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>{profile?.role}</div>
             </div>
           </div>
-          {saving && <div style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>Salvando...</div>}
+          {saving && <div style={{ fontSize: 11, color: '#EA1D2C', fontWeight: 600 }}>Salvando...</div>}
           <button onClick={handleLogout} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, padding: 6, cursor: 'pointer' }}><LogOut size={16} color="#94a3b8" /></button>
         </div>
       </div>
@@ -403,7 +403,7 @@ export default function CRMPage() {
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.estado || '—'}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.qtd_lojas_fisicas || '—'}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
-                        <button onClick={e => { e.stopPropagation(); setSelectedBrand(b); setDetailTab('pipelines'); loadHistory(b.id); }} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}><Eye size={13} color="#6366f1" /></button>
+                        <button onClick={e => { e.stopPropagation(); setSelectedBrand(b); setDetailTab('pipelines'); loadHistory(b.id); }} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}><Eye size={13} color="#EA1D2C" /></button>
                       </td>
                     </tr>
                   ))}
@@ -417,7 +417,7 @@ export default function CRMPage() {
         {view === 'dashboard' && (
           <div>
             <div style={{ display: 'flex', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
-              <KPI icon={Building2} label="Total Marcas" value={metrics.total} color="#6366f1" />
+              <KPI icon={Building2} label="Total Marcas" value={metrics.total} color="#EA1D2C" />
               <KPI icon={Check} label="Contratos 3S" value={metrics.won3s} sub="Contrato assinado" color="#22c55e" />
               <KPI icon={AlertCircle} label="Perdidos 3S" value={metrics.lost3s} color="#ef4444" />
             </div>
@@ -425,13 +425,13 @@ export default function CRMPage() {
               <div style={{ background: '#fff', borderRadius: 14, padding: 20, border: '1px solid #e2e8f0' }}>
                 <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Marcas Ativas por Produto</h4>
                 <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={Object.entries(metrics.activeByProduct).map(([k, v]) => ({ name: PRODUCTS[k]?.name || k, count: v, fill: PRODUCTS[k]?.color || '#6366f1' }))}>
+                  <BarChart data={Object.entries(metrics.activeByProduct).map(([k, v]) => ({ name: PRODUCTS[k]?.name || k, count: v, fill: PRODUCTS[k]?.color || '#EA1D2C' }))}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} />
                     <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
                     <Tooltip />
                     <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {Object.keys(metrics.activeByProduct).map((k, i) => <Cell key={i} fill={PRODUCTS[k]?.color || '#6366f1'} />)}
+                      {Object.keys(metrics.activeByProduct).map((k, i) => <Cell key={i} fill={PRODUCTS[k]?.color || '#EA1D2C'} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -444,7 +444,7 @@ export default function CRMPage() {
                     <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} />
                     <YAxis dataKey="name" type="category" width={30} tick={{ fontSize: 11, fill: '#64748b' }} />
                     <Tooltip />
-                    <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="value" fill="#DA5D69" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -460,7 +460,7 @@ export default function CRMPage() {
             <button onClick={() => setSelectedBrand(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}><ArrowLeft size={16} /> Voltar</button>
             <div style={{ display: 'flex', gap: 6 }}>
               {['info', 'pipelines', 'historico'].map(t => (
-                <button key={t} onClick={() => setDetailTab(t)} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: detailTab === t ? '#6366f1' : '#f1f5f9', color: detailTab === t ? '#fff' : '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                <button key={t} onClick={() => setDetailTab(t)} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: detailTab === t ? '#EA1D2C' : '#f1f5f9', color: detailTab === t ? '#fff' : '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                   {t === 'info' ? 'Info' : t === 'pipelines' ? 'Produtos' : 'Historico'}
                 </button>
               ))}
@@ -532,7 +532,7 @@ export default function CRMPage() {
                       <span style={{ color: '#94a3b8' }}>{shortStage(h.from_stage)}</span>
                       <span style={{ margin: '0 6px', color: '#cbd5e1' }}>&rarr;</span>
                       <span style={{ fontWeight: 600, color: '#1e293b' }}>{shortStage(h.to_stage)}</span>
-<span style={{ marginLeft: 8, fontSize: 10, background: (PRODUCTS[h.product]?.color || '#6366f1') + '20', color: PRODUCTS[h.product]?.color || '#6366f1', padding: '1px 6px', borderRadius: 4 }}>{PRODUCTS[h.product]?.name || h.product}</span>
+<span style={{ marginLeft: 8, fontSize: 10, background: (PRODUCTS[h.product]?.color || '#EA1D2C') + '20', color: PRODUCTS[h.product]?.color || '#EA1D2C', padding: '1px 6px', borderRadius: 4 }}>{PRODUCTS[h.product]?.name || h.product}</span>
                     </div>
                     <div style={{ color: '#94a3b8', fontSize: 11 }}>{h.changed_by_name}</div>
                   </div>
