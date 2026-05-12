@@ -292,6 +292,9 @@ export default function CRMPage() {
           <NavBtn id="pipeline" icon={LayoutGrid} label="Pipeline" />
           <NavBtn id="contacts" icon={Users} label="Marcas" />
           <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
+          <a href="/scorecard" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
+            <Target size={16} /> Scorecard
+          </a>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -529,16 +532,4 @@ export default function CRMPage() {
                       <span style={{ color: '#94a3b8' }}>{shortStage(h.from_stage)}</span>
                       <span style={{ margin: '0 6px', color: '#cbd5e1' }}>&rarr;</span>
                       <span style={{ fontWeight: 600, color: '#1e293b' }}>{shortStage(h.to_stage)}</span>
-                      <span style={{ marginLeft: 8, fontSize: 10, background: (PRODUCTS[h.product]?.color || '#6366f1') + '20', color: PRODUCTS[h.product]?.color || '#6366f1', padding: '1px 6px', borderRadius: 4 }}>{PRODUCTS[h.product]?.name || h.product}</span>
-                    </div>
-                    <div style={{ color: '#94a3b8', fontSize: 11 }}>{h.changed_by_name}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                      <span style={{ marginLeft: 8, fontSize: 10, background: (PRODUCTS[h.product]?.color || '#6366f1') + '20', color: PRODUCTS[h.product]?.color || '#6366f1', padding: '1px 6px', borderRadius: 4 }}>{PRO
