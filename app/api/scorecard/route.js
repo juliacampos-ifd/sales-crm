@@ -36,6 +36,12 @@ async function paginate(sb, table, cols, filters) {
   return all;
 }
 
+// Check if brand is P or M classification (only these count for scorecard)
+const isPorM = (b) => {
+  const c = (b.classificacao || '').trim().toUpperCase();
+  return c === 'P' || c === 'M';
+};
+
 export async function GET(request) {
   try {
     const sb = createServerClient();
@@ -44,7 +50,8 @@ export async function GET(request) {
       .order('year', { ascending: true }).order('month', { ascending: true });
     if (mErr) throw mErr;
 
-    const allBrands = await paginate(sb, 'brands', 'id,marca,responsavel_closer,qtd_lojas_fisicas,base_elegivel');
+    // Include classificacao in the query to filter P and M only
+    const allBrands = await paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,qtd_lojas_fisicas,base_elegivel');
     const allPipes = await paginate(sb, 'pipelines', 'brand_id,stage', [['product','3s']]);
 
     const pipeLk = {};
@@ -67,8 +74,10 @@ export async function GET(request) {
       group.forEach(b => { activeBrandId[b.id] = pick; });
     });
 
+    // Elegiveis: only P and M brands
     const eligS = { total: new Set(), lidia_gabi: new Set(), joao_diego: new Set(), michel_emerson: new Set() };
     allBrands.forEach(b => {
+      if (!isPorM(b)) return;
       if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
       if (pipeLk[b.id] === '13. Reativado') return;
       const d = closerToDupla(b.responsavel_closer);
@@ -91,6 +100,8 @@ export async function GET(request) {
     allHist.forEach(e => {
       const br = brandLk[e.brand_id];
       if (!br) return;
+      // Only count P and M brands in the scorecard
+      if (!isPorM(br)) return;
       const active = activeBrandId[e.brand_id];
       if (!active) return;
       const dt = new Date(e.created_at);
@@ -103,9 +114,7 @@ export async function GET(request) {
       if (realized._seen.has(dedupKey)) return;
       realized._seen.add(dedupKey);
       if (!realized[ym]) realized[ym] = { total: emptyM(), lidia_gabi: emptyM(), joao_diego: emptyM(), michel_emerson: emptyM() };
-      // FIX: Use the closer from the brand that OWNS this history entry (br),
-      // not the "active" brand record. This ensures that if Nippon's May entry
-      // belongs to Diego's brand_id, it maps to joao_diego correctly.
+      // Use the closer from the brand that OWNS this history entry
       const d = closerToDupla(br.responsavel_closer);
       realized[ym].total[metric]++; realized[ym][d][metric]++;
       if (metric === 'fechadas' && active.qtd_lojas_fisicas) { realized[ym].total.lojas += active.qtd_lojas_fisicas; realized[ym][d].lojas += active.qtd_lojas_fisicas; }
