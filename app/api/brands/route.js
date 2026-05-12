@@ -47,7 +47,7 @@ export async function GET(request) {
   }
 
   // Transform pipelines array into object keyed by product
-  const brands = data.map(brand => {
+  const transformed = data.map(brand => {
     const pipelinesObj = {};
     (brand.pipelines || []).forEach(p => {
       pipelinesObj[p.product] = { stage: p.stage, active: p.active, updated_at: p.updated_at };
@@ -55,7 +55,29 @@ export async function GET(request) {
     return { ...brand, pipelines: pipelinesObj };
   });
 
-  return NextResponse.json({ brands, total: count });
+  // Consolidate reactivated brands: same marca name -> merge into active entry
+  const byName = {};
+  transformed.forEach(b => {
+    const name = (b.marca || '').trim().toLowerCase();
+    if (!byName[name]) byName[name] = [];
+    byName[name].push(b);
+  });
+
+  const brands = [];
+  Object.values(byName).forEach(group => {
+    if (group.length === 1) { brands.push(group[0]); return; }
+    // Multiple entries: pick the active one (non-reativado), store old IDs
+    const active = group.find(b => {
+      const s = b.pipelines?.['3s']?.stage;
+      return s !== '13. Reativado';
+    }) || group[group.length - 1];
+    const oldIds = group.filter(b => b.id !== active.id).map(b => b.id);
+    brands.push({ ...active, _oldIds: oldIds });
+  });
+
+  brands.sort((a, b) => (a.marca || '').localeCompare(b.marca || ''));
+
+  return NextResponse.json({ brands, total: brands.length });
 }
 
 // POST /api/brands - Create a new brand
