@@ -1,15 +1,12 @@
 'use client';
-
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PRODUCTS, CLASSIFICACAO_COLORS, MONTH_NAMES, DUPLAS, getMonthBusinessDays, getMonthBusinessDaysMTD } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload } from 'lucide-react';
-
 // ====================================================================
 // MAIN CRM PAGE
 // ====================================================================
-
 export default function CRMPage() {
   // Auth
   const [user, setUser] = useState(null);
@@ -18,7 +15,6 @@ export default function CRMPage() {
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(true);
-
   // Data
   const [brands, setBrands] = useState([]);
   const [view, setView] = useState('pipeline');
@@ -32,7 +28,6 @@ export default function CRMPage() {
   const [brandHistory, setBrandHistory] = useState([]);
   const [showClosed, setShowClosed] = useState(false);
   const [saving, setSaving] = useState(false);
-
   // ── Auth check ──
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -42,7 +37,6 @@ export default function CRMPage() {
       }
       setLoading(false);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user);
@@ -52,28 +46,23 @@ export default function CRMPage() {
         setProfile(null);
       }
     });
-
     return () => subscription.unsubscribe();
   }, []);
-
   const loadProfile = async (userId) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (data) setProfile(data);
   };
-
   // ── Login ──
   const handleLogin = async () => {
     setLoginError('');
     const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPass });
     if (error) setLoginError('Email ou senha incorretos');
   };
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
   };
-
   // ── Load brands ──
   const loadBrands = useCallback(async () => {
     const params = new URLSearchParams();
@@ -82,16 +71,13 @@ export default function CRMPage() {
     if (filterEstado !== 'Todos') params.set('estado', filterEstado);
     if (filterBDR !== 'Todos') params.set('bdr', filterBDR);
     params.set('limit', '500');
-
     const res = await fetch(`/api/brands?${params}`);
     const data = await res.json();
     if (data.brands) setBrands(data.brands);
   }, [search, filterClass, filterEstado, filterBDR]);
-
   useEffect(() => {
     if (user) loadBrands();
   }, [user, loadBrands]);
-
   // ── Role-based filtering ──
   const filtered = useMemo(() => {
     let d = brands;
@@ -100,7 +86,6 @@ export default function CRMPage() {
     }
     return d;
   }, [brands, profile]);
-
   // ── Change stage ──
   const changeStage = async (brandId, product, newStage) => {
     setSaving(true);
@@ -122,7 +107,6 @@ export default function CRMPage() {
     }
     setSaving(false);
   };
-
   // ── Enable product ──
   const enableProduct = async (brandId, product) => {
     await fetch('/api/pipelines', {
@@ -137,7 +121,6 @@ export default function CRMPage() {
     });
     await loadBrands();
   };
-
   // ── Load history (includes old reactivated entries) ──
   const loadHistory = async (brandId, oldIds) => {
     let url = `/api/history?brand_id=${brandId}`;
@@ -146,7 +129,6 @@ export default function CRMPage() {
     const data = await res.json();
     if (data.history) setBrandHistory(data.history);
   };
-
   // ── Pipeline stages for current product ──
   const product = PRODUCTS[activeProduct];
   const pipelineStages = useMemo(() => {
@@ -154,37 +136,30 @@ export default function CRMPage() {
     if (showClosed) return product.stages;
     return product.activeStages || product.stages;
   }, [activeProduct, showClosed, product]);
-
   const getBrandsInStage = useCallback((stage) => {
     return filtered.filter(b => {
       const p = b.pipelines?.[activeProduct];
       return p && p.stage === stage;
     });
   }, [filtered, activeProduct]);
-
   // ── Estados list ──
   const estados = useMemo(() => {
     const s = new Set(brands.map(b => b.estado).filter(e => e && e.length === 2));
     return ['Todos', ...Array.from(s).sort()];
   }, [brands]);
-
   const bdrs = useMemo(() => {
     const s = new Set(brands.map(b => b.responsavel_bdr).filter(Boolean));
     return ['Todos', ...Array.from(s).sort()];
   }, [brands]);
-
   // ── Metrics ──
   const metrics = useMemo(() => {
     const f = filtered;
     const won3s = f.filter(b => b.pipelines?.['3s']?.stage === '9. Contrato assinado').length;
     const lost3s = f.filter(b => b.pipelines?.['3s']?.stage === '10. Perdido').length;
-
     const byClass = {};
     f.forEach(b => { if (b.classificacao) byClass[b.classificacao] = (byClass[b.classificacao] || 0) + 1; });
-
     const byEstado = {};
     f.forEach(b => { if (b.estado && b.estado.length === 2) byEstado[b.estado] = (byEstado[b.estado] || 0) + 1; });
-
     const activeByProduct = {};
     Object.keys(PRODUCTS).forEach(pk => {
       activeByProduct[pk] = f.filter(b => {
@@ -192,12 +167,9 @@ export default function CRMPage() {
         return s && !['10. Perdido','11. Stand by','8. Perdido','9. Stand by'].includes(s);
       }).length;
     });
-
     return { total: f.length, won3s, lost3s, byClass, byEstado, activeByProduct };
   }, [filtered]);
-
   const shortStage = (s) => (s || '').replace(/^\d+\.\s*/, '');
-
   // ══════════════════════════════════════════════════════════════
   // LOADING
   // ══════════════════════════════════════════════════════════════
@@ -212,7 +184,6 @@ export default function CRMPage() {
       </div>
     );
   }
-
   // ══════════════════════════════════════════════════════════════
   // LOGIN
   // ══════════════════════════════════════════════════════════════
@@ -237,7 +208,6 @@ export default function CRMPage() {
       </div>
     );
   }
-
   // ══════════════════════════════════════════════════════════════
   // HELPERS
   // ══════════════════════════════════════════════════════════════
@@ -246,7 +216,6 @@ export default function CRMPage() {
       <Icon size={16} /> {label}
     </button>
   );
-
   const KPI = ({ icon: Icon, label, value, sub, color }) => (
     <div style={{ background: '#fff', borderRadius: 14, padding: '18px 22px', flex: 1, minWidth: 180, boxShadow: '0 1px 3px rgba(0,0,0,.05)', border: '1px solid #f1f5f9' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -257,7 +226,6 @@ export default function CRMPage() {
       {sub && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{sub}</div>}
     </div>
   );
-
   const ProductTab = ({ pkey }) => {
     const p = PRODUCTS[pkey];
     const count = filtered.filter(b => b.pipelines?.[pkey]?.stage).length;
@@ -269,7 +237,6 @@ export default function CRMPage() {
       </button>
     );
   };
-
   const FilterSelect = ({ label, value, onChange, options }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '6px 12px' }}>
       <span style={{ fontSize: 11, color: '#94a3b8' }}>{label}:</span>
@@ -278,7 +245,6 @@ export default function CRMPage() {
       </select>
     </div>
   );
-
   // ══════════════════════════════════════════════════════════════
   // RENDER
   // ══════════════════════════════════════════════════════════════
@@ -315,14 +281,12 @@ export default function CRMPage() {
           <button onClick={handleLogout} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, padding: 6, cursor: 'pointer' }}><LogOut size={16} color="#94a3b8" /></button>
         </div>
       </div>
-
       {/* PRODUCT TABS */}
       {(view === 'pipeline' || view === 'contacts') && (
         <div style={{ padding: '14px 28px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {Object.keys(PRODUCTS).map(pk => <ProductTab key={pk} pkey={pk} />)}
         </div>
       )}
-
       {/* FILTERS */}
       {(view === 'pipeline' || view === 'contacts') && (
         <div style={{ padding: '12px 28px 0', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -341,10 +305,8 @@ export default function CRMPage() {
           <div style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8' }}>{filtered.length} marcas</div>
         </div>
       )}
-
       {/* CONTENT */}
       <div style={{ padding: '16px 28px 40px' }}>
-
         {/* PIPELINE */}
         {view === 'pipeline' && (
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
@@ -365,7 +327,8 @@ export default function CRMPage() {
                         onMouseEnter={e => { e.currentTarget.style.borderColor = product.color; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{b.marca}</div>
-                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{b.responsavel_closer}</div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>BDR: {b.responsavel_bdr || '—'}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Closer: {b.responsavel_closer || '—'}</div>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
                           {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
@@ -381,7 +344,6 @@ export default function CRMPage() {
             })}
           </div>
         )}
-
         {/* CONTACTS TABLE */}
         {view === 'contacts' && (
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
@@ -417,7 +379,6 @@ export default function CRMPage() {
             </div>
           </div>
         )}
-
         {/* DASHBOARD */}
         {view === 'dashboard' && (
           <div>
@@ -457,7 +418,6 @@ export default function CRMPage() {
           </div>
         )}
       </div>
-
       {/* DETAIL PANEL */}
       {selectedBrand && (
         <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', boxShadow: '-4px 0 30px rgba(0,0,0,.12)', zIndex: 50, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -471,7 +431,6 @@ export default function CRMPage() {
               ))}
             </div>
           </div>
-
           <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: '#1e293b' }}>{selectedBrand.marca}</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
@@ -479,7 +438,6 @@ export default function CRMPage() {
               {selectedBrand.estado && <span style={{ fontSize: 11, background: '#dbeafe', color: '#2563eb', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>{selectedBrand.estado}</span>}
             </div>
           </div>
-
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 24px' }}>
             {/* INFO */}
             {detailTab === 'info' && (
@@ -493,7 +451,6 @@ export default function CRMPage() {
                 {selectedBrand.proximo_passo && <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, fontSize: 13, color: '#475569', marginTop: 8 }}><strong>Proximo Passo:</strong> {selectedBrand.proximo_passo}</div>}
               </div>
             )}
-
             {/* PIPELINES */}
             {detailTab === 'pipelines' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -525,7 +482,6 @@ export default function CRMPage() {
                 })}
               </div>
             )}
-
             {/* HISTORY */}
             {detailTab === 'historico' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -550,4 +506,3 @@ export default function CRMPage() {
     </div>
   );
 }
-                      
