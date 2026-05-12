@@ -10,9 +10,11 @@ const closerToDupla = (closer) => {
 const stageToMetric = (stage) => {
   const map = {
     '2. Primeiro Contato': 'primeiro_contato',
+    '2. Primeiro Contato com a marca': 'primeiro_contato',
     '3. Apresentacao': 'apresentacao',
     '6. Negociacao': 'negociacao',
     '9. Contrato Assinado': 'fechadas',
+    '9. Contrato assinado': 'fechadas',
   };
   return map[stage] || null;
 };
@@ -91,7 +93,7 @@ export async function GET(request) {
       });
     });
 
-    const tgtStages = ['2. Primeiro Contato', '3. Apresentacao', '6. Negociacao', '9. Contrato Assinado'];
+    const tgtStages = ['2. Primeiro Contato', '2. Primeiro Contato com a marca', '3. Apresentacao', '6. Negociacao', '9. Contrato Assinado', '9. Contrato assinado'];
     let allHist = [], from = 0;
     while (true) {
       const { data: batch, error: hE } = await sb.from('pipeline_history').select('brand_id,to_stage,created_at').eq('product','3s').in('to_stage', tgtStages).range(from, from+999);
