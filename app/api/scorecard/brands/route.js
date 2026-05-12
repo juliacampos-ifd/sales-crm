@@ -52,11 +52,14 @@ export async function GET(request) {
       const allPipes = await paginate(sb, 'pipelines', 'brand_id,stage', [['product','3s']]);
       const pipeLk = {};
       allPipes.forEach(p => { pipeLk[p.brand_id] = p.stage; });
-
+      const seen = new Set();
       const brands = [];
       allBrands.forEach(b => {
         if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
         if (pipeLk[b.id] === '13. Reativado') return;
+        const key = (b.marca || '').trim().toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
         const d = closerToDupla(b.responsavel_closer);
         if (dupla !== 'total' && d !== dupla) return;
         brands.push({ marca: b.marca, closer: b.responsavel_closer, stage: pipeLk[b.id] || '—', lojas: b.qtd_lojas_fisicas || 0 });
@@ -80,6 +83,7 @@ export async function GET(request) {
     const brandLk = {};
     allBrands.forEach(b => { brandLk[b.id] = b; });
 
+    const seen = new Set();
     const brands = [];
     allHist.forEach(e => {
       const br = brandLk[e.brand_id];
@@ -89,6 +93,9 @@ export async function GET(request) {
       if (eYm !== ym) return;
       const m = stageToMetric(e.to_stage);
       if (m !== metric) return;
+      const key = (br.marca || '').trim().toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
       const d = closerToDupla(br.responsavel_closer);
       if (dupla !== 'total' && d !== dupla) return;
       brands.push({ marca: br.marca, closer: br.responsavel_closer, lojas: br.qtd_lojas_fisicas || 0, date: e.created_at });
