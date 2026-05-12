@@ -12,42 +12,44 @@ export async function GET(request) {
   const bdr = searchParams.get('bdr');
   const closer = searchParams.get('closer');
   const product = searchParams.get('product') || '3s';
-  const limit = parseInt(searchParams.get('limit') || '200');
-  const offset = parseInt(searchParams.get('offset') || '0');
 
-  let query = supabase
-    .from('brands')
-    .select(`
-      *,
-      pipelines (id, product, stage, active, updated_at)
-    `)
-    .order('marca', { ascending: true })
-    .range(offset, offset + limit - 1);
+  // Fetch ALL brands (no limit) so consolidation works across duplicates
+  let all = [], from = 0;
+  while (true) {
+    let query = supabase
+      .from('brands')
+      .select(`*, pipelines (id, product, stage, active, updated_at)`)
+      .order('marca', { ascending: true })
+      .range(from, from + 999);
 
-  if (search) {
-    query = query.or(`marca.ilike.%${search}%,responsavel_bdr.ilike.%${search}%,responsavel_closer.ilike.%${search}%`);
-  }
-  if (classificacao && classificacao !== 'Todos') {
-    query = query.eq('classificacao', classificacao);
-  }
-  if (estado && estado !== 'Todos') {
-    query = query.eq('estado', estado);
-  }
-  if (bdr && bdr !== 'Todos') {
-    query = query.eq('responsavel_bdr', bdr);
-  }
-  if (closer && closer !== 'Todos') {
-    query = query.eq('responsavel_closer', closer);
-  }
+    if (search) {
+      query = query.or(`marca.ilike.%${search}%,responsavel_bdr.ilike.%${search}%,responsavel_closer.ilike.%${search}%`);
+    }
+    if (classificacao && classificacao !== 'Todos') {
+      query = query.eq('classificacao', classificacao);
+    }
+    if (estado && estado !== 'Todos') {
+      query = query.eq('estado', estado);
+    }
+    if (bdr && bdr !== 'Todos') {
+      query = query.eq('responsavel_bdr', bdr);
+    }
+    if (closer && closer !== 'Todos') {
+      query = query.eq('responsavel_closer', closer);
+    }
 
-  const { data, error, count } = await query;
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const { data, error } = await query;
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < 1000) break;
+    from += 1000;
   }
 
   // Transform pipelines array into object keyed by product
-  const transformed = data.map(brand => {
+  const transformed = all.map(brand => {
     const pipelinesObj = {};
     (brand.pipelines || []).forEach(p => {
       pipelinesObj[p.product] = { stage: p.stage, active: p.active, updated_at: p.updated_at };
@@ -65,23 +67,27 @@ export async function GET(request) {
 
   const brands = [];
   Object.values(byName).forEach(group => {
-    if (group.length === 1) { brands.push(group[0]); return; }
-    // Multiple entries: pick the newest non-reativado; if all reativado, pick newest overall
+    // Sort by id ascending (oldest first)
     group.sort((a, b) => (a.id > b.id ? 1 : -1));
+    // Find entries that are NOT reativado
     const nonReativ = group.filter(b => b.pipelines?.['3s']?.stage !== '13. Reativado');
-    const active = nonReativ.length > 0 ? nonReativ[nonReativ.length - 1] : group[group.length - 1];
-    const oldIds = group.filter(b => b.id !== active.id).map(b => b.id);
-    brands.push({ ...active, _oldIds: oldIds });
+    if (nonReativ.length > 0) {
+      // Pick the newest non-reativado entry as the "active" one
+      const active = nonReativ[nonReativ.length - 1];
+      const oldIds = group.filter(b => b.id !== active.id).map(b => b.id);
+      brands.push({ ...active, _oldIds: oldIds.length > 0 ? oldIds : undefined });
+    } else {
+      // ALL entries are reativado — pick the newest and keep it
+      // (it will show as reativado since there's no active version)
+      const newest = group[group.length - 1];
+      const oldIds = group.filter(b => b.id !== newest.id).map(b => b.id);
+      brands.push({ ...newest, _oldIds: oldIds.length > 0 ? oldIds : undefined });
+    }
   });
 
-  // IMPORTANT: Filter out any entry still showing as Reativado
-  // This handles cases where ALL entries for a marca are reativado,
-  // or single entries that are reativado without a matching active pair
-  const filtered = brands.filter(b => b.pipelines?.['3s']?.stage !== '13. Reativado');
+  brands.sort((a, b) => (a.marca || '').localeCompare(b.marca || ''));
 
-  filtered.sort((a, b) => (a.marca || '').localeCompare(b.marca || ''));
-
-  return NextResponse.json({ brands: filtered, total: filtered.length });
+  return NextResponse.json({ brands, total: brands.length });
 }
 
 // POST /api/brands - Create a new brand
