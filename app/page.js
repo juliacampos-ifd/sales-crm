@@ -138,9 +138,11 @@ export default function CRMPage() {
     await loadBrands();
   };
 
-  // ── Load history ──
-  const loadHistory = async (brandId) => {
-    const res = await fetch(`/api/history?brand_id=${brandId}`);
+  // ── Load history (includes old reactivated entries) ──
+  const loadHistory = async (brandId, oldIds) => {
+    let url = `/api/history?brand_id=${brandId}`;
+    if (oldIds && oldIds.length > 0) url += `&old_ids=${oldIds.join(',')}`;
+    const res = await fetch(url);
     const data = await res.json();
     if (data.history) setBrandHistory(data.history);
   };
@@ -359,7 +361,7 @@ export default function CRMPage() {
                   </div>
                   <div style={{ padding: 6, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 50 }}>
                     {stageB.map(b => (
-                      <div key={b.id} onClick={() => { setSelectedBrand(b); setDetailTab('info'); loadHistory(b.id); }} style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', border: '1px solid #e2e8f0', transition: 'all .12s' }}
+                      <div key={b.id} onClick={() => { setSelectedBrand(b); setDetailTab('info'); loadHistory(b.id, b._oldIds); }} style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', border: '1px solid #e2e8f0', transition: 'all .12s' }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = product.color; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{b.marca}</div>
@@ -394,7 +396,7 @@ export default function CRMPage() {
                 </thead>
                 <tbody>
                   {filtered.slice(0, 100).map(b => (
-                    <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => { setSelectedBrand(b); setDetailTab('info'); loadHistory(b.id); }}
+                    <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => { setSelectedBrand(b); setDetailTab('info'); loadHistory(b.id, b._oldIds); }}
                       onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, fontSize: 13 }}>{b.marca}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_bdr}</td>
@@ -406,7 +408,7 @@ export default function CRMPage() {
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.estado || '—'}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.qtd_lojas_fisicas || '—'}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
-                        <button onClick={e => { e.stopPropagation(); setSelectedBrand(b); setDetailTab('pipelines'); loadHistory(b.id); }} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}><Eye size={13} color="#EA1D2C" /></button>
+                        <button onClick={e => { e.stopPropagation(); setSelectedBrand(b); setDetailTab('pipelines'); loadHistory(b.id, b._oldIds); }} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}><Eye size={13} color="#EA1D2C" /></button>
                       </td>
                     </tr>
                   ))}
@@ -535,7 +537,7 @@ export default function CRMPage() {
                       <span style={{ color: '#94a3b8' }}>{shortStage(h.from_stage)}</span>
                       <span style={{ margin: '0 6px', color: '#cbd5e1' }}>&rarr;</span>
                       <span style={{ fontWeight: 600, color: '#1e293b' }}>{shortStage(h.to_stage)}</span>
-<span style={{ marginLeft: 8, fontSize: 10, background: (PRODUCTS[h.product]?.color || '#EA1D2C') + '20', color: PRODUCTS[h.product]?.color || '#EA1D2C', padding: '1px 6px', borderRadius: 4 }}>{PRODUCTS[h.product]?.name || h.product}</span>
+                      <span style={{ marginLeft: 8, fontSize: 10, background: (PRODUCTS[h.product]?.color || '#EA1D2C') + '20', color: PRODUCTS[h.product]?.color || '#EA1D2C', padding: '1px 6px', borderRadius: 4 }}>{PRODUCTS[h.product]?.name || h.product}</span>
                     </div>
                     <div style={{ color: '#94a3b8', fontSize: 11 }}>{h.changed_by_name}</div>
                   </div>
@@ -548,3 +550,4 @@ export default function CRMPage() {
     </div>
   );
 }
+                      
