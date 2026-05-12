@@ -66,11 +66,10 @@ export async function GET(request) {
   const brands = [];
   Object.values(byName).forEach(group => {
     if (group.length === 1) { brands.push(group[0]); return; }
-    // Multiple entries: pick the active one (non-reativado), store old IDs
-    const active = group.find(b => {
-      const s = b.pipelines?.['3s']?.stage;
-      return s !== '13. Reativado';
-    }) || group[group.length - 1];
+    // Multiple entries: pick the newest non-reativado; if all reativado, pick newest overall
+    group.sort((a, b) => (a.id > b.id ? 1 : -1));
+    const nonReativ = group.filter(b => b.pipelines?.['3s']?.stage !== '13. Reativado');
+    const active = nonReativ.length > 0 ? nonReativ[nonReativ.length - 1] : group[group.length - 1];
     const oldIds = group.filter(b => b.id !== active.id).map(b => b.id);
     brands.push({ ...active, _oldIds: oldIds });
   });
