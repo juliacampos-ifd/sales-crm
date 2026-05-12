@@ -34,6 +34,12 @@ async function paginate(sb, table, cols, filters) {
   return all;
 }
 
+// Check if brand is P or M classification
+const isPorM = (b) => {
+  const c = (b.classificacao || '').trim().toUpperCase();
+  return c === 'P' || c === 'M';
+};
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -48,13 +54,14 @@ export async function GET(request) {
     const sb = createServerClient();
 
     if (metric === 'elegiveis') {
-      const allBrands = await paginate(sb, 'brands', 'id,marca,responsavel_closer,base_elegivel,qtd_lojas_fisicas');
+      const allBrands = await paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,base_elegivel,qtd_lojas_fisicas');
       const allPipes = await paginate(sb, 'pipelines', 'brand_id,stage', [['product','3s']]);
       const pipeLk = {};
       allPipes.forEach(p => { pipeLk[p.brand_id] = p.stage; });
       const seen = new Set();
       const brands = [];
       allBrands.forEach(b => {
+        if (!isPorM(b)) return;
         if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
         if (pipeLk[b.id] === '13. Reativado') return;
         const key = (b.marca || '').trim().toLowerCase();
@@ -79,7 +86,7 @@ export async function GET(request) {
       from += 1000;
     }
 
-    const allBrands = await paginate(sb, 'brands', 'id,marca,responsavel_closer,qtd_lojas_fisicas');
+    const allBrands = await paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,qtd_lojas_fisicas');
     const brandLk = {};
     allBrands.forEach(b => { brandLk[b.id] = b; });
 
@@ -88,6 +95,7 @@ export async function GET(request) {
     allHist.forEach(e => {
       const br = brandLk[e.brand_id];
       if (!br) return;
+      if (!isPorM(br)) return;
       const dt = new Date(e.created_at);
       const eYm = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
       if (eYm !== ym) return;
