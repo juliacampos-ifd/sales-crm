@@ -91,10 +91,17 @@ export default function ScorecardPage() {
   // Get live eligible count
   const ge = (dupla) => data?.elegiveis?.[dupla] || 0;
 
+  // Get current stage count (snapshot of brands currently at or past each stage)
+  const gc = (dupla, field) => data?.currentCounts?.[dupla]?.[field] || 0;
+
   const buildRows = (dupla) => {
+    // Use pipeline_history realized data OR fall back to currentCounts
     const cmR = {}, cmM = {}, fcst = {}, mtdM = {};
     ['primeiro_contato','apresentacao','negociacao','fechadas','lojas'].forEach(f => {
-      cmR[f] = gr(dupla, curKey, f);
+      const histVal = gr(dupla, curKey, f);
+      const curVal = gc(dupla, f);
+      // Use history if available, otherwise use current stage counts
+      cmR[f] = histVal > 0 ? histVal : curVal;
       cmM[f] = gm(dupla, selYear, selMonth, f);
       fcst[f] = mtdBD > 0 ? Math.round((cmR[f] / mtdBD) * totalBD) : 0;
       mtdM[f] = totalBD > 0 ? Math.round((cmM[f] / totalBD) * mtdBD) : 0;
@@ -110,7 +117,6 @@ export default function ScorecardPage() {
 
         if (def.key === 'elegiveis') {
           if (isCur) {
-            // Current month: show meta, forecast=meta, real=live count, mtd meta=mtd real=live
             row.cells.push({
               isCur: true,
               meta: elegMeta,
@@ -122,13 +128,12 @@ export default function ScorecardPage() {
               mtdPct: '100%',
             });
           } else {
-            // Past months: show meta as the realized value (we don't have historical snapshots)
             row.cells.push({ v: gm(dupla, col.y, col.m, 'elegiveis') });
           }
         } else if (def.key === 'media_lojas') {
           const fch = isCur ? cmR.fechadas : gr(dupla, col.k, 'fechadas');
           const loj = isCur ? cmR.lojas : gr(dupla, col.k, 'lojas');
-          const v = fch > 0 ? Math.round(loj / fch) : 0;
+          const v = fch > 0 ? Math.round((loj / fch) * 10) / 10 : 0;
           if (isCur) {
             const metaML = gm(dupla, selYear, selMonth, 'media_lojas');
             row.cells.push({ isCur: true, meta: metaML, fcst: v, pctA: metaML > 0 ? Math.round((v/metaML)*100)+'%' : '—', real: v, mtdMeta: v, mtdReal: v, mtdPct: '—', isLive: true });
@@ -137,11 +142,20 @@ export default function ScorecardPage() {
           }
         } else if (def.isPercent) {
           let num = 0, den = 1;
-          const gv = (field) => isCur ? cmR[field] : gr(dupla, col.k, field);
-          if (def.key === 'taxa_pc') { num = gv('primeiro_contato'); den = isCur ? eleg : gm(dupla, col.y, col.m, 'elegiveis'); }
-          else if (def.key === 'taxa_apres') { num = gv('apresentacao'); den = gv('primeiro_contato'); }
-          else if (def.key === 'taxa_neg') { num = gv('negociacao'); den = gv('apresentacao'); }
-          else if (def.key === 'taxa_fechadas') { num = gv('fechadas'); den = gv('negociacao'); }
+          if (isCur) {
+            // Current month: use realized data (history or current counts)
+            if (def.key === 'taxa_pc') { num = cmR.primeiro_contato; den = eleg; }
+            else if (def.key === 'taxa_apres') { num = cmR.apresentacao; den = cmR.primeiro_contato; }
+            else if (def.key === 'taxa_neg') { num = cmR.negociacao; den = cmR.apresentacao; }
+            else if (def.key === 'taxa_fechadas') { num = cmR.fechadas; den = cmR.negociacao; }
+          } else {
+            // Past months: use history data
+            const gv = (field) => gr(dupla, col.k, field);
+            if (def.key === 'taxa_pc') { num = gv('primeiro_contato'); den = gm(dupla, col.y, col.m, 'elegiveis'); }
+            else if (def.key === 'taxa_apres') { num = gv('apresentacao'); den = gv('primeiro_contato'); }
+            else if (def.key === 'taxa_neg') { num = gv('negociacao'); den = gv('apresentacao'); }
+            else if (def.key === 'taxa_fechadas') { num = gv('fechadas'); den = gv('negociacao'); }
+          }
           const pct = den > 0 ? Math.round((num / den) * 100) + '%' : '0%';
           row.cells.push(isCur ? { isCur: true, span: true, v: pct } : { v: pct });
         } else {
@@ -241,22 +255,4 @@ export default function ScorecardPage() {
                               <td key={ci+'r'} style={{ ...td, textAlign: 'center', fontWeight: 700, color: clr, background: '#fce4e608' }}>{cell.real}</td>,
                               <td key={ci+'mm'} style={{ ...td, textAlign: 'center', background: '#fefce808' }}>{cell.mtdMeta}</td>,
                               <td key={ci+'mr'} style={{ ...td, textAlign: 'center', fontWeight: 700, color: clr, background: '#fefce808' }}>{cell.mtdReal}</td>,
-                              <td key={ci+'mp'} style={{ ...td, textAlign: 'center', fontWeight: 600, color: pctColor(cell.mtdPct), background: '#fef9c308' }}>{cell.mtdPct}</td>,
-                            ];
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const th = { padding: '8px 10px', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0', textAlign: 'center', whiteSpace: 'nowrap' };
-const td = { padding: '6px 10px', fontSize: 12, borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap' };
+    
