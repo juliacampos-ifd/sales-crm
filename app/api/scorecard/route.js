@@ -17,7 +17,6 @@ const stageToMetric = (stage) => {
   return map[stage] || null;
 };
 
-// Stage order for "at or past" logic: a brand at stage 6 has been through stages 2, 3
 const STAGE_ORDER = [
   '0. Nao Iniciado', '1. Iniciado', '2. Primeiro Contato com a marca',
   '3. Apresentacao', '4. Diagnostico', '5. Demo/Showroom',
@@ -25,12 +24,8 @@ const STAGE_ORDER = [
   '10. Perdido', '11. Stand by', '12. Organico', '13. Reativado'
 ];
 
-const stageIndex = (s) => {
-  const idx = STAGE_ORDER.indexOf(s);
-  return idx >= 0 ? idx : -1;
-};
+const stageIndex = (s) => STAGE_ORDER.indexOf(s);
 
-// Threshold indices for funnel metrics
 const THRESHOLD = {
   primeiro_contato: stageIndex('2. Primeiro Contato com a marca'),
   apresentacao: stageIndex('3. Apresentacao'),
@@ -38,115 +33,92 @@ const THRESHOLD = {
   fechadas: stageIndex('9. Contrato assinado'),
 };
 
-const emptyMetrics = () => ({ primeiro_contato: 0, apresentacao: 0, negociacao: 0, fechadas: 0, lojas: 0 });
+const emptyM = () => ({ primeiro_contato: 0, apresentacao: 0, negociacao: 0, fechadas: 0, lojas: 0 });
+
+async function paginate(sb, table, cols, filters) {
+  let all = [], from = 0;
+  while (true) {
+    let q = sb.from(table).select(cols).range(from, from + 999);
+    if (filters) filters.forEach(f => { q = q.eq(f[0], f[1]); });
+    const { data, error } = await q;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < 1000) break;
+    from += 1000;
+  }
+  return all;
+}
 
 export async function GET(request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1), 10);
-    const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()), 10);
-    const supabase = createServerClient();
+    const sb = createServerClient();
+    const { data: metas, error: mErr } = await sb
+      .from('funnel_metas').select('*')
+      .order('year', { ascending: true }).order('month', { ascending: true });
+    if (mErr) throw mErr;
 
-    // 1. Get ALL funnel metas
-    const { data: metas, error: metasError } = await supabase
-      .from('funnel_metas')
-      .select('*')
-      .order('year', { ascending: true })
-      .order('month', { ascending: true });
-    if (metasError) throw metasError;
+    const allBrands = await paginate(sb, 'brands', 'id,marca,responsavel_closer,qtd_lojas_fisicas,base_elegivel');
+    const allPipes = await paginate(sb, 'pipelines', 'brand_id,stage', [['product','3s']]);
 
-    // 2. Get ALL brands
-    let allBrands = [];
-    let from = 0;
-    const pageSize = 1000;
-    while (true) {
-      const { data: batch, error: bErr } = await supabase
-        .from('brands')
-        .select('id, marca, responsavel_closer, qtd_lojas_fisicas, base_elegivel')
-        .range(from, from + pageSize - 1);
-      if (bErr) throw bErr;
-      if (!batch || batch.length === 0) break;
-      allBrands = allBrands.concat(batch);
-      if (batch.length < pageSize) break;
-      from += pageSize;
-    }
+    const pipeLk = {};
+    allPipes.forEach(p => { pipeLk[p.brand_id] = p.stage; });
+    const brandLk = {};
+    allBrands.forEach(b => { brandLk[b.id] = b; });
 
-    // 3. Get ALL pipelines for product 3s
-    let allPipelines = [];
-    from = 0;
-    while (true) {
-      const { data: batch, error: pErr } = await supabase
-        .from('pipelines')
-        .select('brand_id, stage')
-        .eq('product', '3s')
-        .range(from, from + pageSize - 1);
-      if (pErr) throw pErr;
-      if (!batch || batch.length === 0) break;
-      allPipelines = allPipelines.concat(batch);
-      if (batch.length < pageSize) break;
-      from += pageSize;
-    }
-
-    // Build pipeline lookup: brand_id -> stage
-    const pipelineLookup = {};
-    allPipelines.forEach(p => { pipelineLookup[p.brand_id] = p.stage; });
-
-    // Build brand lookup
-    const brandLookup = {};
-    allBrands.forEach(b => { brandLookup[b.id] = b; });
-
-    // 4. Count eligible brands (COUNTUNIQUEIFS equivalent)
-    const eligibleByDupla = { total: new Set(), lidia_gabi: new Set(), joao_diego: new Set(), michel_emerson: new Set() };
-
+    const eligS = { total: new Set(), lidia_gabi: new Set(), joao_diego: new Set(), michel_emerson: new Set() };
     allBrands.forEach(b => {
       if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
-      const stage = pipelineLookup[b.id];
-      if (stage === '13. Reativado') return;
-      const dupla = closerToDupla(b.responsavel_closer);
-      eligibleByDupla.total.add(b.marca);
-      eligibleByDupla[dupla].add(b.marca);
+      if (pipeLk[b.id] === '13. Reativado') return;
+      const d = closerToDupla(b.responsavel_closer);
+      eligS.total.add(b.marca); eligS[d].add(b.marca);
     });
+    const elegiveis = { total: eligS.total.size, lidia_gabi: eligS.lidia_gabi.size, joao_diego: eligS.joao_diego.size, michel_emerson: eligS.michel_emerson.size };
 
-    const elegiveis = {
-      total: eligibleByDupla.total.size,
-      lidia_gabi: eligibleByDupla.lidia_gabi.size,
-      joao_diego: eligibleByDupla.joao_diego.size,
-      michel_emerson: eligibleByDupla.michel_emerson.size,
-    };
-
-    // 5. Count brands currently AT or PAST each funnel stage (current snapshot)
-    // A brand at stage "6. Negociacao" counts for primeiro_contato, apresentacao, AND negociacao
-    // Only count eligible brands (FY27, not Reativado)
-    const currentCounts = {
-      total: emptyMetrics(),
-      lidia_gabi: emptyMetrics(),
-      joao_diego: emptyMetrics(),
-      michel_emerson: emptyMetrics(),
-    };
-
+    const cc = { total: emptyM(), lidia_gabi: emptyM(), joao_diego: emptyM(), michel_emerson: emptyM() };
     allBrands.forEach(b => {
       if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
-      const stage = pipelineLookup[b.id];
+      const stage = pipeLk[b.id];
       if (!stage || stage === '13. Reativado') return;
       const si = stageIndex(stage);
       if (si < 0) return;
-
-      const dupla = closerToDupla(b.responsavel_closer);
-
-      // Count for each threshold the brand has reached or passed
-      Object.entries(THRESHOLD).forEach(([metric, threshold]) => {
-        if (si >= threshold) {
-          currentCounts.total[metric]++;
-          currentCounts[dupla][metric]++;
-
-          // For fechadas, also add lojas
-          if (metric === 'fechadas' && b.qtd_lojas_fisicas) {
-            currentCounts.total.lojas += b.qtd_lojas_fisicas;
-            currentCounts[dupla].lojas += b.qtd_lojas_fisicas;
-          }
+      const d = closerToDupla(b.responsavel_closer);
+      Object.entries(THRESHOLD).forEach(([m, th]) => {
+        if (si >= th) {
+          cc.total[m]++; cc[d][m]++;
+          if (m === 'fechadas' && b.qtd_lojas_fisicas) { cc.total.lojas += b.qtd_lojas_fisicas; cc[d].lojas += b.qtd_lojas_fisicas; }
         }
       });
     });
 
-    // 6. Get pipeline history for realized counts
-    const targ
+    const tgtStages = ['2. Primeiro Contato', '3. Apresentacao', '6. Negociacao', '9. Contrato Assinado'];
+    let allHist = [], from = 0;
+    while (true) {
+      const { data: batch, error: hE } = await sb.from('pipeline_history').select('brand_id,to_stage,created_at').eq('product','3s').in('to_stage', tgtStages).range(from, from+999);
+      if (hE) throw hE;
+      if (!batch || batch.length === 0) break;
+      allHist = allHist.concat(batch);
+      if (batch.length < 1000) break;
+      from += 1000;
+    }
+
+    const realized = {};
+    allHist.forEach(e => {
+      const br = brandLk[e.brand_id];
+      if (!br) return;
+      const dt = new Date(e.created_at);
+      const ym = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+      if (!realized[ym]) realized[ym] = { total: emptyM(), lidia_gabi: emptyM(), joao_diego: emptyM(), michel_emerson: emptyM() };
+      const metric = stageToMetric(e.to_stage);
+      if (!metric) return;
+      const d = closerToDupla(br.responsavel_closer);
+      realized[ym].total[metric]++; realized[ym][d][metric]++;
+      if (metric === 'fechadas' && br.qtd_lojas_fisicas) { realized[ym].total.lojas += br.qtd_lojas_fisicas; realized[ym][d].lojas += br.qtd_lojas_fisicas; }
+    });
+
+    return NextResponse.json({ metas: metas || [], realized, elegiveis, currentCounts: cc });
+  } catch (error) {
+    console.error('Scorecard API error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
