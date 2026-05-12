@@ -86,7 +86,8 @@ export async function GET(request) {
       if (batch.length < pageSize) break;
       from += pageSize;
     }
-        // Build pipeline lookup: brand_id -> stage
+
+    // Build pipeline lookup: brand_id -> stage
     const pipelineLookup = {};
     allPipelines.forEach(p => { pipelineLookup[p.brand_id] = p.stage; });
 
