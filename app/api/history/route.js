@@ -22,4 +22,14 @@ export async function GET(request) {
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (allIds.length > 0) 
+  if (allIds.length > 0) query = query.in('brand_id', allIds);
+  if (product) query = query.eq('product', product);
+
+  const { data, error } = await query;
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ history: data });
+}
