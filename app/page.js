@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PRODUCTS, CLASSIFICACAO_COLORS, MONTH_NAMES, DUPLAS, getMonthBusinessDays, getMonthBusinessDaysMTD } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload } from 'lucide-react';
+import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload, Plus } from 'lucide-react';
 // ====================================================================
 // MAIN CRM PAGE
 // ====================================================================
@@ -230,7 +230,7 @@ export default function CRMPage() {
       await fetch('/api/brands', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: brandId, [field]: value }),
+        body: JSON.stringify({ id: brandId, [field]: value, user_id: user?.id, user_name: profile?.name }),
       });
       const freshRes = await fetch('/api/brands?limit=999');
       const freshData = await freshRes.json();
@@ -399,8 +399,8 @@ export default function CRMPage() {
           <a href="/scorecard" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Target size={16} /> Scorecard
           </a>
-          <a href="/import" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
-            <Upload size={16} /> Import CSV
+          <a href="/input" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
+            <Plus size={16} /> Nova Marca
           </a>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -641,7 +641,7 @@ export default function CRMPage() {
                       <span style={{ color: '#94a3b8' }}>{shortStage(h.from_stage)}</span>
                       <span style={{ margin: '0 6px', color: '#cbd5e1' }}>&rarr;</span>
                       <span style={{ fontWeight: 600, color: '#1e293b' }}>{shortStage(h.to_stage)}</span>
-                      <span style={{ marginLeft: 8, fontSize: 10, background: (PRODUCTS[h.product]?.color || '#EA1D2C') + '20', color: PRODUCTS[h.product]?.color || '#EA1D2C', padding: '1px 6px', borderRadius: 4 }}>{PRODUCTS[h.product]?.name || h.product}</span>
+                      <span style={{ marginLeft: 8, fontSize: 10, background: (h.product === 'fup' ? '#8b5cf6' : PRODUCTS[h.product]?.color || '#EA1D2C') + '20', color: h.product === 'fup' ? '#8b5cf6' : PRODUCTS[h.product]?.color || '#EA1D2C', padding: '1px 6px', borderRadius: 4 }}>{h.product === 'fup' ? 'FUP' : (PRODUCTS[h.product]?.name || h.product)}</span>
                     </div>
                     <div style={{ color: '#94a3b8', fontSize: 11 }}>{h.changed_by_name}</div>
                   </div>
