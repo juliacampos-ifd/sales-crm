@@ -112,4 +112,7 @@ export async function GET(request) {
     brands.sort((a, b) => a.marca.localeCompare(b.marca));
     return NextResponse.json({ brands, count: brands.length });
   } catch (error) {
-    console.error('Scorecard brands API error:', error
+    console.error('Scorecard brands API error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
