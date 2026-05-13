@@ -18,7 +18,7 @@ export async function GET(request) {
   while (true) {
     let query = supabase
       .from('brands')
-      .select(`*, pipelines (id, product, stage, active, updated_at)`)
+      .select(`*, pipelines (id, product, stage, active, updated_at, responsavel)`)
       .order('marca', { ascending: true })
       .range(from, from + 999);
 
@@ -52,7 +52,7 @@ export async function GET(request) {
   const transformed = all.map(brand => {
     const pipelinesObj = {};
     (brand.pipelines || []).forEach(p => {
-      pipelinesObj[p.product] = { stage: p.stage, active: p.active, updated_at: p.updated_at };
+      pipelinesObj[p.product] = { stage: p.stage, active: p.active, updated_at: p.updated_at, responsavel: p.responsavel };
     });
     return { ...brand, pipelines: pipelinesObj };
   });
@@ -67,18 +67,13 @@ export async function GET(request) {
 
   const brands = [];
   Object.values(byName).forEach(group => {
-    // Sort by id ascending (oldest first)
     group.sort((a, b) => (a.id > b.id ? 1 : -1));
-    // Find entries that are NOT reativado
     const nonReativ = group.filter(b => b.pipelines?.['3s']?.stage !== '13. Reativado');
     if (nonReativ.length > 0) {
-      // Pick the newest non-reativado entry as the "active" one
       const active = nonReativ[nonReativ.length - 1];
       const oldIds = group.filter(b => b.id !== active.id).map(b => b.id);
       brands.push({ ...active, _oldIds: oldIds.length > 0 ? oldIds : undefined });
     } else {
-      // ALL entries are reativado — pick the newest and keep it
-      // (it will show as reativado since there's no active version)
       const newest = group[group.length - 1];
       const oldIds = group.filter(b => b.id !== newest.id).map(b => b.id);
       brands.push({ ...newest, _oldIds: oldIds.length > 0 ? oldIds : undefined });
@@ -114,13 +109,13 @@ export async function POST(request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Create initial pipeline entries
   const products = body.products || ['3s'];
   const pipelineInserts = products.map(product => ({
     brand_id: brand.id,
     product,
-    stage: product === '3s' ? '0. Nao Iniciado' : product === 'saipos' ? '0. Nao Iniciado' : 'Buscando Reuniao',
+    stage: product === '3s' ? '0. Nao Iniciado' : product === 'saipos' ? '0. Nao Iniciado' : '0. Nao Iniciado',
     active: true,
+    responsavel: product === '3s' ? `${body.responsavel_bdr || ''} / ${body.responsavel_closer || ''}`.trim() : null,
   }));
 
   const { error: pipelineError } = await supabase
