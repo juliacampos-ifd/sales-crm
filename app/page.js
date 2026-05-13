@@ -222,6 +222,25 @@ export default function CRMPage() {
     }
     setSaving(false);
   };
+  // ── Update brand field ──
+  const updateBrandField = async (brandId, field, value) => {
+    setSaving(true);
+    setSelectedBrand(prev => prev ? { ...prev, [field]: value } : prev);
+    try {
+      await fetch('/api/brands', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: brandId, [field]: value }),
+      });
+      const freshRes = await fetch('/api/brands?limit=999');
+      const freshData = await freshRes.json();
+      if (freshData.brands) {
+        setBrands(freshData.brands);
+        setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
+      }
+    } catch (err) { console.error('Update error:', err); }
+    setSaving(false);
+  };
   // ── Pipeline stages for current product ──
   const product = PRODUCTS[activeProduct];
   const pipelineStages = useMemo(() => {
@@ -567,7 +586,10 @@ export default function CRMPage() {
                     <span style={{ fontWeight: 500, color: '#1e293b' }}>{v || '—'}</span>
                   </div>
                 ))}
-                {selectedBrand.proximo_passo && <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, fontSize: 13, color: '#475569', marginTop: 8 }}><strong>Proximo Passo:</strong> {selectedBrand.proximo_passo}</div>}
+                <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, marginTop: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Proximo Passo / FUP</div>
+                  <textarea defaultValue={selectedBrand.proximo_passo || ''} placeholder="Descreva o proximo passo, data do FUP..." rows={3} onBlur={e => { if (e.target.value !== (selectedBrand.proximo_passo || '')) updateBrandField(selectedBrand.id, 'proximo_passo', e.target.value); }} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: '#475569' }} />
+                </div>
               </div>
             )}
             {/* PIPELINES */}
@@ -596,7 +618,10 @@ export default function CRMPage() {
                           </select>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>Responsavel:</span>
-                            <input type="text" defaultValue={pipeline.responsavel || ''} placeholder="Nome do responsavel" onBlur={e => { if (e.target.value !== (pipeline.responsavel || '')) changeResponsavel(selectedBrand.id, key, e.target.value); }} onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }} style={{ flex: 1, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, outline: 'none' }} />
+                            <select value={pipeline.responsavel || ''} onChange={e => changeResponsavel(selectedBrand.id, key, e.target.value)} style={{ flex: 1, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, outline: 'none', background: '#fff' }}>
+                              <option value="">Selecione...</option>
+                              {(prod.responsaveis || []).map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
                           </div>
                         </div>
                       )}
