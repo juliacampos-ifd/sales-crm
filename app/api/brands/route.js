@@ -128,3 +128,32 @@ export async function POST(request) {
 
   return NextResponse.json({ brand }, { status: 201 });
 }
+
+// PATCH /api/brands - Update brand fields (proximo_passo, etc)
+export async function PATCH(request) {
+  const supabase = createServerClient();
+  const body = await request.json();
+
+  const { id, ...updates } = body;
+  if (!id) {
+    return NextResponse.json({ error: 'id is required' }, { status: 400 });
+  }
+
+  // Only allow safe fields to be updated
+  const allowed = ['proximo_passo', 'data_ultimo_fup', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp'];
+  const safeUpdates = {};
+  allowed.forEach(k => { if (updates[k] !== undefined) safeUpdates[k] = updates[k]; });
+
+  const { data, error } = await supabase
+    .from('brands')
+    .update(safeUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ brand: data });
+}
