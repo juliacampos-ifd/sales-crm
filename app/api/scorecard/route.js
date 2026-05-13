@@ -124,4 +124,7 @@ export async function GET(request) {
     delete realized._seen;
     return NextResponse.json({ metas: metas || [], realized, elegiveis });
   } catch (error) {
-    console.error('Scorecard API error:', error
+    console.error('Scorecard API error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
