@@ -134,10 +134,13 @@ export async function PATCH(request) {
   const supabase = createServerClient();
   const body = await request.json();
 
-  const { id, ...updates } = body;
+  const { id, user_id, user_name, ...updates } = body;
   if (!id) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
+
+  // Get current values before update (for history)
+  const { data: current } = await supabase.from('brands').select('proximo_passo').eq('id', id).single();
 
   // Only allow safe fields to be updated
   const allowed = ['proximo_passo', 'data_ultimo_fup', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp'];
@@ -153,6 +156,19 @@ export async function PATCH(request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Log FUP changes in pipeline_history
+  if (updates.proximo_passo !== undefined && updates.proximo_passo !== (current?.proximo_passo || '')) {
+    await supabase.from('pipeline_history').insert({
+      brand_id: id,
+      product: 'fup',
+      from_stage: current?.proximo_passo || '(vazio)',
+      to_stage: updates.proximo_passo || '(vazio)',
+      changed_by: user_id || null,
+      changed_by_name: user_name || 'Sistema',
+      notes: 'Atualizacao de FUP',
+    });
   }
 
   return NextResponse.json({ brand: data });
