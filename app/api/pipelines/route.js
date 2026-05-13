@@ -22,9 +22,13 @@ export async function PATCH(request) {
 
   const from_stage = current?.stage || null;
 
-  // Build update object
+  // Build update object — always keep current stage if not changing it
   const update = { brand_id, product, active: true, updated_by: user_id };
-  if (new_stage) update.stage = new_stage;
+  if (new_stage) {
+    update.stage = new_stage;
+  } else if (current?.stage) {
+    update.stage = current.stage;
+  }
   if (responsavel !== undefined) update.responsavel = responsavel;
 
   // Upsert pipeline
