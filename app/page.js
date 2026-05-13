@@ -82,7 +82,7 @@ export default function CRMPage() {
   const filtered = useMemo(() => {
     let d = brands;
     if (profile?.role === 'executivo') {
-      d = d.filter(b => b.responsavel_bdr === profile.name || b.responsavel_closer === profile.name);
+      d = d.filter(b => b.responsavel_bdr === profile.name || b.responsavel_closer === profile.name || Object.values(b.pipelines || {}).some(p => p.responsavel && p.responsavel.includes(profile.name)));
     }
     return d;
   }, [brands, profile]);
@@ -104,6 +104,29 @@ export default function CRMPage() {
       await loadBrands();
     } catch (err) {
       console.error('Error changing stage:', err);
+    }
+    setSaving(false);
+  };
+  // ── Change responsavel ──
+  const changeResponsavel = async (brandId, product, newResp) => {
+    setSaving(true);
+    try {
+      await fetch('/api/pipelines', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand_id: brandId,
+          product,
+          responsavel: newResp,
+          user_id: user?.id,
+          user_name: profile?.name,
+        }),
+      });
+      await loadBrands();
+      // Update selectedBrand in place
+      setSelectedBrand(prev => prev ? { ...prev, pipelines: { ...prev.pipelines, [product]: { ...prev.pipelines?.[product], responsavel: newResp } } } : prev);
+    } catch (err) {
+      console.error('Error changing responsavel:', err);
     }
     setSaving(false);
   };
@@ -327,8 +350,7 @@ export default function CRMPage() {
                         onMouseEnter={e => { e.currentTarget.style.borderColor = product.color; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{b.marca}</div>
-                        <div style={{ fontSize: 11, color: '#64748b' }}>BDR: {b.responsavel_bdr || '—'}</div>
-                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Closer: {b.responsavel_closer || '—'}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || '—'} / ${b.responsavel_closer || '—'}` : '—')}</div>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
                           {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
@@ -351,7 +373,7 @@ export default function CRMPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    {['Marca','BDR','Closer',`Status ${product.name}`,'Class.','Estado','Lojas',''].map(h => (
+                    {['Marca','Responsavel',`Status ${product.name}`,'Class.','Estado','Lojas',''].map(h => (
                       <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                     ))}
                   </tr>
@@ -361,8 +383,7 @@ export default function CRMPage() {
                     <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => { setSelectedBrand(b); setDetailTab('info'); loadHistory(b.id, b._oldIds); }}
                       onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, fontSize: 13 }}>{b.marca}</td>
-                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_bdr}</td>
-                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_closer}</td>
+                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || ''} / ${b.responsavel_closer || ''}` : '—')}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
                         <span style={{ fontSize: 11, background: product.color + '15', color: product.color, padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>{shortStage(b.pipelines?.[activeProduct]?.stage || '—')}</span>
                       </td>
@@ -442,7 +463,7 @@ export default function CRMPage() {
             {/* INFO */}
             {detailTab === 'info' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {[['BDR', selectedBrand.responsavel_bdr], ['Closer', selectedBrand.responsavel_closer], ['Coord. Delivery', selectedBrand.coordenador_delivery], ['Exec. Delivery', selectedBrand.executivo_delivery], ['Lojas', selectedBrand.qtd_lojas_fisicas], ['PDV Atual', selectedBrand.pdv_atual], ['Base Elegivel', selectedBrand.base_elegivel]].map(([l, v]) => (
+                {[['Resp. 3S', selectedBrand.pipelines?.['3s']?.responsavel || `${selectedBrand.responsavel_bdr || '—'} / ${selectedBrand.responsavel_closer || '—'}`], ['Resp. Saipos', selectedBrand.pipelines?.saipos?.responsavel || '—'], ['Resp. Totem', selectedBrand.pipelines?.totem?.responsavel || '—'], ['Coord. Delivery', selectedBrand.coordenador_delivery], ['Exec. Delivery', selectedBrand.executivo_delivery], ['Lojas', selectedBrand.qtd_lojas_fisicas], ['PDV Atual', selectedBrand.pdv_atual], ['Base Elegivel', selectedBrand.base_elegivel]].filter(([l]) => !(l.startsWith('Resp.') && l !== 'Resp. 3S' && !selectedBrand.pipelines?.[l === 'Resp. Saipos' ? 'saipos' : 'totem']?.stage)).map(([l, v]) => (
                   <div key={l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
                     <span style={{ color: '#64748b' }}>{l}</span>
                     <span style={{ fontWeight: 500, color: '#1e293b' }}>{v || '—'}</span>
@@ -471,10 +492,14 @@ export default function CRMPage() {
                         )}
                       </div>
                       {isActive && (
-                        <div style={{ padding: '12px 18px' }}>
+                        <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                           <select value={pipeline.stage} onChange={e => changeStage(selectedBrand.id, key, e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none' }}>
                             {prod.stages.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>Responsavel:</span>
+                            <input type="text" defaultValue={pipeline.responsavel || ''} placeholder="Nome do responsavel" onBlur={e => { if (e.target.value !== (pipeline.responsavel || '')) changeResponsavel(selectedBrand.id, key, e.target.value); }} onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }} style={{ flex: 1, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, outline: 'none' }} />
+                          </div>
                         </div>
                       )}
                     </div>
