@@ -20,9 +20,10 @@ export default function CRMPage() {
   const [view, setView] = useState('pipeline');
   const [activeProduct, setActiveProduct] = useState('3s');
   const [search, setSearch] = useState('');
-  const [filterClass, setFilterClass] = useState('Todos');
-  const [filterEstado, setFilterEstado] = useState('Todos');
-  const [filterBDR, setFilterBDR] = useState('Todos');
+  const [filterClass, setFilterClass] = useState([]);
+  const [filterEstado, setFilterEstado] = useState([]);
+  const [filterBDR, setFilterBDR] = useState([]);
+  const [filterPDV, setFilterPDV] = useState([]);
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [detailTab, setDetailTab] = useState('info');
   const [brandHistory, setBrandHistory] = useState([]);
@@ -65,16 +66,10 @@ export default function CRMPage() {
   };
   // ── Load brands ──
   const loadBrands = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (search) params.set('search', search);
-    if (filterClass !== 'Todos') params.set('classificacao', filterClass);
-    if (filterEstado !== 'Todos') params.set('estado', filterEstado);
-    if (filterBDR !== 'Todos') params.set('bdr', filterBDR);
-    params.set('limit', '500');
-    const res = await fetch(`/api/brands?${params}`);
+    const res = await fetch('/api/brands?limit=999');
     const data = await res.json();
     if (data.brands) setBrands(data.brands);
-  }, [search, filterClass, filterEstado, filterBDR]);
+  }, []);
   useEffect(() => {
     if (user) loadBrands();
   }, [user, loadBrands]);
@@ -84,24 +79,42 @@ export default function CRMPage() {
     if (profile?.role === 'executivo') {
       d = d.filter(b => b.responsavel_bdr === profile.name || b.responsavel_closer === profile.name || Object.values(b.pipelines || {}).some(p => p.responsavel && p.responsavel.includes(profile.name)));
     }
+    if (search) {
+      const q = search.toLowerCase();
+      d = d.filter(b => (b.marca||'').toLowerCase().includes(q) || (b.responsavel_bdr||'').toLowerCase().includes(q) || (b.responsavel_closer||'').toLowerCase().includes(q));
+    }
+    if (filterClass.length > 0) d = d.filter(b => filterClass.includes(b.classificacao));
+    if (filterEstado.length > 0) d = d.filter(b => filterEstado.includes(b.estado));
+    if (filterBDR.length > 0) d = d.filter(b => filterBDR.includes(b.responsavel_bdr));
+    if (filterPDV.length > 0) d = d.filter(b => filterPDV.includes(b.pdv_atual));
     return d;
-  }, [brands, profile]);
+  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV]);
   // ── Change stage ──
-  const changeStage = async (brandId, product, newStage) => {
+  const changeStage = async (brandId, productKey, newStage) => {
     setSaving(true);
+    // Optimistic update: immediately reflect in UI
+    setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { ...prev.pipelines?.[productKey], stage: newStage } } } : prev);
+    setBrands(prev => prev.map(b => b.id === brandId ? { ...b, pipelines: { ...b.pipelines, [productKey]: { ...b.pipelines?.[productKey], stage: newStage } } } : b));
     try {
       await fetch('/api/pipelines', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           brand_id: brandId,
-          product,
+          product: productKey,
           new_stage: newStage,
           user_id: user?.id,
           user_name: profile?.name,
         }),
       });
       await loadBrands();
+      // Re-sync selectedBrand with fresh data
+      const freshRes = await fetch(`/api/brands?limit=999`);
+      const freshData = await freshRes.json();
+      if (freshData.brands) {
+        setBrands(freshData.brands);
+        setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
+      }
     } catch (err) {
       console.error('Error changing stage:', err);
     }
@@ -122,27 +135,42 @@ export default function CRMPage() {
           user_name: profile?.name,
         }),
       });
-      await loadBrands();
-      // Update selectedBrand in place
+      // Optimistic update + re-sync
       setSelectedBrand(prev => prev ? { ...prev, pipelines: { ...prev.pipelines, [product]: { ...prev.pipelines?.[product], responsavel: newResp } } } : prev);
+      const freshRes = await fetch('/api/brands?limit=999');
+      const freshData = await freshRes.json();
+      if (freshData.brands) {
+        setBrands(freshData.brands);
+        setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
+      }
     } catch (err) {
       console.error('Error changing responsavel:', err);
     }
     setSaving(false);
   };
   // ── Enable product ──
-  const enableProduct = async (brandId, product) => {
+  const enableProduct = async (brandId, productKey) => {
+    setSaving(true);
+    // Optimistic update
+    setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { stage: '0. Nao Iniciado', active: true, responsavel: '' } } } : prev);
     await fetch('/api/pipelines', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         brand_id: brandId,
-        product,
+        product: productKey,
         user_id: user?.id,
         user_name: profile?.name,
       }),
     });
-    await loadBrands();
+    // Re-sync with fresh data
+    const freshRes = await fetch('/api/brands?limit=999');
+    const freshData = await freshRes.json();
+    if (freshData.brands) {
+      setBrands(freshData.brands);
+      setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
+    }
+    setSaving(false);
   };
   // ── Load history (includes old reactivated entries) ──
   const loadHistory = async (brandId, oldIds) => {
@@ -151,6 +179,48 @@ export default function CRMPage() {
     const res = await fetch(url);
     const data = await res.json();
     if (data.history) setBrandHistory(data.history);
+  };
+  // ── Export data ──
+  const exportData = async () => {
+    setSaving(true);
+    try {
+      // Fetch all history
+      const histRes = await fetch('/api/history?limit=9999');
+      const histData = await histRes.json();
+      const allHistory = histData.history || [];
+      // Build CSV rows: one row per brand, with columns for each product status + responsavel
+      const prodKeys = Object.keys(PRODUCTS);
+      const headers = ['Marca', 'Classificacao', 'Estado', 'Lojas', 'PDV Atual', 'BDR', 'Closer'];
+      prodKeys.forEach(pk => { headers.push(`Status ${PRODUCTS[pk].name}`); headers.push(`Resp. ${PRODUCTS[pk].name}`); });
+      headers.push('Historico');
+      const csvRows = [headers.join(';')];
+      filtered.forEach(b => {
+        const row = [
+          b.marca || '', b.classificacao || '', b.estado || '', b.qtd_lojas_fisicas || 0, b.pdv_atual || '',
+          b.responsavel_bdr || '', b.responsavel_closer || '',
+        ];
+        prodKeys.forEach(pk => {
+          row.push(b.pipelines?.[pk]?.stage || '');
+          row.push(b.pipelines?.[pk]?.responsavel || '');
+        });
+        // History for this brand
+        const brandHist = allHistory.filter(h => h.brand_id === b.id || (b._oldIds && b._oldIds.includes(h.brand_id)));
+        const histStr = brandHist.map(h => `${new Date(h.created_at).toLocaleDateString('pt-BR')} ${PRODUCTS[h.product]?.name || h.product}: ${h.from_stage} > ${h.to_stage}`).join(' | ');
+        row.push(histStr);
+        csvRows.push(row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';'));
+      });
+      const bom = '﻿';
+      const blob = new Blob([bom + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `CRM_Export_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export error:', err);
+    }
+    setSaving(false);
   };
   // ── Pipeline stages for current product ──
   const product = PRODUCTS[activeProduct];
@@ -172,7 +242,11 @@ export default function CRMPage() {
   }, [brands]);
   const bdrs = useMemo(() => {
     const s = new Set(brands.map(b => b.responsavel_bdr).filter(Boolean));
-    return ['Todos', ...Array.from(s).sort()];
+    return Array.from(s).sort();
+  }, [brands]);
+  const pdvs = useMemo(() => {
+    const s = new Set(brands.map(b => b.pdv_atual).filter(Boolean));
+    return Array.from(s).sort();
   }, [brands]);
   // ── Metrics ──
   const metrics = useMemo(() => {
@@ -260,14 +334,34 @@ export default function CRMPage() {
       </button>
     );
   };
-  const FilterSelect = ({ label, value, onChange, options }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '6px 12px' }}>
-      <span style={{ fontSize: 11, color: '#94a3b8' }}>{label}:</span>
-      <select value={value} onChange={e => onChange(e.target.value)} style={{ border: 'none', outline: 'none', fontSize: 12, color: '#1e293b', background: 'transparent', fontWeight: 500 }}>
-        {options.map(o => <option key={o}>{o}</option>)}
-      </select>
-    </div>
-  );
+  const MultiFilter = ({ label, selected, onChange, options }) => {
+    const [open, setOpen] = useState(false);
+    const toggle = (val) => {
+      if (selected.includes(val)) onChange(selected.filter(v => v !== val));
+      else onChange([...selected, val]);
+    };
+    return (
+      <div style={{ position: 'relative' }}>
+        <button onClick={() => setOpen(!open)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: selected.length > 0 ? '#fef2f2' : '#fff', border: selected.length > 0 ? '1px solid #EA1D2C' : '1px solid #e2e8f0', borderRadius: 10, padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: selected.length > 0 ? '#EA1D2C' : '#64748b', fontWeight: 500 }}>
+          <Filter size={12} />
+          {label}{selected.length > 0 ? ` (${selected.length})` : ''}
+        </button>
+        {open && (
+          <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 4px 12px rgba(0,0,0,.1)', zIndex: 50, padding: 6, minWidth: 160, maxHeight: 220, overflowY: 'auto' }}>
+            {selected.length > 0 && <button onClick={() => { onChange([]); setOpen(false); }} style={{ width: '100%', padding: '6px 10px', border: 'none', background: 'none', fontSize: 11, color: '#EA1D2C', cursor: 'pointer', textAlign: 'left', fontWeight: 600 }}>Limpar filtro</button>}
+            {options.map(o => (
+              <button key={o} onClick={() => toggle(o)} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 10px', border: 'none', background: selected.includes(o) ? '#fef2f2' : 'transparent', borderRadius: 6, fontSize: 12, color: '#1e293b', cursor: 'pointer', textAlign: 'left' }}>
+                <div style={{ width: 14, height: 14, borderRadius: 3, border: selected.includes(o) ? '2px solid #EA1D2C' : '1px solid #cbd5e1', background: selected.includes(o) ? '#EA1D2C' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {selected.includes(o) && <Check size={10} color="#fff" />}
+                </div>
+                {o}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
   // ══════════════════════════════════════════════════════════════
   // RENDER
   // ══════════════════════════════════════════════════════════════
@@ -317,14 +411,18 @@ export default function CRMPage() {
             <Search size={14} color="#94a3b8" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar marca..." style={{ border: 'none', outline: 'none', flex: 1, fontSize: 13, color: '#1e293b' }} />
           </div>
-          <FilterSelect label="Classificacao" value={filterClass} onChange={setFilterClass} options={['Todos','P','M','G']} />
-          <FilterSelect label="Estado" value={filterEstado} onChange={setFilterEstado} options={estados} />
-          {profile?.role !== 'executivo' && <FilterSelect label="BDR" value={filterBDR} onChange={setFilterBDR} options={bdrs} />}
+          <MultiFilter label="Classificacao" selected={filterClass} onChange={setFilterClass} options={['P','M','G']} />
+          <MultiFilter label="Estado" selected={filterEstado} onChange={setFilterEstado} options={estados.filter(e => e !== 'Todos')} />
+          {profile?.role !== 'executivo' && <MultiFilter label="Responsavel" selected={filterBDR} onChange={setFilterBDR} options={bdrs} />}
+          {pdvs.length > 0 && <MultiFilter label="PDV" selected={filterPDV} onChange={setFilterPDV} options={pdvs} />}
           {product?.closedStages && (
             <button onClick={() => setShowClosed(!showClosed)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: showClosed ? '#fef2f2' : '#fff', color: showClosed ? '#ef4444' : '#64748b', cursor: 'pointer' }}>
               {showClosed ? 'Ocultar Perdidos' : 'Mostrar Perdidos'}
             </button>
           )}
+          <button onClick={exportData} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Upload size={12} style={{ transform: 'rotate(180deg)' }} /> Exportar
+          </button>
           <div style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8' }}>{filtered.length} marcas</div>
         </div>
       )}
