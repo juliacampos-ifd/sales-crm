@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PRODUCTS, CLASSIFICACAO_COLORS, MONTH_NAMES, DUPLAS, getMonthBusinessDays, getMonthBusinessDaysMTD } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload, Plus } from 'lucide-react';
+import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload, Plus, Save } from 'lucide-react';
 // ====================================================================
 // MAIN CRM PAGE
 // ====================================================================
@@ -29,6 +29,29 @@ export default function CRMPage() {
   const [brandHistory, setBrandHistory] = useState([]);
   const [showClosed, setShowClosed] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Editable fields (local state for pending changes)
+  const [editLojas, setEditLojas] = useState('');
+  const [editPDV, setEditPDV] = useState('');
+  const [editBaseElegivel, setEditBaseElegivel] = useState([]);
+  const [editFUP, setEditFUP] = useState('');
+  const [infoChanged, setInfoChanged] = useState(false);
+  const [pipelinesChanged, setPipelinesChanged] = useState(false);
+  // Track pending responsavel changes
+  const [pendingResp, setPendingResp] = useState({});
+  // ── Init edit fields when selecting a brand ──
+  const openBrandDetail = (brand, tab) => {
+    setSelectedBrand(brand);
+    setDetailTab(tab || 'info');
+    setEditLojas(brand.qtd_lojas_fisicas || '');
+    setEditPDV(brand.pdv_atual || '');
+    const be = brand.base_elegivel || '';
+    setEditBaseElegivel(be ? be.split(',').map(s => s.trim()).filter(Boolean) : []);
+    setEditFUP(brand.proximo_passo || '');
+    setInfoChanged(false);
+    setPipelinesChanged(false);
+    setPendingResp({});
+    loadHistory(brand.id, brand._oldIds);
+  };
   // ── Auth check ──
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -92,78 +115,42 @@ export default function CRMPage() {
   // ── Change stage ──
   const changeStage = async (brandId, productKey, newStage) => {
     setSaving(true);
-    // Optimistic update: immediately reflect in UI
     setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { ...prev.pipelines?.[productKey], stage: newStage } } } : prev);
     setBrands(prev => prev.map(b => b.id === brandId ? { ...b, pipelines: { ...b.pipelines, [productKey]: { ...b.pipelines?.[productKey], stage: newStage } } } : b));
     try {
       await fetch('/api/pipelines', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brand_id: brandId,
-          product: productKey,
-          new_stage: newStage,
-          user_id: user?.id,
-          user_name: profile?.name,
-        }),
+        body: JSON.stringify({ brand_id: brandId, product: productKey, new_stage: newStage, user_id: user?.id, user_name: profile?.name }),
       });
-      await loadBrands();
-      // Re-sync selectedBrand with fresh data
-      const freshRes = await fetch(`/api/brands?limit=999`);
-      const freshData = await freshRes.json();
-      if (freshData.brands) {
-        setBrands(freshData.brands);
-        setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
-      }
-    } catch (err) {
-      console.error('Error changing stage:', err);
-    }
-    setSaving(false);
-  };
-  // ── Change responsavel ──
-  const changeResponsavel = async (brandId, product, newResp) => {
-    setSaving(true);
-    try {
-      await fetch('/api/pipelines', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brand_id: brandId,
-          product,
-          responsavel: newResp,
-          user_id: user?.id,
-          user_name: profile?.name,
-        }),
-      });
-      // Optimistic update + re-sync
-      setSelectedBrand(prev => prev ? { ...prev, pipelines: { ...prev.pipelines, [product]: { ...prev.pipelines?.[product], responsavel: newResp } } } : prev);
       const freshRes = await fetch('/api/brands?limit=999');
       const freshData = await freshRes.json();
       if (freshData.brands) {
         setBrands(freshData.brands);
         setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
       }
-    } catch (err) {
-      console.error('Error changing responsavel:', err);
-    }
+    } catch (err) { console.error('Error changing stage:', err); }
     setSaving(false);
+  };
+  // ── Save pending responsavel changes (batch) ──
+  const savePendingResponsaveis = async (brandId) => {
+    for (const [prodKey, newResp] of Object.entries(pendingResp)) {
+      await fetch('/api/pipelines', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_id: brandId, product: prodKey, responsavel: newResp, user_id: user?.id, user_name: profile?.name }),
+      });
+    }
   };
   // ── Enable product ──
   const enableProduct = async (brandId, productKey) => {
     setSaving(true);
-    // Optimistic update
     setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { stage: '0. Nao Iniciado', active: true, responsavel: '' } } } : prev);
     await fetch('/api/pipelines', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        brand_id: brandId,
-        product: productKey,
-        user_id: user?.id,
-        user_name: profile?.name,
-      }),
+      body: JSON.stringify({ brand_id: brandId, product: productKey, user_id: user?.id, user_name: profile?.name }),
     });
-    // Re-sync with fresh data
     const freshRes = await fetch('/api/brands?limit=999');
     const freshData = await freshRes.json();
     if (freshData.brands) {
@@ -172,7 +159,7 @@ export default function CRMPage() {
     }
     setSaving(false);
   };
-  // ── Load history (includes old reactivated entries) ──
+  // ── Load history ──
   const loadHistory = async (brandId, oldIds) => {
     let url = `/api/history?brand_id=${brandId}`;
     if (oldIds && oldIds.length > 0) url += `&old_ids=${oldIds.join(',')}`;
@@ -180,30 +167,75 @@ export default function CRMPage() {
     const data = await res.json();
     if (data.history) setBrandHistory(data.history);
   };
+  // ── Save info changes (button click) ──
+  const saveInfoChanges = async () => {
+    if (!selectedBrand) return;
+    setSaving(true);
+    try {
+      const updates = {};
+      if (String(editLojas) !== String(selectedBrand.qtd_lojas_fisicas || '')) updates.qtd_lojas_fisicas = editLojas === '' ? 0 : Number(editLojas);
+      if (editPDV !== (selectedBrand.pdv_atual || '')) updates.pdv_atual = editPDV;
+      const newBE = editBaseElegivel.join(', ');
+      if (newBE !== (selectedBrand.base_elegivel || '')) updates.base_elegivel = newBE;
+      if (editFUP !== (selectedBrand.proximo_passo || '')) updates.proximo_passo = editFUP;
+      if (Object.keys(updates).length > 0) {
+        await fetch('/api/brands', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: selectedBrand.id, ...updates, user_id: user?.id, user_name: profile?.name }),
+        });
+      }
+      const freshRes = await fetch('/api/brands?limit=999');
+      const freshData = await freshRes.json();
+      if (freshData.brands) {
+        setBrands(freshData.brands);
+        const updated = freshData.brands.find(b => b.id === selectedBrand.id);
+        if (updated) {
+          setSelectedBrand(updated);
+          setEditLojas(updated.qtd_lojas_fisicas || '');
+          setEditPDV(updated.pdv_atual || '');
+          const be = updated.base_elegivel || '';
+          setEditBaseElegivel(be ? be.split(',').map(s => s.trim()).filter(Boolean) : []);
+          setEditFUP(updated.proximo_passo || '');
+        }
+      }
+      setInfoChanged(false);
+    } catch (err) { console.error('Save error:', err); }
+    setSaving(false);
+  };
+  // ── Save pipelines changes (responsavel batch) ──
+  const savePipelinesChanges = async () => {
+    if (!selectedBrand) return;
+    setSaving(true);
+    try {
+      await savePendingResponsaveis(selectedBrand.id);
+      const freshRes = await fetch('/api/brands?limit=999');
+      const freshData = await freshRes.json();
+      if (freshData.brands) {
+        setBrands(freshData.brands);
+        const updated = freshData.brands.find(b => b.id === selectedBrand.id);
+        if (updated) setSelectedBrand(updated);
+      }
+      setPendingResp({});
+      setPipelinesChanged(false);
+    } catch (err) { console.error('Save pipelines error:', err); }
+    setSaving(false);
+  };
   // ── Export data ──
   const exportData = async () => {
     setSaving(true);
     try {
-      // Fetch all history
       const histRes = await fetch('/api/history?limit=9999');
       const histData = await histRes.json();
       const allHistory = histData.history || [];
-      // Build CSV rows: one row per brand, with columns for each product status + responsavel
       const prodKeys = Object.keys(PRODUCTS);
       const headers = ['Marca', 'Classificacao', 'Estado', 'Lojas', 'PDV Atual', 'BDR', 'Closer'];
       prodKeys.forEach(pk => { headers.push(`Status ${PRODUCTS[pk].name}`); headers.push(`Resp. ${PRODUCTS[pk].name}`); });
       headers.push('Historico');
       const csvRows = [headers.join(';')];
       filtered.forEach(b => {
-        const row = [
-          b.marca || '', b.classificacao || '', b.estado || '', b.qtd_lojas_fisicas || 0, b.pdv_atual || '',
-          b.responsavel_bdr || '', b.responsavel_closer || '',
-        ];
-        prodKeys.forEach(pk => {
-          row.push(b.pipelines?.[pk]?.stage || '');
-          row.push(b.pipelines?.[pk]?.responsavel || '');
-        });
-        // History for this brand
+        const row = [b.marca || '', b.classificacao || '', b.estado || '', b.qtd_lojas_fisicas || 0, b.pdv_atual || '', b.responsavel_bdr || '', b.responsavel_closer || ''];
+        prodKeys.forEach(pk => { row.push(b.pipelines?.[pk]?.stage || ''); row.push(b.pipelines?.[pk]?.responsavel || ''); });
         const brandHist = allHistory.filter(h => h.brand_id === b.id || (b._oldIds && b._oldIds.includes(h.brand_id)));
         const histStr = brandHist.map(h => `${new Date(h.created_at).toLocaleDateString('pt-BR')} ${PRODUCTS[h.product]?.name || h.product}: ${h.from_stage} > ${h.to_stage}`).join(' | ');
         row.push(histStr);
@@ -217,31 +249,10 @@ export default function CRMPage() {
       a.download = `CRM_Export_${new Date().toISOString().slice(0,10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Export error:', err);
-    }
+    } catch (err) { console.error('Export error:', err); }
     setSaving(false);
   };
-  // ── Update brand field ──
-  const updateBrandField = async (brandId, field, value) => {
-    setSaving(true);
-    setSelectedBrand(prev => prev ? { ...prev, [field]: value } : prev);
-    try {
-      await fetch('/api/brands', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: brandId, [field]: value, user_id: user?.id, user_name: profile?.name }),
-      });
-      const freshRes = await fetch('/api/brands?limit=999');
-      const freshData = await freshRes.json();
-      if (freshData.brands) {
-        setBrands(freshData.brands);
-        setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
-      }
-    } catch (err) { console.error('Update error:', err); }
-    setSaving(false);
-  };
-  // ── Pipeline stages for current product ──
+  // ── Pipeline helpers ──
   const product = PRODUCTS[activeProduct];
   const pipelineStages = useMemo(() => {
     if (!product) return [];
@@ -249,12 +260,8 @@ export default function CRMPage() {
     return product.activeStages || product.stages;
   }, [activeProduct, showClosed, product]);
   const getBrandsInStage = useCallback((stage) => {
-    return filtered.filter(b => {
-      const p = b.pipelines?.[activeProduct];
-      return p && p.stage === stage;
-    });
+    return filtered.filter(b => { const p = b.pipelines?.[activeProduct]; return p && p.stage === stage; });
   }, [filtered, activeProduct]);
-  // ── Estados list ──
   const estados = useMemo(() => {
     const s = new Set(brands.map(b => b.estado).filter(e => e && e.length === 2));
     return ['Todos', ...Array.from(s).sort()];
@@ -267,25 +274,26 @@ export default function CRMPage() {
     const s = new Set(brands.map(b => b.pdv_atual).filter(Boolean));
     return Array.from(s).sort();
   }, [brands]);
-  // ── Metrics ──
   const metrics = useMemo(() => {
     const f = filtered;
     const won3s = f.filter(b => b.pipelines?.['3s']?.stage === '9. Contrato assinado').length;
     const lost3s = f.filter(b => b.pipelines?.['3s']?.stage === '10. Perdido').length;
-    const byClass = {};
-    f.forEach(b => { if (b.classificacao) byClass[b.classificacao] = (byClass[b.classificacao] || 0) + 1; });
-    const byEstado = {};
-    f.forEach(b => { if (b.estado && b.estado.length === 2) byEstado[b.estado] = (byEstado[b.estado] || 0) + 1; });
+    const byClass = {}; f.forEach(b => { if (b.classificacao) byClass[b.classificacao] = (byClass[b.classificacao] || 0) + 1; });
+    const byEstado = {}; f.forEach(b => { if (b.estado && b.estado.length === 2) byEstado[b.estado] = (byEstado[b.estado] || 0) + 1; });
     const activeByProduct = {};
     Object.keys(PRODUCTS).forEach(pk => {
-      activeByProduct[pk] = f.filter(b => {
-        const s = b.pipelines?.[pk]?.stage;
-        return s && !['10. Perdido','11. Stand by','8. Perdido','9. Stand by'].includes(s);
-      }).length;
+      activeByProduct[pk] = f.filter(b => { const s = b.pipelines?.[pk]?.stage; return s && !['10. Perdido','11. Stand by','8. Perdido','9. Stand by'].includes(s); }).length;
     });
     return { total: f.length, won3s, lost3s, byClass, byEstado, activeByProduct };
   }, [filtered]);
   const shortStage = (s) => (s || '').replace(/^\d+\.\s*/, '');
+  // Base elegivel options
+  const BASE_ELEGIVEL_OPTIONS = ['FY26', 'FY27', 'Organico 3S'];
+  const toggleBaseElegivel = (opt) => {
+    setInfoChanged(true);
+    if (editBaseElegivel.includes(opt)) setEditBaseElegivel(editBaseElegivel.filter(v => v !== opt));
+    else setEditBaseElegivel([...editBaseElegivel, opt]);
+  };
   // ══════════════════════════════════════════════════════════════
   // LOADING
   // ══════════════════════════════════════════════════════════════
@@ -463,7 +471,7 @@ export default function CRMPage() {
                   </div>
                   <div style={{ padding: 6, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 50 }}>
                     {stageB.map(b => (
-                      <div key={b.id} onClick={() => { setSelectedBrand(b); setDetailTab('info'); loadHistory(b.id, b._oldIds); }} style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', border: '1px solid #e2e8f0', transition: 'all .12s' }}
+                      <div key={b.id} onClick={() => openBrandDetail(b, 'info')} style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', border: '1px solid #e2e8f0', transition: 'all .12s' }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = product.color; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{b.marca}</div>
@@ -497,7 +505,7 @@ export default function CRMPage() {
                 </thead>
                 <tbody>
                   {filtered.slice(0, 100).map(b => (
-                    <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => { setSelectedBrand(b); setDetailTab('info'); loadHistory(b.id, b._oldIds); }}
+                    <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => openBrandDetail(b, 'info')}
                       onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, fontSize: 13 }}>{b.marca}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || ''} / ${b.responsavel_closer || ''}` : '—')}</td>
@@ -508,7 +516,7 @@ export default function CRMPage() {
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.estado || '—'}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.qtd_lojas_fisicas || '—'}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
-                        <button onClick={e => { e.stopPropagation(); setSelectedBrand(b); setDetailTab('pipelines'); loadHistory(b.id, b._oldIds); }} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}><Eye size={13} color="#EA1D2C" /></button>
+                        <button onClick={e => { e.stopPropagation(); openBrandDetail(b, 'pipelines'); }} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}><Eye size={13} color="#EA1D2C" /></button>
                       </td>
                     </tr>
                   ))}
@@ -577,27 +585,58 @@ export default function CRMPage() {
             </div>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 24px' }}>
-            {/* INFO */}
+            {/* INFO TAB */}
             {detailTab === 'info' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {[['Resp. 3S', selectedBrand.pipelines?.['3s']?.responsavel || `${selectedBrand.responsavel_bdr || '—'} / ${selectedBrand.responsavel_closer || '—'}`], ['Resp. Saipos', selectedBrand.pipelines?.saipos?.responsavel || '—'], ['Resp. Totem', selectedBrand.pipelines?.totem?.responsavel || '—'], ['Coord. Delivery', selectedBrand.coordenador_delivery], ['Exec. Delivery', selectedBrand.executivo_delivery], ['Lojas', selectedBrand.qtd_lojas_fisicas], ['PDV Atual', selectedBrand.pdv_atual], ['Base Elegivel', selectedBrand.base_elegivel]].filter(([l]) => !(l.startsWith('Resp.') && l !== 'Resp. 3S' && !selectedBrand.pipelines?.[l === 'Resp. Saipos' ? 'saipos' : 'totem']?.stage)).map(([l, v]) => (
+                {[['Resp. 3S', selectedBrand.pipelines?.['3s']?.responsavel || `${selectedBrand.responsavel_bdr || '—'} / ${selectedBrand.responsavel_closer || '—'}`], ['Coord. Delivery', selectedBrand.coordenador_delivery], ['Exec. Delivery', selectedBrand.executivo_delivery]].map(([l, v]) => (
                   <div key={l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
                     <span style={{ color: '#64748b' }}>{l}</span>
                     <span style={{ fontWeight: 500, color: '#1e293b' }}>{v || '—'}</span>
                   </div>
                 ))}
+                {/* Editable: Lojas */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
+                  <span style={{ color: '#64748b' }}>Lojas</span>
+                  <input type="number" value={editLojas} onChange={e => { setEditLojas(e.target.value); setInfoChanged(true); }} style={{ width: 80, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none' }} />
+                </div>
+                {/* Editable: PDV Atual */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
+                  <span style={{ color: '#64748b' }}>PDV Atual</span>
+                  <input type="text" value={editPDV} onChange={e => { setEditPDV(e.target.value); setInfoChanged(true); }} placeholder="Ex: iFood, Rappi..." style={{ width: 160, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none' }} />
+                </div>
+                {/* Editable: Base Elegivel (multi-select) */}
+                <div style={{ fontSize: 13, padding: '4px 0' }}>
+                  <span style={{ color: '#64748b', display: 'block', marginBottom: 6 }}>Base Elegivel</span>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {BASE_ELEGIVEL_OPTIONS.map(opt => (
+                      <button key={opt} onClick={() => toggleBaseElegivel(opt)} style={{ padding: '4px 12px', borderRadius: 20, border: editBaseElegivel.includes(opt) ? '2px solid #EA1D2C' : '1px solid #e2e8f0', background: editBaseElegivel.includes(opt) ? '#fef2f2' : '#fff', color: editBaseElegivel.includes(opt) ? '#EA1D2C' : '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        {editBaseElegivel.includes(opt) && <Check size={10} style={{ marginRight: 4, verticalAlign: 'middle' }} />}
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Editable: FUP */}
                 <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, marginTop: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Proximo Passo / FUP</div>
-                  <textarea defaultValue={selectedBrand.proximo_passo || ''} placeholder="Descreva o proximo passo, data do FUP..." rows={3} onBlur={e => { if (e.target.value !== (selectedBrand.proximo_passo || '')) updateBrandField(selectedBrand.id, 'proximo_passo', e.target.value); }} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: '#475569' }} />
+                  <textarea value={editFUP} onChange={e => { setEditFUP(e.target.value); setInfoChanged(true); }} placeholder="Descreva o proximo passo, data do FUP..." rows={3} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', color: '#475569', boxSizing: 'border-box' }} />
                 </div>
+                {/* SAVE BUTTON */}
+                {infoChanged && (
+                  <button onClick={saveInfoChanges} disabled={saving} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '12px', background: saving ? '#94a3b8' : 'linear-gradient(135deg, #EA1D2C, #DA5D69)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', marginTop: 8 }}>
+                    <Save size={16} />
+                    {saving ? 'Salvando...' : 'Salvar Alteracoes'}
+                  </button>
+                )}
               </div>
             )}
-            {/* PIPELINES */}
+            {/* PIPELINES TAB */}
             {detailTab === 'pipelines' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {Object.entries(PRODUCTS).map(([key, prod]) => {
                   const pipeline = selectedBrand.pipelines?.[key];
                   const isActive = pipeline?.stage;
+                  const currentResp = pendingResp[key] !== undefined ? pendingResp[key] : (pipeline?.responsavel || '');
                   return (
                     <div key={key} style={{ border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden' }}>
                       <div style={{ padding: '14px 18px', background: isActive ? prod.color + '10' : '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
@@ -618,7 +657,7 @@ export default function CRMPage() {
                           </select>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>Responsavel:</span>
-                            <select value={pipeline.responsavel || ''} onChange={e => changeResponsavel(selectedBrand.id, key, e.target.value)} style={{ flex: 1, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, outline: 'none', background: '#fff' }}>
+                            <select value={currentResp} onChange={e => { setPendingResp({ ...pendingResp, [key]: e.target.value }); setPipelinesChanged(true); }} style={{ flex: 1, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, outline: 'none', background: '#fff' }}>
                               <option value="">Selecione...</option>
                               {(prod.responsaveis || []).map(r => <option key={r} value={r}>{r}</option>)}
                             </select>
@@ -628,9 +667,16 @@ export default function CRMPage() {
                     </div>
                   );
                 })}
+                {/* SAVE BUTTON for pipelines */}
+                {pipelinesChanged && (
+                  <button onClick={savePipelinesChanges} disabled={saving} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '12px', background: saving ? '#94a3b8' : 'linear-gradient(135deg, #EA1D2C, #DA5D69)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', marginTop: 8 }}>
+                    <Save size={16} />
+                    {saving ? 'Salvando...' : 'Salvar Alteracoes'}
+                  </button>
+                )}
               </div>
             )}
-            {/* HISTORY */}
+            {/* HISTORY TAB */}
             {detailTab === 'historico' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {brandHistory.length === 0 && <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 24 }}>Nenhuma movimentacao registrada</p>}
