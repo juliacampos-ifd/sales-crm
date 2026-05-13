@@ -11,6 +11,7 @@ const stageToMetric = (stage) => {
   const map = {
     '2. Primeiro Contato': 'primeiro_contato',
     '2. Primeiro Contato com a marca': 'primeiro_contato',
+    '2. Primeiro Contato Marca': 'primeiro_contato',
     '3. Apresentacao': 'apresentacao',
     '6. Negociacao': 'negociacao',
     '9. Contrato Assinado': 'fechadas',
@@ -85,7 +86,7 @@ export async function GET(request) {
     });
     const elegiveis = { total: eligS.total.size, lidia_gabi: eligS.lidia_gabi.size, joao_diego: eligS.joao_diego.size, michel_emerson: eligS.michel_emerson.size };
 
-    const tgtStages = ['2. Primeiro Contato', '2. Primeiro Contato com a marca', '3. Apresentacao', '6. Negociacao', '9. Contrato Assinado', '9. Contrato assinado'];
+    const tgtStages = ['2. Primeiro Contato', '2. Primeiro Contato com a marca', '2. Primeiro Contato Marca', '3. Apresentacao', '6. Negociacao', '9. Contrato Assinado', '9. Contrato assinado'];
     let allHist = [], from = 0;
     while (true) {
       const { data: batch, error: hE } = await sb.from('pipeline_history').select('brand_id,to_stage,created_at').eq('product','3s').in('to_stage', tgtStages).range(from, from+999);
@@ -123,7 +124,4 @@ export async function GET(request) {
     delete realized._seen;
     return NextResponse.json({ metas: metas || [], realized, elegiveis });
   } catch (error) {
-    console.error('Scorecard API error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+    console.error('Scorecard API error:', error
