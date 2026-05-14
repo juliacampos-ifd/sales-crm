@@ -142,7 +142,44 @@ export async function GET(request) {
       forecast[ym].total.lojas += (e.lojas || 0);
     });
 
-    const res = NextResponse.json({ metas: metas || [], realized, elegiveis, forecast });
+    // Build brand lists per ym+metric for popup detail
+    const brandLists = {};
+    const _seen2 = new Set();
+    allHist.forEach(e => {
+      const br = brandLk[e.brand_id];
+      if (!br) return;
+      const marcaKey = (br.marca || '').trim().toLowerCase();
+      const active = activeBrand[marcaKey];
+      if (!active) return;
+      if (!isPorM(active)) return;
+      const dt = new Date(e.created_at);
+      const ym = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+      const metric = stageToMetric(e.to_stage);
+      if (!metric) return;
+      const dedupKey2 = marcaKey + '|' + ym + '|' + metric;
+      if (_seen2.has(dedupKey2)) return;
+      _seen2.add(dedupKey2);
+      const d = closerToDupla(active.responsavel_closer);
+      const bk = ym + '|' + metric;
+      if (!brandLists[bk]) brandLists[bk] = [];
+      brandLists[bk].push({ marca: active.marca, closer: active.responsavel_closer, lojas: active.qtd_lojas_fisicas || 0, dupla: d, date: e.created_at });
+    });
+
+    // Elegiveis brand list
+    const eligBrands = [];
+    const _seenE = new Set();
+    allBrands.forEach(b => {
+      if (!isPorM(b)) return;
+      if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
+      if (pipeLk[b.id] === '13. Reativado') return;
+      const key = (b.marca || '').trim().toLowerCase();
+      if (_seenE.has(key)) return;
+      _seenE.add(key);
+      const active = activeBrand[key] || b;
+      eligBrands.push({ marca: active.marca, closer: active.responsavel_closer, lojas: active.qtd_lojas_fisicas || 0, dupla: closerToDupla(active.responsavel_closer), stage: pipeLk[active.id] || '—' });
+    });
+
+    const res = NextResponse.json({ metas: metas || [], realized, elegiveis, forecast, brandLists, eligBrands });
     res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return res;
   } catch (error) {
