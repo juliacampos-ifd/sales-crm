@@ -130,7 +130,7 @@ export default function ScorecardPage() {
         } else if (def.isForecast) {
           const fField = def.key === 'fcst_marcas' ? 'marcas' : 'lojas';
           const v = gf(dupla, col.k, fField);
-          if (isCur) { row.cells.push({ isCur:true, isRate:true, v, ym:col.k }); }
+          if (isCur) { row.cells.push({ isCur:true, isFcstCell:true, v, ym:col.k }); }
           else { row.cells.push({ v, ym:col.k }); }
         } else if (def.isPercent) {
           let num=0, den=1;
@@ -281,11 +281,20 @@ export default function ScorecardPage() {
                           <td style={{ ...td, fontWeight:row.isBold?700:400, fontSize:row.isPercent?11:12, color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#1e293b', position:'sticky', left:0, background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff', zIndex:1 }}>{row.label}</td>
                           {row.cells.map((cell,ci) => {
                             if (!cell.isCur) return <td key={ci} style={{ ...td, textAlign:'center', fontWeight:row.isBold?600:400, color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#475569' }}><CVal v={cell.v} metric={row.key} ym={cell.ym} dupla={dupla} bold={row.isBold}/></td>;
+                            if (cell.isFcstCell) return [
+                              <td key={ci+'m'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                              <td key={ci+'f'} style={{ ...td, textAlign:'center', color:'#0284c7', fontWeight:700 }}>{cell.v}</td>,
+                              <td key={ci+'p'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                              <td key={ci+'r'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                              <td key={ci+'mm'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                              <td key={ci+'mr'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                              <td key={ci+'mp'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                            ];
                             if (cell.isRate) return [
                               <td key={ci+'m'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
                               <td key={ci+'f'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
                               <td key={ci+'p'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
-                              <td key={ci+'r'} style={{ ...td, textAlign:'center', color:row.isForecast?'#0284c7':'#c0c5cc', fontWeight:row.isForecast?700:400 }}>{cell.v}</td>,
+                              <td key={ci+'r'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}>{cell.v}</td>,
                               <td key={ci+'mm'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
                               <td key={ci+'mr'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
                               <td key={ci+'mp'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
