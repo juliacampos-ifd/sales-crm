@@ -122,7 +122,24 @@ export async function GET(request) {
     });
 
     delete realized._seen;
-    return NextResponse.json({ metas: metas || [], realized, elegiveis });
+
+    // Forecast integration: fetch 3s_pm entries and map to duplas
+    const { data: fcstEntries } = await sb.from('forecast_entries').select('*').eq('section', '3s_pm');
+    const forecast = {};
+    (fcstEntries || []).forEach(e => {
+      const ym = `${e.year}-${String(e.month).padStart(2,'0')}`;
+      const marcaLower = (e.marca || '').trim().toLowerCase();
+      // Find brand to get dupla
+      const brandMatch = allBrands.find(b => (b.marca || '').trim().toLowerCase() === marcaLower);
+      const dupla = brandMatch ? closerToDupla(brandMatch.responsavel_closer) : 'michel_emerson';
+      if (!forecast[ym]) forecast[ym] = { total: { marcas: 0, lojas: 0 }, lidia_gabi: { marcas: 0, lojas: 0 }, joao_diego: { marcas: 0, lojas: 0 }, michel_emerson: { marcas: 0, lojas: 0 } };
+      forecast[ym][dupla].marcas++;
+      forecast[ym][dupla].lojas += (e.lojas || 0);
+      forecast[ym].total.marcas++;
+      forecast[ym].total.lojas += (e.lojas || 0);
+    });
+
+    return NextResponse.json({ metas: metas || [], realized, elegiveis, forecast });
   } catch (error) {
     console.error('Scorecard API error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
