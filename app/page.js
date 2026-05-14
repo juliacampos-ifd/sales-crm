@@ -115,7 +115,13 @@ export default function CRMPage() {
     if (data.brands) setBrands(data.brands);
   }, []);
   useEffect(() => {
-    if (user) { loadBrands(); loadForecast(); }
+    if (user) {
+      loadBrands();
+      fetch('/api/forecast').then(r => r.json()).then(d => {
+        if (d.metas) setForecastMetas(d.metas);
+        if (d.entries) setForecastEntries(d.entries);
+      }).catch(console.error);
+    }
   }, [user, loadBrands]);
   // Viewer = read-only (vê tudo, não edita nada)
   const canEdit = profile?.role !== 'viewer';
