@@ -481,11 +481,19 @@ export default function CRMPage() {
     } catch (err) { console.error(err); }
   };
 
-  const updateForecastLojas = async (entryId, val) => {
+  const updateForecastLojasLocal = (entryId, val) => {
+    setForecastEntries(prev => prev.map(e => e.id === entryId ? { ...e, lojas: Number(val) || 0, _dirty: true } : e));
+  };
+  const saveForecastChanges = async () => {
+    setSaving(true);
     try {
-      await fetch('/api/forecast', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: entryId, lojas: Number(val) || 0 }) });
-      setForecastEntries(prev => prev.map(e => e.id === entryId ? { ...e, lojas: Number(val) || 0 } : e));
+      const dirty = forecastEntries.filter(e => e._dirty);
+      for (const e of dirty) {
+        await fetch('/api/forecast', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: e.id, lojas: e.lojas }) });
+      }
+      setForecastEntries(prev => prev.map(e => ({ ...e, _dirty: false })));
     } catch (err) { console.error(err); }
+    setSaving(false);
   };
 
   const NavBtn = ({ id, icon: Icon, label }) => (
@@ -779,6 +787,11 @@ export default function CRMPage() {
                 </div>
               ))}
             </div>
+            {canEditForecast && forecastEntries.some(e => e._dirty) && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                <button onClick={saveForecastChanges} disabled={saving} style={{ padding: '10px 28px', background: saving ? '#94a3b8' : 'linear-gradient(135deg, #22c55e, #16a34a)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: saving ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 2px 8px rgba(34,197,94,.3)' }}><Save size={16} /> {saving ? 'Salvando...' : 'Salvar alteracoes'}</button>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 20 }}>
               {FISCAL_MONTHS.map(fm => {
                 const secColor = FORECAST_SECTIONS.find(s => s.key === forecastSection)?.color || '#EA1D2C';
@@ -821,7 +834,7 @@ export default function CRMPage() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, color: entry.checked ? '#166534' : '#1e293b', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.marca}</div>
                           </div>
-                          <input type="number" defaultValue={entry.lojas} key={entry.id + '-' + entry.lojas} disabled={!canEditForecast} onBlur={e => { if (Number(e.target.value) !== entry.lojas) updateForecastLojas(entry.id, e.target.value); }} onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }} style={{ width: 40, padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11, textAlign: 'center', outline: 'none', opacity: canEditForecast ? 1 : 0.6 }} />
+                          <input type="number" value={entry.lojas} disabled={!canEditForecast} onChange={e => updateForecastLojasLocal(entry.id, e.target.value)} style={{ width: 40, padding: '2px 4px', border: entry._dirty ? '1px solid #f59e0b' : '1px solid #e2e8f0', borderRadius: 4, fontSize: 11, textAlign: 'center', outline: 'none', opacity: canEditForecast ? 1 : 0.6, background: entry._dirty ? '#fffbeb' : '#fff' }} />
                           <span style={{ fontSize: 10, color: '#94a3b8' }}>lj</span>
                           {canEditForecast && <button onClick={() => deleteForecastEntry(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db' }}><X size={12} /></button>}
                         </div>
