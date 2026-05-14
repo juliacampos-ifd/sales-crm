@@ -53,7 +53,7 @@ export default function ScorecardPage() {
 
   useEffect(() => {
     if (!user) return;
-    fetch(`/api/scorecard?month=${selMonth}&year=${selYear}`)
+    fetch(`/api/scorecard?month=${selMonth}&year=${selYear}&_t=${Date.now()}`, {cache:'no-store'})
       .then(r => r.json()).then(d => setData(d)).catch(console.error);
   }, [user, selMonth, selYear]);
 
@@ -62,7 +62,7 @@ export default function ScorecardPage() {
     setModal({ metric, ym, dupla, label: METRIC_LABELS[metric] || metric });
     setModalLoading(true);
     setModalBrands([]);
-    fetch(`/api/scorecard/brands?metric=${metric}&ym=${ym}&dupla=${dupla}`)
+    fetch(`/api/scorecard/brands?metric=${metric}&ym=${ym}&dupla=${dupla}&_t=${Date.now()}`, {cache:'no-store'})
       .then(r => r.json())
       .then(d => { setModalBrands(d.brands || []); setModalLoading(false); })
       .catch(() => setModalLoading(false));
