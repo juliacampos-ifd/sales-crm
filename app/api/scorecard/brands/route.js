@@ -112,10 +112,11 @@ export async function GET(request) {
     allHist.forEach(e => {
       const br = brandLk[e.brand_id];
       if (!br) return;
-      if (!isPorM(br)) return;
       const marcaKey = (br.marca || '').trim().toLowerCase();
       const active = activeBrand[marcaKey];
       if (!active) return;
+      // Check P/M on ACTIVE brand (not the history entry's brand)
+      if (!isPorM(active)) return;
       const dt = new Date(e.created_at);
       const eYm = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
       if (eYm !== ym) return;
