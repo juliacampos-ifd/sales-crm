@@ -170,4 +170,24 @@ export async function PATCH(request) {
     .update(safeUpdates)
     .eq('id', id)
     .select()
-    .single(
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Log FUP changes in pipeline_history
+  if (updates.proximo_passo !== undefined && updates.proximo_passo !== (current?.proximo_passo || '')) {
+    await supabase.from('pipeline_history').insert({
+      brand_id: id,
+      product: 'fup',
+      from_stage: current?.proximo_passo || '(vazio)',
+      to_stage: updates.proximo_passo || '(vazio)',
+      changed_by: user_id || null,
+      changed_by_name: user_name || 'Sistema',
+      notes: 'Atualizacao de FUP',
+    });
+  }
+
+  return NextResponse.json({ brand: data });
+}
