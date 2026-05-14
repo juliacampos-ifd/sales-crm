@@ -993,4 +993,11 @@ export default function CRMPage() {
                     <div style={{ flex: '0 0 100px', color: '#94a3b8', textAlign: 'right' }}>{h.changed_by_name || '—'}</div>
                   </div>
                 ))}
-    
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
