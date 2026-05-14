@@ -115,8 +115,8 @@ export async function GET(request) {
       if (realized._seen.has(dedupKey)) return;
       realized._seen.add(dedupKey);
       if (!realized[ym]) realized[ym] = { total: emptyM(), lidia_gabi: emptyM(), joao_diego: emptyM(), michel_emerson: emptyM() };
-      // Use the closer from the brand that OWNS this history entry
-      const d = closerToDupla(br.responsavel_closer);
+      // Use ACTIVE brand's closer for dupla assignment (not the history entry's brand)
+      const d = closerToDupla(active.responsavel_closer);
       realized[ym].total[metric]++; realized[ym][d][metric]++;
       if (metric === 'fechadas' && active.qtd_lojas_fisicas) { realized[ym].total.lojas += active.qtd_lojas_fisicas; realized[ym][d].lojas += active.qtd_lojas_fisicas; }
     });
