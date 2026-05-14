@@ -21,6 +21,8 @@ const FUNNEL_ROWS = [
   { key:'fechadas', label:'MARCAS FECHADAS', isBold:true },
   { key:'media_lojas', label:'Media de lojas por marca', isLive:true },
   { key:'lojas', label:'Lojas Fechadas', isBold:true },
+  { key:'fcst_marcas', label:'Forecast Marcas', isForecast:true },
+  { key:'fcst_lojas', label:'Forecast Lojas', isForecast:true, isBold:true },
 ];
 
 function pctColor(pct) {
@@ -82,9 +84,24 @@ export default function ScorecardPage() {
   }, [selMonth, selYear]);
 
   const curKey = `${selYear}-${String(selMonth).padStart(2,'0')}`;
-  const gm = (dupla, y, m, f) => { if (!data?.metas) return 0; const x = data.metas.find(r => r.dupla === dupla && r.year === y && r.month === m); return x ? (x[f] || 0) : 0; };
-  const gr = (dupla, ym, f) => data?.realized?.[ym]?.[dupla]?.[f] || 0;
-  const ge = (dupla) => data?.elegiveis?.[dupla] || 0;
+  const DUPLAS_KEYS = ['lidia_gabi','joao_diego','michel_emerson'];
+  const gmSingle = (dupla, y, m, f) => { if (!data?.metas) return 0; const x = data.metas.find(r => r.dupla === dupla && r.year === y && r.month === m); return x ? (x[f] || 0) : 0; };
+  const gm = (dupla, y, m, f) => {
+    if (dupla === 'total') return DUPLAS_KEYS.reduce((s, d) => s + gmSingle(d, y, m, f), 0);
+    return gmSingle(dupla, y, m, f);
+  };
+  const gr = (dupla, ym, f) => {
+    if (dupla === 'total') return DUPLAS_KEYS.reduce((s, d) => s + (data?.realized?.[ym]?.[d]?.[f] || 0), 0);
+    return data?.realized?.[ym]?.[dupla]?.[f] || 0;
+  };
+  const ge = (dupla) => {
+    if (dupla === 'total') return DUPLAS_KEYS.reduce((s, d) => s + (data?.elegiveis?.[d] || 0), 0);
+    return data?.elegiveis?.[dupla] || 0;
+  };
+  const gf = (dupla, ym, field) => {
+    if (dupla === 'total') return DUPLAS_KEYS.reduce((s, d) => s + (data?.forecast?.[ym]?.[d]?.[field] || 0), 0);
+    return data?.forecast?.[ym]?.[dupla]?.[field] || 0;
+  };
 
   const buildRows = (dupla) => {
     const cmR = {}, cmM = {}, fcst = {}, mtdM = {};
@@ -110,6 +127,11 @@ export default function ScorecardPage() {
           const v = fch > 0 ? Math.round((loj/fch)*10)/10 : 0;
           if (isCur) { const metaML = gm(dupla, selYear, selMonth, 'media_lojas'); row.cells.push({ isCur:true, meta:metaML, fcst:v, pctA:metaML>0?Math.round((v/metaML)*100)+'%':'—', real:v, mtdMeta:v, mtdReal:v, mtdPct:'—', isLive:true, ym:col.k }); }
           else { row.cells.push({ v, ym:col.k }); }
+        } else if (def.isForecast) {
+          const fField = def.key === 'fcst_marcas' ? 'marcas' : 'lojas';
+          const v = gf(dupla, col.k, fField);
+          if (isCur) { row.cells.push({ isCur:true, isRate:true, v, ym:col.k }); }
+          else { row.cells.push({ v, ym:col.k }); }
         } else if (def.isPercent) {
           let num=0, den=1;
           if (isCur) {
@@ -119,7 +141,7 @@ export default function ScorecardPage() {
             if(def.key==='taxa_pc'){num=gv('primeiro_contato');den=gm(dupla,col.y,col.m,'elegiveis');} else if(def.key==='taxa_apres'){num=gv('apresentacao');den=gv('primeiro_contato');} else if(def.key==='taxa_neg'){num=gv('negociacao');den=gv('apresentacao');} else if(def.key==='taxa_fechadas'){num=gv('fechadas');den=gv('negociacao');}
           }
           const pct = den>0 ? Math.round((num/den)*100)+'%' : '0%';
-          row.cells.push(isCur ? { isCur:true, span:true, v:pct, ym:col.k } : { v:pct, ym:col.k });
+          row.cells.push(isCur ? { isCur:true, isRate:true, v:pct, ym:col.k } : { v:pct, ym:col.k });
         } else {
           const f = def.key;
           if (isCur) {
@@ -255,11 +277,19 @@ export default function ScorecardPage() {
                     </thead>
                     <tbody>
                       {rows.map((row,ri) => (
-                        <tr key={ri} style={{ background:row.isBold?'#fffbfb':'#fff' }}>
-                          <td style={{ ...td, fontWeight:row.isBold?700:400, fontSize:row.isPercent?11:12, color:row.isPercent?'#94a3b8':'#1e293b', position:'sticky', left:0, background:row.isBold?'#fffbfb':'#fff', zIndex:1 }}>{row.label}</td>
+                        <tr key={ri} style={{ background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff' }}>
+                          <td style={{ ...td, fontWeight:row.isBold?700:400, fontSize:row.isPercent?11:12, color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#1e293b', position:'sticky', left:0, background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff', zIndex:1 }}>{row.label}</td>
                           {row.cells.map((cell,ci) => {
-                            if (!cell.isCur) return <td key={ci} style={{ ...td, textAlign:'center', fontWeight:row.isBold?600:400, color:row.isPercent?'#94a3b8':'#475569' }}><CVal v={cell.v} metric={row.key} ym={cell.ym} dupla={dupla} bold={row.isBold}/></td>;
-                            if (cell.span) return <td key={ci} colSpan={7} style={{ ...td, textAlign:'center', fontWeight:600, color:'#94a3b8' }}>{cell.v}</td>;
+                            if (!cell.isCur) return <td key={ci} style={{ ...td, textAlign:'center', fontWeight:row.isBold?600:400, color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#475569' }}><CVal v={cell.v} metric={row.key} ym={cell.ym} dupla={dupla} bold={row.isBold}/></td>;
+                            if (cell.isRate) return [
+                              <td key={ci+'m'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                              <td key={ci+'f'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                              <td key={ci+'p'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                              <td key={ci+'r'} style={{ ...td, textAlign:'center', color:row.isForecast?'#0284c7':'#c0c5cc', fontWeight:row.isForecast?700:400 }}>{cell.v}</td>,
+                              <td key={ci+'mm'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                              <td key={ci+'mr'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                              <td key={ci+'mp'} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                            ];
                             return [
                               <td key={ci+'m'} style={{ ...td, textAlign:'center', background:'#fef2f208' }}>{cell.meta}</td>,
                               <td key={ci+'f'} style={{ ...td, textAlign:'center', fontWeight:600, background:'#fef2f208' }}>{cell.fcst}</td>,
