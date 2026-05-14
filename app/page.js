@@ -115,7 +115,7 @@ export default function CRMPage() {
     if (data.brands) setBrands(data.brands);
   }, []);
   useEffect(() => {
-    if (user) loadBrands();
+    if (user) { loadBrands(); loadForecast(); }
   }, [user, loadBrands]);
   // Viewer = read-only (vê tudo, não edita nada)
   const canEdit = profile?.role !== 'viewer';
@@ -232,6 +232,13 @@ export default function CRMPage() {
     const res = await fetch(url);
     const data = await res.json();
     if (data.history) setBrandHistory(data.history);
+  };
+  const deleteHistory = async (histId) => {
+    if (!confirm('Excluir esta movimentacao do historico?')) return;
+    try {
+      await fetch('/api/history?id=' + histId, { method: 'DELETE' });
+      setBrandHistory(prev => prev.filter(h => h.id !== histId));
+    } catch (err) { console.error('Error deleting history:', err); }
   };
   // ── Save info changes (button click) — respects testMode ──
   const saveInfoChanges = async () => {
@@ -738,7 +745,7 @@ export default function CRMPage() {
         {/* FORECAST */}
         {view === 'forecast' && forecastMetas.length === 0 && (
           <div style={{ textAlign: 'center', padding: 40 }}>
-            <button onClick={loadForecast} style={{ padding: '12px 24px', background: 'linear-gradient(135deg, #EA1D2C, #DA5D69)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Carregar Forecast</button>
+            <p style={{ color: '#94a3b8', fontSize: 14 }}>Carregando forecast...</p>
           </div>
         )}
         {view === 'forecast' && forecastMetas.length > 0 && (
@@ -808,7 +815,7 @@ export default function CRMPage() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, color: entry.checked ? '#166534' : '#1e293b', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.marca}</div>
                           </div>
-                          <input type="number" defaultValue={entry.lojas} key={entry.id} disabled={!canEditForecast} onBlur={e => updateForecastLojas(entry.id, e.target.value)} style={{ width: 40, padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11, textAlign: 'center', outline: 'none', opacity: canEditForecast ? 1 : 0.6 }} />
+                          <input type="number" defaultValue={entry.lojas} key={entry.id + '-' + entry.lojas} disabled={!canEditForecast} onBlur={e => { if (Number(e.target.value) !== entry.lojas) updateForecastLojas(entry.id, e.target.value); }} onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }} style={{ width: 40, padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11, textAlign: 'center', outline: 'none', opacity: canEditForecast ? 1 : 0.6 }} />
                           <span style={{ fontSize: 10, color: '#94a3b8' }}>lj</span>
                           {canEditForecast && <button onClick={() => deleteForecastEntry(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db' }}><X size={12} /></button>}
                         </div>
@@ -983,7 +990,7 @@ export default function CRMPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {brandHistory.length === 0 && <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 24 }}>Nenhuma movimentacao registrada</p>}
                 {brandHistory.map(h => (
-                  <div key={h.id} style={{ display: 'flex', gap: 10, padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9', fontSize: 12 }}>
+                  <div key={h.id} style={{ display: 'flex', gap: 10, padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9', fontSize: 12, alignItems: 'center' }}>
                     <div style={{ flex: '0 0 80px', color: '#94a3b8' }}>{new Date(h.created_at).toLocaleDateString('pt-BR')}</div>
                     <div style={{ flex: 1 }}>
                       <span style={{ color: '#94a3b8' }}>{shortStage(h.from_stage)}</span>
@@ -991,6 +998,7 @@ export default function CRMPage() {
                       <span style={{ color: '#94a3b8', marginLeft: 4 }}>({PRODUCTS[h.product]?.name || h.product})</span>
                     </div>
                     <div style={{ flex: '0 0 100px', color: '#94a3b8', textAlign: 'right' }}>{h.changed_by_name || '—'}</div>
+                    {profile?.role === 'admin' && <button onClick={() => deleteHistory(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db', flexShrink: 0 }} title="Excluir"><X size={14} /></button>}
                   </div>
                 ))}
               </div>
