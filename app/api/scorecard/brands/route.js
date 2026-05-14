@@ -54,11 +54,31 @@ export async function GET(request) {
 
     const sb = createServerClient();
 
+    // Load brands and pipelines (needed for all metrics)
+    const allBrands = await paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,base_elegivel,qtd_lojas_fisicas');
+    const allPipes = await paginate(sb, 'pipelines', 'brand_id,stage', [['product','3s']]);
+    const pipeLk = {};
+    allPipes.forEach(p => { pipeLk[p.brand_id] = p.stage; });
+    const brandLk = {};
+    allBrands.forEach(b => { brandLk[b.id] = b; });
+
+    // Build activeBrandId map: for each marca name, find the newest non-reativado entry
+    // This ensures we always use the CURRENT brand data (closer, lojas, etc.)
+    const byName = {};
+    allBrands.forEach(b => {
+      const name = (b.marca || '').trim().toLowerCase();
+      if (!byName[name]) byName[name] = [];
+      byName[name].push(b);
+    });
+    const activeBrandId = {};
+    Object.values(byName).forEach(group => {
+      group.sort((a, b) => (a.id > b.id ? 1 : -1));
+      const nonR = group.filter(b => pipeLk[b.id] !== '13. Reativado');
+      const pick = nonR.length > 0 ? nonR[nonR.length - 1] : group[group.length - 1];
+      group.forEach(b => { activeBrandId[b.id] = pick; });
+    });
+
     if (metric === 'elegiveis') {
-      const allBrands = await paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,base_elegivel,qtd_lojas_fisicas');
-      const allPipes = await paginate(sb, 'pipelines', 'brand_id,stage', [['product','3s']]);
-      const pipeLk = {};
-      allPipes.forEach(p => { pipeLk[p.brand_id] = p.stage; });
       const seen = new Set();
       const brands = [];
       allBrands.forEach(b => {
@@ -87,27 +107,35 @@ export async function GET(request) {
       from += 1000;
     }
 
-    const allBrands = await paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,qtd_lojas_fisicas');
-    const brandLk = {};
-    allBrands.forEach(b => { brandLk[b.id] = b; });
-
+    // Use the SAME dedup logic as the main scorecard API: marca+ym+metric
     const seen = new Set();
     const brands = [];
     allHist.forEach(e => {
       const br = brandLk[e.brand_id];
       if (!br) return;
+      // Only count P and M brands
       if (!isPorM(br)) return;
+      // Use active brand for current data (closer, lojas)
+      const active = activeBrandId[e.brand_id];
+      if (!active) return;
       const dt = new Date(e.created_at);
       const eYm = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
       if (eYm !== ym) return;
       const m = stageToMetric(e.to_stage);
       if (m !== metric) return;
-      const key = (br.marca || '').trim().toLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      const d = closerToDupla(br.responsavel_closer);
+      // Dedup by marca+ym+metric (same as main scorecard API)
+      const dedupKey = `${(br.marca||'').trim().toLowerCase()}|${eYm}|${m}`;
+      if (seen.has(dedupKey)) return;
+      seen.add(dedupKey);
+      // Use ACTIVE brand's closer for dupla assignment (fixes Nippon-like issues)
+      const d = closerToDupla(active.responsavel_closer);
       if (dupla !== 'total' && d !== dupla) return;
-      brands.push({ marca: br.marca, closer: br.responsavel_closer, lojas: br.qtd_lojas_fisicas || 0, date: e.created_at });
+      brands.push({
+        marca: active.marca,
+        closer: active.responsavel_closer,
+        lojas: active.qtd_lojas_fisicas || 0,
+        date: e.created_at
+      });
     });
     brands.sort((a, b) => a.marca.localeCompare(b.marca));
     return NextResponse.json({ brands, count: brands.length });
