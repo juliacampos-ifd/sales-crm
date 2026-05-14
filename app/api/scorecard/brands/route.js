@@ -91,7 +91,9 @@ export async function GET(request) {
         brands.push({ marca: active.marca, closer: active.responsavel_closer, stage: pipeLk[active.id] || '—', lojas: active.qtd_lojas_fisicas || 0 });
       });
       brands.sort((a, b) => a.marca.localeCompare(b.marca));
-      return NextResponse.json({ brands, count: brands.length });
+      const res = NextResponse.json({ brands, count: brands.length });
+      res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return res;
     }
 
     // Fetch pipeline_history for funnel metrics
@@ -137,7 +139,9 @@ export async function GET(request) {
       });
     });
     brands.sort((a, b) => a.marca.localeCompare(b.marca));
-    return NextResponse.json({ brands, count: brands.length });
+    const res = NextResponse.json({ brands, count: brands.length });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   } catch (error) {
     console.error('Scorecard brands API error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
