@@ -136,7 +136,7 @@ export default function CRMPage() {
     }
     if (filterClass.length > 0) d = d.filter(b => filterClass.includes(b.classificacao));
     if (filterEstado.length > 0) d = d.filter(b => filterEstado.includes(b.estado));
-    if (filterBDR.length > 0) d = d.filter(b => filterBDR.includes(b.responsavel_bdr));
+    if (filterBDR.length > 0) d = d.filter(b => filterBDR.includes(b.responsavel_bdr) || filterBDR.includes(b.responsavel_closer));
     if (filterPDV.length > 0) d = d.filter(b => filterPDV.includes(b.pdv_atual));
     if (filterBaseElegivel.length > 0) d = d.filter(b => { const be = (b.base_elegivel || "").split(",").map(s => s.trim()); return filterBaseElegivel.some(f => be.includes(f)); });
     if (filterHaas.length > 0) d = d.filter(b => { const pt = (b.produto_totem || "").split(",").map(s => s.trim()); return filterHaas.some(f => pt.includes(f)); });
@@ -341,7 +341,7 @@ export default function CRMPage() {
     return ['Todos', ...Array.from(s).sort()];
   }, [brands]);
   const bdrs = useMemo(() => {
-    const s = new Set(brands.map(b => b.responsavel_bdr).filter(Boolean));
+    const s = new Set([...brands.map(b => b.responsavel_bdr), ...brands.map(b => b.responsavel_closer)].filter(Boolean));
     return Array.from(s).sort();
   }, [brands]);
   const pdvs = useMemo(() => {
@@ -560,10 +560,6 @@ export default function CRMPage() {
         <div style={{ display: 'flex', gap: 4, background: '#f1f5f9', borderRadius: 10, padding: 3 }}>
           <NavBtn id="pipeline" icon={LayoutGrid} label="Pipeline" />
           <NavBtn id="contacts" icon={Users} label="Marcas" />
-          <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
-          <a href="/scorecard" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
-            <Target size={16} /> Scorecard
-          </a>
           {canEdit && <a href="/input" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Plus size={16} /> Nova Marca
           </a>}
@@ -571,6 +567,10 @@ export default function CRMPage() {
             <Award size={16} /> RV
           </a>
           <NavBtn id="forecast" icon={Calendar} label="Forecast" />
+          <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
+          <a href="/scorecard" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
+            <Target size={16} /> Scorecard
+          </a>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {profile?.role === 'admin' && (
@@ -993,11 +993,4 @@ export default function CRMPage() {
                     <div style={{ flex: '0 0 100px', color: '#94a3b8', textAlign: 'right' }}>{h.changed_by_name || '—'}</div>
                   </div>
                 ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+    
