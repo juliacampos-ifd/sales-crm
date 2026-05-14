@@ -767,4 +767,14 @@ export default function CRMPage() {
                       <span style={{ fontWeight: 600, color: '#1e293b' }}>{shortStage(h.to_stage)}</span>
                       <span style={{ marginLeft: 8, fontSize: 10, background: (h.product === 'fup' ? '#8b5cf6' : PRODUCTS[h.product]?.color || '#EA1D2C') + '20', color: h.product === 'fup' ? '#8b5cf6' : PRODUCTS[h.product]?.color || '#EA1D2C', padding: '1px 6px', borderRadius: 4 }}>{h.product === 'fup' ? 'FUP' : (PRODUCTS[h.product]?.name || h.product)}</span>
                     </div>
-                
+                    <div style={{ color: '#94a3b8', fontSize: 11 }}>{h.changed_by_name || 'Sistema'}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
