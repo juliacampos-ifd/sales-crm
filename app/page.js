@@ -24,6 +24,7 @@ export default function CRMPage() {
   const [filterEstado, setFilterEstado] = useState([]);
   const [filterBDR, setFilterBDR] = useState([]);
   const [filterPDV, setFilterPDV] = useState([]);
+  const [filterBaseElegivel, setFilterBaseElegivel] = useState([]);
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [detailTab, setDetailTab] = useState('info');
   const [brandHistory, setBrandHistory] = useState([]);
@@ -34,6 +35,7 @@ export default function CRMPage() {
   const [editPDV, setEditPDV] = useState('');
   const [editBaseElegivel, setEditBaseElegivel] = useState([]);
   const [editFUP, setEditFUP] = useState('');
+  const [editCulinaria, setEditCulinaria] = useState('');
   const [infoChanged, setInfoChanged] = useState(false);
   const [pipelinesChanged, setPipelinesChanged] = useState(false);
   // Track pending responsavel changes
@@ -51,6 +53,7 @@ export default function CRMPage() {
     const be = brand.base_elegivel || '';
     setEditBaseElegivel(be ? be.split(',').map(s => s.trim()).filter(Boolean) : []);
     setEditFUP(brand.proximo_passo || '');
+    setEditCulinaria(brand.culinaria || '');
     setInfoChanged(false);
     setPipelinesChanged(false);
     setPendingResp({});
@@ -114,8 +117,9 @@ export default function CRMPage() {
     if (filterEstado.length > 0) d = d.filter(b => filterEstado.includes(b.estado));
     if (filterBDR.length > 0) d = d.filter(b => filterBDR.includes(b.responsavel_bdr));
     if (filterPDV.length > 0) d = d.filter(b => filterPDV.includes(b.pdv_atual));
+    if (filterBaseElegivel.length > 0) d = d.filter(b => { const be = (b.base_elegivel || "").split(",").map(s => s.trim()); return filterBaseElegivel.some(f => be.includes(f)); });
     return d;
-  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV]);
+  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel]);
   // ── Change stage (respects testMode) ──
   const changeStage = async (brandId, productKey, newStage) => {
     setSaving(true);
@@ -219,6 +223,7 @@ export default function CRMPage() {
       const newBE = editBaseElegivel.join(', ');
       if (newBE !== (selectedBrand.base_elegivel || '')) updates.base_elegivel = newBE;
       if (editFUP !== (selectedBrand.proximo_passo || '')) updates.proximo_passo = editFUP;
+      if (editCulinaria !== (selectedBrand.culinaria || '' )) updates.culinaria = editCulinaria;
       if (Object.keys(updates).length > 0) {
         await fetch('/api/brands', {
           method: 'PATCH',
@@ -514,6 +519,7 @@ export default function CRMPage() {
           <MultiFilter label="Estado" selected={filterEstado} onChange={setFilterEstado} options={estados.filter(e => e !== 'Todos')} filterId="estado" />
           {profile?.role !== 'executivo' && <MultiFilter label="Responsavel" selected={filterBDR} onChange={setFilterBDR} options={bdrs} filterId="bdr" />}
           {pdvs.length > 0 && <MultiFilter label="PDV" selected={filterPDV} onChange={setFilterPDV} options={pdvs} filterId="pdv" />}
+          <MultiFilter label="Base Elegivel" selected={filterBaseElegivel} onChange={setFilterBaseElegivel} options={["FY26","FY27","Organico 3S"]} filterId="base" />
           {product?.closedStages && (
             <button onClick={() => setShowClosed(!showClosed)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: showClosed ? '#fef2f2' : '#fff', color: showClosed ? '#ef4444' : '#64748b', cursor: 'pointer' }}>
               {showClosed ? 'Ocultar Perdidos' : 'Mostrar Perdidos'}
@@ -551,6 +557,7 @@ export default function CRMPage() {
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
                           {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
+                          {b.culinaria && <span style={{ fontSize: 10, background: "#faf5ff", color: "#7c3aed", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.culinaria}</span>}
                           {Object.entries(b.pipelines || {}).filter(([k, v]) => k !== activeProduct && v.stage).map(([k]) => (
                             <div key={k} title={PRODUCTS[k]?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: PRODUCTS[k]?.color, marginTop: 3 }} />
                           ))}
@@ -687,6 +694,11 @@ export default function CRMPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+                {/* Editable: Culinaria */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, padding: "4px 0" }}>
+                  <span style={{ color: "#64748b" }}>Culinaria</span>
+                  <input type="text" value={editCulinaria} onChange={e => { setEditCulinaria(e.target.value); setInfoChanged(true); }} placeholder="Ex: Japonesa, Pizza..." style={{ width: 160, padding: "4px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 13, textAlign: "right", outline: "none" }} />
                 </div>
                 {/* Editable: FUP */}
                 <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, marginTop: 8 }}>
