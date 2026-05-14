@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PRODUCTS, CLASSIFICACAO_COLORS, MONTH_NAMES, DUPLAS, getMonthBusinessDays, getMonthBusinessDaysMTD } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload, Plus, Save, Sparkles, Award } from 'lucide-react';
+import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload, Plus, Save, Sparkles, Award, FlaskConical, X } from 'lucide-react';
 // ====================================================================
 // MAIN CRM PAGE
 // ====================================================================
@@ -38,6 +38,8 @@ export default function CRMPage() {
   const [pipelinesChanged, setPipelinesChanged] = useState(false);
   // Track pending responsavel changes
   const [pendingResp, setPendingResp] = useState({});
+  // ── TEST MODE ──
+  const [testMode, setTestMode] = useState(false);
   // ── Init edit fields when selecting a brand ──
   const openBrandDetail = (brand, tab) => {
     setSelectedBrand(brand);
@@ -112,28 +114,31 @@ export default function CRMPage() {
     if (filterPDV.length > 0) d = d.filter(b => filterPDV.includes(b.pdv_atual));
     return d;
   }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV]);
-  // ── Change stage ──
+  // ── Change stage (respects testMode) ──
   const changeStage = async (brandId, productKey, newStage) => {
     setSaving(true);
     setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { ...prev.pipelines?.[productKey], stage: newStage } } } : prev);
     setBrands(prev => prev.map(b => b.id === brandId ? { ...b, pipelines: { ...b.pipelines, [productKey]: { ...b.pipelines?.[productKey], stage: newStage } } } : b));
-    try {
-      await fetch('/api/pipelines', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand_id: brandId, product: productKey, new_stage: newStage, user_id: user?.id, user_name: profile?.name }),
-      });
-      const freshRes = await fetch('/api/brands?limit=999');
-      const freshData = await freshRes.json();
-      if (freshData.brands) {
-        setBrands(freshData.brands);
-        setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
-      }
-    } catch (err) { console.error('Error changing stage:', err); }
+    if (!testMode) {
+      try {
+        await fetch('/api/pipelines', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brand_id: brandId, product: productKey, new_stage: newStage, user_id: user?.id, user_name: profile?.name }),
+        });
+        const freshRes = await fetch('/api/brands?limit=999');
+        const freshData = await freshRes.json();
+        if (freshData.brands) {
+          setBrands(freshData.brands);
+          setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
+        }
+      } catch (err) { console.error('Error changing stage:', err); }
+    }
     setSaving(false);
   };
   // ── Save pending responsavel changes (batch) ──
   const savePendingResponsaveis = async (brandId) => {
+    if (testMode) return;
     for (const [prodKey, newResp] of Object.entries(pendingResp)) {
       await fetch('/api/pipelines', {
         method: 'PATCH',
@@ -146,16 +151,49 @@ export default function CRMPage() {
   const enableProduct = async (brandId, productKey) => {
     setSaving(true);
     setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { stage: '0. Nao Iniciado', active: true, responsavel: '' } } } : prev);
-    await fetch('/api/pipelines', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brand_id: brandId, product: productKey, user_id: user?.id, user_name: profile?.name }),
+    if (!testMode) {
+      await fetch('/api/pipelines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_id: brandId, product: productKey, user_id: user?.id, user_name: profile?.name }),
+      });
+      const freshRes = await fetch('/api/brands?limit=999');
+      const freshData = await freshRes.json();
+      if (freshData.brands) {
+        setBrands(freshData.brands);
+        setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
+      }
+    }
+    setSaving(false);
+  };
+  // ── Disable product ──
+  const disableProduct = async (brandId, productKey) => {
+    if (!confirm('Desativar ' + (PRODUCTS[productKey]?.name || productKey) + ' desta marca?')) return;
+    setSaving(true);
+    setSelectedBrand(prev => {
+      if (!prev || prev.id !== brandId) return prev;
+      const newPipelines = { ...prev.pipelines };
+      delete newPipelines[productKey];
+      return { ...prev, pipelines: newPipelines };
     });
-    const freshRes = await fetch('/api/brands?limit=999');
-    const freshData = await freshRes.json();
-    if (freshData.brands) {
-      setBrands(freshData.brands);
-      setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
+    setBrands(prev => prev.map(b => {
+      if (b.id !== brandId) return b;
+      const newPipelines = { ...b.pipelines };
+      delete newPipelines[productKey];
+      return { ...b, pipelines: newPipelines };
+    }));
+    if (!testMode) {
+      await fetch('/api/pipelines', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_id: brandId, product: productKey, new_stage: '14. Desativado', user_id: user?.id, user_name: profile?.name }),
+      });
+      const freshRes = await fetch('/api/brands?limit=999');
+      const freshData = await freshRes.json();
+      if (freshData.brands) {
+        setBrands(freshData.brands);
+        setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
+      }
     }
     setSaving(false);
   };
@@ -167,9 +205,10 @@ export default function CRMPage() {
     const data = await res.json();
     if (data.history) setBrandHistory(data.history);
   };
-  // ── Save info changes (button click) ──
+  // ── Save info changes (button click) — respects testMode ──
   const saveInfoChanges = async () => {
     if (!selectedBrand) return;
+    if (testMode) { setInfoChanged(false); return; }
     setSaving(true);
     try {
       const updates = {};
@@ -203,9 +242,10 @@ export default function CRMPage() {
     } catch (err) { console.error('Save error:', err); }
     setSaving(false);
   };
-  // ── Save pipelines changes (responsavel batch) ──
+  // ── Save pipelines changes (responsavel batch) — respects testMode ──
   const savePipelinesChanges = async () => {
     if (!selectedBrand) return;
+    if (testMode) { setPendingResp({}); setPipelinesChanged(false); return; }
     setSaving(true);
     try {
       await savePendingResponsaveis(selectedBrand.id);
@@ -221,7 +261,7 @@ export default function CRMPage() {
     } catch (err) { console.error('Save pipelines error:', err); }
     setSaving(false);
   };
-  // ── Export data ──
+  // ── Export data — history as separate rows ──
   const exportData = async () => {
     setSaving(true);
     try {
@@ -231,15 +271,20 @@ export default function CRMPage() {
       const prodKeys = Object.keys(PRODUCTS);
       const headers = ['Marca', 'Classificacao', 'Estado', 'Lojas', 'PDV Atual', 'BDR', 'Closer'];
       prodKeys.forEach(pk => { headers.push(`Status ${PRODUCTS[pk].name}`); headers.push(`Resp. ${PRODUCTS[pk].name}`); });
-      headers.push('Historico');
+      headers.push('Data Alteracao', 'Produto Alterado', 'De', 'Para', 'Alterado por');
       const csvRows = [headers.join(';')];
       filtered.forEach(b => {
-        const row = [b.marca || '', b.classificacao || '', b.estado || '', b.qtd_lojas_fisicas || 0, b.pdv_atual || '', b.responsavel_bdr || '', b.responsavel_closer || ''];
-        prodKeys.forEach(pk => { row.push(b.pipelines?.[pk]?.stage || ''); row.push(b.pipelines?.[pk]?.responsavel || ''); });
+        const baseRow = [b.marca || '', b.classificacao || '', b.estado || '', b.qtd_lojas_fisicas || 0, b.pdv_atual || '', b.responsavel_bdr || '', b.responsavel_closer || ''];
+        prodKeys.forEach(pk => { baseRow.push(b.pipelines?.[pk]?.stage || ''); baseRow.push(b.pipelines?.[pk]?.responsavel || ''); });
         const brandHist = allHistory.filter(h => h.brand_id === b.id || (b._oldIds && b._oldIds.includes(h.brand_id)));
-        const histStr = brandHist.map(h => `${new Date(h.created_at).toLocaleDateString('pt-BR')} ${PRODUCTS[h.product]?.name || h.product}: ${h.from_stage} > ${h.to_stage}`).join(' | ');
-        row.push(histStr);
-        csvRows.push(row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';'));
+        if (brandHist.length === 0) {
+          csvRows.push([...baseRow, '', '', '', '', ''].map(c => `"${String(c).replace(/"/g, '""')}"`).join(';'));
+        } else {
+          brandHist.forEach(h => {
+            const row = [...baseRow, new Date(h.created_at).toLocaleDateString('pt-BR'), PRODUCTS[h.product]?.name || h.product, h.from_stage || '', h.to_stage || '', h.changed_by_name || 'Sistema'];
+            csvRows.push(row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';'));
+          });
+        }
       });
       const bom = '﻿';
       const blob = new Blob([bom + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -282,7 +327,7 @@ export default function CRMPage() {
     const byEstado = {}; f.forEach(b => { if (b.estado && b.estado.length === 2) byEstado[b.estado] = (byEstado[b.estado] || 0) + 1; });
     const activeByProduct = {};
     Object.keys(PRODUCTS).forEach(pk => {
-      activeByProduct[pk] = f.filter(b => { const s = b.pipelines?.[pk]?.stage; return s && !['10. Perdido','11. Stand by','8. Perdido','9. Stand by'].includes(s); }).length;
+      activeByProduct[pk] = f.filter(b => { const s = b.pipelines?.[pk]?.stage; return s && !['10. Perdido','11. Stand by','8. Perdido','9. Stand by','14. Desativado'].includes(s); }).length;
     });
     return { total: f.length, won3s, lost3s, byClass, byEstado, activeByProduct };
   }, [filtered]);
@@ -374,17 +419,26 @@ export default function CRMPage() {
           {label}{selected.length > 0 ? ` (${selected.length})` : ''}
         </button>
         {open && (
-          <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 4px 12px rgba(0,0,0,.1)', zIndex: 50, padding: 6, minWidth: 160, maxHeight: 220, overflowY: 'auto' }}>
-            {selected.length > 0 && <button onClick={() => { onChange([]); setOpen(false); }} style={{ width: '100%', padding: '6px 10px', border: 'none', background: 'none', fontSize: 11, color: '#EA1D2C', cursor: 'pointer', textAlign: 'left', fontWeight: 600 }}>Limpar filtro</button>}
-            {options.map(o => (
-              <button key={o} onClick={() => toggle(o)} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 10px', border: 'none', background: selected.includes(o) ? '#fef2f2' : 'transparent', borderRadius: 6, fontSize: 12, color: '#1e293b', cursor: 'pointer', textAlign: 'left' }}>
-                <div style={{ width: 14, height: 14, borderRadius: 3, border: selected.includes(o) ? '2px solid #EA1D2C' : '1px solid #cbd5e1', background: selected.includes(o) ? '#EA1D2C' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {selected.includes(o) && <Check size={10} color="#fff" />}
+          <>
+            <div onClick={() => setOpen(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 49 }} />
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 4px 12px rgba(0,0,0,.1)', zIndex: 50, padding: 6, minWidth: 180, maxHeight: 260, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 10px 8px', borderBottom: '1px solid #f1f5f9', marginBottom: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>{label}</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {selected.length > 0 && <button onClick={() => onChange([])} style={{ border: 'none', background: 'none', fontSize: 11, color: '#EA1D2C', cursor: 'pointer', fontWeight: 600, padding: 0 }}>Limpar</button>}
+                  <button onClick={() => setOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={14} color="#94a3b8" /></button>
                 </div>
-                {o}
-              </button>
-            ))}
-          </div>
+              </div>
+              {options.map(o => (
+                <button key={o} onClick={() => toggle(o)} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 10px', border: 'none', background: selected.includes(o) ? '#fef2f2' : 'transparent', borderRadius: 6, fontSize: 12, color: '#1e293b', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ width: 14, height: 14, borderRadius: 3, border: selected.includes(o) ? '2px solid #EA1D2C' : '1px solid #cbd5e1', background: selected.includes(o) ? '#EA1D2C' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {selected.includes(o) && <Check size={10} color="#fff" />}
+                  </div>
+                  {o}
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </div>
     );
@@ -394,8 +448,16 @@ export default function CRMPage() {
   // ══════════════════════════════════════════════════════════════
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+      {/* TEST MODE BANNER */}
+      {testMode && (
+        <div style={{ background: '#fef3c7', borderBottom: '2px solid #f59e0b', padding: '8px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: '#92400e' }}>
+          <FlaskConical size={16} />
+          Modo Teste ativo — alteracoes NAO serao salvas no banco de dados
+          <button onClick={() => { setTestMode(false); loadBrands(); }} style={{ marginLeft: 12, padding: '4px 12px', background: '#92400e', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Desativar e recarregar</button>
+        </div>
+      )}
       {/* HEADER */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '10px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 40 }}>
+      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '10px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: testMode ? 42 : 0, zIndex: 40 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #EA1D2C, #DA5D69)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Target size={18} color="#fff" /></div>
           <span style={{ fontSize: 18, fontWeight: 800, color: '#EA1D2C' }}>SalesCRM</span>
@@ -413,11 +475,13 @@ export default function CRMPage() {
           <a href="/rv" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Award size={16} /> RV
           </a>
-          <a href="/ai" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(135deg, #8b5cf620, #6d28d920)', color: '#8b5cf6', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer', border: '1px solid #8b5cf630' }}>
-            <Sparkles size={16} /> Assistente IA
-          </a>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {profile?.role === 'admin' && (
+            <button onClick={() => setTestMode(!testMode)} title="Modo Teste" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 8, border: testMode ? '2px solid #f59e0b' : '1px solid #e2e8f0', background: testMode ? '#fef3c7' : '#fff', color: testMode ? '#92400e' : '#94a3b8', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              <FlaskConical size={14} />
+            </button>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 30, height: 30, borderRadius: 8, background: profile?.role === 'admin' ? '#ef4444' : profile?.role === 'gestor' ? '#f59e0b' : '#EA1D2C', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {profile?.role === 'admin' ? <Shield size={14} color="#fff" /> : profile?.role === 'gestor' ? <UserCheck size={14} color="#fff" /> : <Users size={14} color="#fff" />}
@@ -577,7 +641,7 @@ export default function CRMPage() {
             <button onClick={() => setSelectedBrand(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}><ArrowLeft size={16} /> Voltar</button>
             <div style={{ display: 'flex', gap: 6 }}>
               {['info', 'pipelines', 'historico'].map(t => (
-                <button key={t} onClick={() => setDetailTab(t)} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: detailTab === t ? '#EA1D2C' : '#f1f5f9', color: detailTab === t ? '#fff' : '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                <button key={t} onClick={() => { setDetailTab(t); if (t === 'historico') loadHistory(selectedBrand.id, selectedBrand._oldIds); }} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: detailTab === t ? '#EA1D2C' : '#f1f5f9', color: detailTab === t ? '#fff' : '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                   {t === 'info' ? 'Info' : t === 'pipelines' ? 'Produtos' : 'Historico'}
                 </button>
               ))}
@@ -653,7 +717,13 @@ export default function CRMPage() {
                         {!isActive ? (
                           <button onClick={() => enableProduct(selectedBrand.id, key)} style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: `1px solid ${prod.color}`, background: 'transparent', color: prod.color, fontWeight: 600, cursor: 'pointer' }}>Ativar</button>
                         ) : (
-                          <span style={{ fontSize: 12, background: prod.color + '20', color: prod.color, padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>{shortStage(pipeline.stage)}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 12, background: prod.color + '20', color: prod.color, padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>{shortStage(pipeline.stage)}</span>
+                            <button onClick={() => disableProduct(selectedBrand.id, key)} title="Desativar produto" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', opacity: 0.5 }}
+                              onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.5}>
+                              <X size={14} color="#ef4444" />
+                            </button>
+                          </div>
                         )}
                       </div>
                       {isActive && (
@@ -695,7 +765,7 @@ export default function CRMPage() {
                       <span style={{ fontWeight: 600, color: '#1e293b' }}>{shortStage(h.to_stage)}</span>
                       <span style={{ marginLeft: 8, fontSize: 10, background: (h.product === 'fup' ? '#8b5cf6' : PRODUCTS[h.product]?.color || '#EA1D2C') + '20', color: h.product === 'fup' ? '#8b5cf6' : PRODUCTS[h.product]?.color || '#EA1D2C', padding: '1px 6px', borderRadius: 4 }}>{h.product === 'fup' ? 'FUP' : (PRODUCTS[h.product]?.name || h.product)}</span>
                     </div>
-                    <div style={{ color: '#94a3b8', fontSize: 11 }}>{h.changed_by_name}</div>
+                    <div style={{ color: '#94a3b8', fontSize: 11 }}>{h.changed_by_name || 'Sistema'}</div>
                   </div>
                 ))}
               </div>
