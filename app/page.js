@@ -931,9 +931,19 @@ export default function CRMPage() {
           const scOpenModal = (metric, ym, dp) => {
             if (!metric || metric.startsWith('taxa_') || metric === 'media_lojas') return;
             setScModal({ metric, ym, dupla:dp, label: SC_METRIC_LABELS[metric]||metric });
-            setScModalLoading(true); setScModalBrands([]);
-            fetch('/api/scorecard/brands?metric='+metric+'&ym='+ym+'&dupla='+dp+'&_t='+Date.now(), {cache:'no-store'})
-              .then(r=>r.json()).then(d=>{setScModalBrands(d.brands||[]);setScModalLoading(false);}).catch(()=>setScModalLoading(false));
+            setScModalLoading(false);
+            if (metric === 'elegiveis') {
+              let list = (scData?.eligBrands || []);
+              if (dp !== 'total') list = list.filter(b => b.dupla === dp);
+              list.sort((a,b) => a.marca.localeCompare(b.marca));
+              setScModalBrands(list);
+            } else {
+              const bk = ym + '|' + metric;
+              let list = (scData?.brandLists?.[bk] || []);
+              if (dp !== 'total') list = list.filter(b => b.dupla === dp);
+              list.sort((a,b) => a.marca.localeCompare(b.marca));
+              setScModalBrands(list);
+            }
           };
           const scTh = { padding:'8px 10px', fontSize:11, fontWeight:600, color:'#64748b', borderBottom:'1px solid #e2e8f0', textAlign:'center', whiteSpace:'nowrap' };
           const scTd = { padding:'6px 10px', fontSize:12, borderBottom:'1px solid #f1f5f9', whiteSpace:'nowrap' };
