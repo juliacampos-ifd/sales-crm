@@ -90,17 +90,27 @@ export async function POST(request) {
   const supabase = createServerClient();
   const body = await request.json();
 
+  // Auto-classify based on stores
+  const lojas = Number(body.qtd_lojas_fisicas) || 0;
+  let classificacao = body.classificacao;
+  if (lojas > 0) {
+    if (lojas <= 30) classificacao = 'P';
+    else if (lojas <= 60) classificacao = 'M';
+    else classificacao = 'G';
+  }
+
   const { data: brand, error } = await supabase
     .from('brands')
     .insert({
       marca: body.marca,
       responsavel_bdr: body.responsavel_bdr,
       responsavel_closer: body.responsavel_closer,
-      classificacao: body.classificacao,
-      qtd_lojas_fisicas: body.qtd_lojas_fisicas || 0,
+      classificacao,
+      qtd_lojas_fisicas: lojas,
       estado: body.estado,
       pdv_atual: body.pdv_atual,
       base_elegivel: body.base_elegivel,
+      culinaria: body.culinaria || null,
     })
     .select()
     .single();
@@ -143,33 +153,21 @@ export async function PATCH(request) {
   const { data: current } = await supabase.from('brands').select('proximo_passo').eq('id', id).single();
 
   // Only allow safe fields to be updated
-  const allowed = ['proximo_passo', 'data_ultimo_fup', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp'];
+  const allowed = ['proximo_passo', 'data_ultimo_fup', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp', 'base_elegivel', 'culinaria'];
   const safeUpdates = {};
   allowed.forEach(k => { if (updates[k] !== undefined) safeUpdates[k] = updates[k]; });
+
+  // Auto-classify based on number of stores
+  if (safeUpdates.qtd_lojas_fisicas !== undefined) {
+    const lojas = Number(safeUpdates.qtd_lojas_fisicas) || 0;
+    if (lojas <= 30) safeUpdates.classificacao = 'P';
+    else if (lojas <= 60) safeUpdates.classificacao = 'M';
+    else safeUpdates.classificacao = 'G';
+  }
 
   const { data, error } = await supabase
     .from('brands')
     .update(safeUpdates)
     .eq('id', id)
     .select()
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // Log FUP changes in pipeline_history
-  if (updates.proximo_passo !== undefined && updates.proximo_passo !== (current?.proximo_passo || '')) {
-    await supabase.from('pipeline_history').insert({
-      brand_id: id,
-      product: 'fup',
-      from_stage: current?.proximo_passo || '(vazio)',
-      to_stage: updates.proximo_passo || '(vazio)',
-      changed_by: user_id || null,
-      changed_by_name: user_name || 'Sistema',
-      notes: 'Atualizacao de FUP',
-    });
-  }
-
-  return NextResponse.json({ brand: data });
-}
+    .single(
