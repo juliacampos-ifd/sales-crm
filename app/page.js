@@ -49,6 +49,14 @@ export default function CRMPage() {
   const [pendingResp, setPendingResp] = useState({});
   // ── TEST MODE ──
   const [testMode, setTestMode] = useState(false);
+  // ── SCORECARD ──
+  const [scData, setScData] = useState(null);
+  const [scMonth, setScMonth] = useState(new Date().getMonth() + 1);
+  const [scYear, setScYear] = useState(new Date().getFullYear());
+  const [scDupla, setScDupla] = useState('total');
+  const [scModal, setScModal] = useState(null);
+  const [scModalBrands, setScModalBrands] = useState([]);
+  const [scModalLoading, setScModalLoading] = useState(false);
   // ── Open filter tracking ──
   const [openFilter, setOpenFilter] = useState(null);
   // ── Init edit fields when selecting a brand ──
@@ -496,6 +504,13 @@ export default function CRMPage() {
     setSaving(false);
   };
 
+  const loadScorecard = async () => {
+    try {
+      const res = await fetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' });
+      const d = await res.json();
+      setScData(d);
+    } catch (err) { console.error('Scorecard fetch error:', err); }
+  };
   const NavBtn = ({ id, icon: Icon, label }) => (
     <button onClick={() => setView(id)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
       <Icon size={16} /> {label}
@@ -589,9 +604,7 @@ export default function CRMPage() {
           </a>
           <NavBtn id="forecast" icon={Calendar} label="Forecast" />
           <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
-          <a href="/scorecard" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
-            <Target size={16} /> Scorecard
-          </a>
+          <NavBtn id="scorecard" icon={Target} label="Scorecard" />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {profile?.role === 'admin' && (
@@ -858,6 +871,158 @@ export default function CRMPage() {
           </div>
         )}
       </div>
+      {/* SCORECARD */}
+        {view === 'scorecard' && (() => {
+          // Load data on first view
+          if (!scData) { loadScorecard(); return <div style={{ textAlign:'center', padding:40 }}><p style={{ color:'#94a3b8' }}>Carregando scorecard...</p></div>; }
+          const SC_DUPLA_LABELS = { total:'FUNIL DE VENDA', lidia_gabi:'Lidia e Gabi', joao_diego:'Joao e Diego', michel_emerson:'Michel e Emerson' };
+          const SC_DUPLA_COLORS = { total:'#EA1D2C', lidia_gabi:'#DA5D69', joao_diego:'#9C050B', michel_emerson:'#A02331' };
+          const SC_METRIC_LABELS = { elegiveis:'Marcas Elegiveis', primeiro_contato:'Primeiro Contato', apresentacao:'Apresentacao', negociacao:'Negociacao', fechadas:'Marcas Fechadas', lojas:'Lojas Fechadas' };
+          const SC_FUNNEL = [
+            { key:'elegiveis', label:'MARCAS ELEGIVEIS', isBold:true, isLive:true },
+            { key:'taxa_pc', label:'Taxa Conversao - PRIMEIRO CONTATO', isPercent:true },
+            { key:'primeiro_contato', label:'PRIMEIRO CONTATO', isBold:true },
+            { key:'taxa_apres', label:'Taxa Conversao - APRESENTACAO', isPercent:true },
+            { key:'apresentacao', label:'APRESENTACAO', isBold:true },
+            { key:'taxa_neg', label:'Taxa Conversao - NEGOCIACAO', isPercent:true },
+            { key:'negociacao', label:'NEGOCIACAO', isBold:true },
+            { key:'taxa_fechadas', label:'Taxa Conversao - MARCAS FECHADAS', isPercent:true },
+            { key:'fechadas', label:'MARCAS FECHADAS', isBold:true },
+            { key:'media_lojas', label:'Media de lojas por marca', isLive:true },
+            { key:'lojas', label:'Lojas Fechadas', isBold:true },
+            { key:'fcst_marcas', label:'Forecast Marcas', isForecast:true },
+            { key:'fcst_lojas', label:'Forecast Lojas', isForecast:true, isBold:true },
+          ];
+          const scPctColor = (p) => { if (!p || p === '—') return '#94a3b8'; const n = parseInt(p); return n >= 100 ? '#22c55e' : n >= 70 ? '#f59e0b' : '#ef4444'; };
+          const today = new Date();
+          const scTotalBD = getMonthBusinessDays(scYear, scMonth - 1);
+          const scMtdBD = scYear === today.getFullYear() && scMonth === today.getMonth() + 1 ? getMonthBusinessDaysMTD(scYear, scMonth - 1, today) : scTotalBD;
+          const scCurKey = scYear + '-' + String(scMonth).padStart(2,'0');
+          const DK = ['lidia_gabi','joao_diego','michel_emerson'];
+          const scGmS = (d,y,m,f) => { if (!scData?.metas) return 0; const x = scData.metas.find(r => r.dupla === d && r.year === y && r.month === m); return x ? (x[f]||0) : 0; };
+          const scGm = (d,y,m,f) => d === 'total' ? DK.reduce((s,k) => s + scGmS(k,y,m,f), 0) : scGmS(d,y,m,f);
+          const scGr = (d,ym,f) => d === 'total' ? DK.reduce((s,k) => s + (scData?.realized?.[ym]?.[k]?.[f]||0), 0) : (scData?.realized?.[ym]?.[d]?.[f]||0);
+          const scGe = (d) => d === 'total' ? DK.reduce((s,k) => s + (scData?.elegiveis?.[k]||0), 0) : (scData?.elegiveis?.[d]||0);
+          const scGf = (d,ym,fl) => d === 'total' ? DK.reduce((s,k) => s + (scData?.forecast?.[ym]?.[k]?.[fl]||0), 0) : (scData?.forecast?.[ym]?.[d]?.[fl]||0);
+          const scMonthCols = (() => { const c = []; for (let y = 2026; y <= scYear; y++) { const ms = y===2026?2:1, mx = y===scYear?scMonth:12; for (let m = ms; m <= mx; m++) c.push({y,m,k:y+'-'+String(m).padStart(2,'0')}); } return c; })();
+          const scPastCols = scMonthCols.filter(c => !(c.y===scYear && c.m===scMonth));
+          const scHasCur = scMonthCols.some(c => c.y===scYear && c.m===scMonth);
+          const scBuildRows = (dupla) => {
+            const cmR={},cmM={},fcst={},mtdM={};
+            ['primeiro_contato','apresentacao','negociacao','fechadas','lojas'].forEach(f => {
+              cmR[f]=scGr(dupla,scCurKey,f); cmM[f]=scGm(dupla,scYear,scMonth,f);
+              fcst[f]=scMtdBD>0?Math.round((cmR[f]/scMtdBD)*scTotalBD):0;
+              mtdM[f]=scTotalBD>0?Math.round((cmM[f]/scTotalBD)*scMtdBD):0;
+            });
+            const eleg=scGe(dupla), elegMeta=scGm(dupla,scYear,scMonth,'elegiveis');
+            return SC_FUNNEL.map(def => {
+              const row = {...def, cells:[]};
+              scMonthCols.forEach(col => {
+                const isCur = col.y===scYear && col.m===scMonth;
+                if (def.key==='elegiveis') { if (isCur) row.cells.push({isCur:true,meta:elegMeta,fcst:eleg,pctA:elegMeta>0?Math.round((eleg/elegMeta)*100)+'%':'—',real:eleg,mtdMeta:eleg,mtdReal:eleg,mtdPct:'100%',ym:col.k}); else row.cells.push({v:scGm(dupla,col.y,col.m,'elegiveis'),ym:col.k}); }
+                else if (def.key==='media_lojas') { const fch=isCur?cmR.fechadas:scGr(dupla,col.k,'fechadas'), loj=isCur?cmR.lojas:scGr(dupla,col.k,'lojas'), v=fch>0?Math.round((loj/fch)*10)/10:0; if (isCur) { const ml=scGm(dupla,scYear,scMonth,'media_lojas'); row.cells.push({isCur:true,meta:ml,fcst:v,pctA:ml>0?Math.round((v/ml)*100)+'%':'—',real:v,mtdMeta:v,mtdReal:v,mtdPct:'—',isLive:true,ym:col.k}); } else row.cells.push({v,ym:col.k}); }
+                else if (def.isForecast) { const ff=def.key==='fcst_marcas'?'marcas':'lojas', v=scGf(dupla,col.k,ff); if (isCur) row.cells.push({isCur:true,isFcstCell:true,v,ym:col.k}); else row.cells.push({v,ym:col.k}); }
+                else if (def.isPercent) { let num=0,den=1; if (isCur) { if(def.key==='taxa_pc'){num=cmR.primeiro_contato;den=eleg;}else if(def.key==='taxa_apres'){num=cmR.apresentacao;den=cmR.primeiro_contato;}else if(def.key==='taxa_neg'){num=cmR.negociacao;den=cmR.apresentacao;}else if(def.key==='taxa_fechadas'){num=cmR.fechadas;den=cmR.negociacao;} } else { const gv=field=>scGr(dupla,col.k,field); if(def.key==='taxa_pc'){num=gv('primeiro_contato');den=scGm(dupla,col.y,col.m,'elegiveis');}else if(def.key==='taxa_apres'){num=gv('apresentacao');den=gv('primeiro_contato');}else if(def.key==='taxa_neg'){num=gv('negociacao');den=gv('apresentacao');}else if(def.key==='taxa_fechadas'){num=gv('fechadas');den=gv('negociacao');} } const pct=den>0?Math.round((num/den)*100)+'%':'0%'; row.cells.push(isCur?{isCur:true,isRate:true,v:pct,ym:col.k}:{v:pct,ym:col.k}); }
+                else { const f=def.key; if (isCur) { const pctA=cmM[f]>0?Math.round((fcst[f]/cmM[f])*100)+'%':'—', pctMtd=mtdM[f]>0?Math.round((cmR[f]/mtdM[f])*100)+'%':'—'; row.cells.push({isCur:true,meta:cmM[f],fcst:fcst[f],pctA,real:cmR[f],mtdMeta:mtdM[f],mtdReal:cmR[f],mtdPct:pctMtd,ym:col.k}); } else row.cells.push({v:scGr(dupla,col.k,def.key),ym:col.k}); }
+              });
+              return row;
+            });
+          };
+          const scOpenModal = (metric, ym, dp) => {
+            if (!metric || metric.startsWith('taxa_') || metric === 'media_lojas') return;
+            setScModal({ metric, ym, dupla:dp, label: SC_METRIC_LABELS[metric]||metric });
+            setScModalLoading(true); setScModalBrands([]);
+            fetch('/api/scorecard/brands?metric='+metric+'&ym='+ym+'&dupla='+dp+'&_t='+Date.now(), {cache:'no-store'})
+              .then(r=>r.json()).then(d=>{setScModalBrands(d.brands||[]);setScModalLoading(false);}).catch(()=>setScModalLoading(false));
+          };
+          const scTh = { padding:'8px 10px', fontSize:11, fontWeight:600, color:'#64748b', borderBottom:'1px solid #e2e8f0', textAlign:'center', whiteSpace:'nowrap' };
+          const scTd = { padding:'6px 10px', fontSize:12, borderBottom:'1px solid #f1f5f9', whiteSpace:'nowrap' };
+          const scClickable = { cursor:'pointer', textDecoration:'underline', textDecorationStyle:'dotted', textUnderlineOffset:2 };
+          const ScVal = ({ v, metric, ym, dupla: dp, bold, color: c }) => {
+            const ok = metric && !metric.startsWith('taxa_') && metric !== 'media_lojas' && v > 0;
+            return ok ? <span style={{...scClickable,fontWeight:bold?700:400,color:c||'inherit'}} onClick={()=>scOpenModal(metric,ym,dp)}>{v}</span> : <span style={{fontWeight:bold?700:400,color:c||'inherit'}}>{v}</span>;
+          };
+          return (
+            <div>
+              {scModal && (
+                <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setScModal(null)}>
+                  <div style={{background:'#fff',borderRadius:16,width:'90%',maxWidth:600,maxHeight:'80vh',display:'flex',flexDirection:'column',overflow:'hidden'}} onClick={e=>e.stopPropagation()}>
+                    <div style={{padding:'16px 20px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <div><div style={{fontSize:16,fontWeight:700,color:'#1e293b'}}>{scModal.label}</div><div style={{fontSize:12,color:'#94a3b8'}}>{MONTH_NAMES[parseInt(scModal.ym.split('-')[1])-1]} {scModal.ym.split('-')[0]} — {SC_DUPLA_LABELS[scModal.dupla]}</div></div>
+                      <button onClick={()=>setScModal(null)} style={{background:'none',border:'none',cursor:'pointer',padding:4}}><X size={20} color="#94a3b8"/></button>
+                    </div>
+                    <div style={{padding:'12px 20px',overflowY:'auto',flex:1}}>
+                      {scModalLoading ? <p style={{textAlign:'center',color:'#94a3b8',padding:20}}>Carregando...</p> : scModalBrands.length === 0 ? <p style={{textAlign:'center',color:'#94a3b8',padding:20}}>Nenhuma marca</p> : (
+                        <table style={{width:'100%',borderCollapse:'collapse'}}>
+                          <thead><tr style={{background:'#f8fafc'}}><th style={{padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:600,color:'#64748b',borderBottom:'1px solid #e2e8f0'}}>#</th><th style={{padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:600,color:'#64748b',borderBottom:'1px solid #e2e8f0'}}>Marca</th><th style={{padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:600,color:'#64748b',borderBottom:'1px solid #e2e8f0'}}>Closer</th><th style={{padding:'8px 10px',textAlign:'right',fontSize:11,fontWeight:600,color:'#64748b',borderBottom:'1px solid #e2e8f0'}}>Lojas</th></tr></thead>
+                          <tbody>{scModalBrands.map((b,i) => <tr key={i} style={{background:i%2===0?'#fff':'#fafbfc'}}><td style={{padding:'6px 10px',fontSize:12,color:'#94a3b8',borderBottom:'1px solid #f1f5f9'}}>{i+1}</td><td style={{padding:'6px 10px',fontSize:12,fontWeight:600,color:'#1e293b',borderBottom:'1px solid #f1f5f9'}}>{b.marca}</td><td style={{padding:'6px 10px',fontSize:12,color:'#475569',borderBottom:'1px solid #f1f5f9'}}>{b.closer}</td><td style={{padding:'6px 10px',fontSize:12,color:'#475569',borderBottom:'1px solid #f1f5f9',textAlign:'right'}}>{b.lojas}</td></tr>)}</tbody>
+                        </table>
+                      )}
+                    </div>
+                    <div style={{padding:'12px 20px',borderTop:'1px solid #e2e8f0',background:'#f8fafc',fontSize:12,color:'#64748b',textAlign:'center'}}>{scModalBrands.length} marca{scModalBrands.length!==1?'s':''}</div>
+                  </div>
+                </div>
+              )}
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:10}}>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{fontSize:12,color:'#94a3b8'}}>Marcas P e M</span>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                  <button onClick={loadScorecard} style={{padding:'6px 14px',background:'#f1f5f9',border:'1px solid #e2e8f0',borderRadius:8,fontSize:12,fontWeight:600,color:'#64748b',cursor:'pointer',display:'flex',alignItems:'center',gap:4}}><TrendingUp size={14}/> Atualizar Dados</button>
+                  <Calendar size={14} color="#64748b"/>
+                  <select value={scMonth} onChange={e=>{setScMonth(+e.target.value);setScData(null);}} style={{border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px',fontSize:13,fontWeight:600}}>
+                    {MONTH_NAMES.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
+                  </select>
+                  <select value={scYear} onChange={e=>{setScYear(+e.target.value);setScData(null);}} style={{border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px',fontSize:13,fontWeight:600}}>
+                    <option value={2026}>2026</option><option value={2027}>2027</option>
+                  </select>
+                  <div style={{background:'#fef2f2',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#EA1D2C',fontWeight:600}}>{scMtdBD}/{scTotalBD} dias uteis</div>
+                </div>
+              </div>
+              {['total','lidia_gabi','joao_diego','michel_emerson'].map(dupla => {
+                const rows = scBuildRows(dupla);
+                const open = scDupla === dupla;
+                const clr = SC_DUPLA_COLORS[dupla];
+                return (
+                  <div key={dupla} style={{marginBottom:16,background:'#fff',borderRadius:14,border:'1px solid #e2e8f0',overflow:'hidden'}}>
+                    <div onClick={()=>setScDupla(open?null:dupla)} style={{padding:'14px 20px',background:clr+'08',borderBottom:open?'2px solid '+clr:'none',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:10}}>
+                        <div style={{width:10,height:10,borderRadius:'50%',background:clr}}/>
+                        <span style={{fontSize:16,fontWeight:700}}>{SC_DUPLA_LABELS[dupla]}</span>
+                        {dupla!=='total' && <span style={{fontSize:12,color:'#94a3b8'}}>({scGe(dupla)} elegiveis)</span>}
+                      </div>
+                      <Filter size={18} color="#94a3b8" style={{transform:open?'rotate(180deg)':'none',transition:'.2s'}}/>
+                    </div>
+                    {open && (
+                      <div style={{overflowX:'auto'}}>
+                        <table style={{width:'100%',borderCollapse:'collapse',minWidth:900}}>
+                          <thead><tr style={{background:'#f8fafc'}}>
+                            <th style={{...scTh,width:250,textAlign:'left',position:'sticky',left:0,background:'#f8fafc',zIndex:2}}></th>
+                            {scPastCols.map(c=><th key={c.k} style={{...scTh,fontSize:10}}>{MONTH_NAMES[c.m-1]} Real</th>)}
+                            {scHasCur && <><th style={{...scTh,background:'#fef2f2',fontSize:10}}>{MONTH_NAMES[scMonth-1]} Meta</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>% Atig</th><th style={{...scTh,background:'#fce4e6',fontSize:10,color:'#EA1D2C'}}>Real</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Meta</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Real</th><th style={{...scTh,background:'#fef9c3',fontSize:10}}>MTD %</th></>}
+                          </tr></thead>
+                          <tbody>
+                            {rows.map((row,ri) => (
+                              <tr key={ri} style={{background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff'}}>
+                                <td style={{...scTd,fontWeight:row.isBold?700:400,fontSize:row.isPercent?11:12,color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#1e293b',position:'sticky',left:0,background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff',zIndex:1}}>{row.label}</td>
+                                {row.cells.map((cell,ci) => {
+                                  if (!cell.isCur) return <td key={ci} style={{...scTd,textAlign:'center',fontWeight:row.isBold?600:400,color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#475569'}}><ScVal v={cell.v} metric={row.key} ym={cell.ym} dupla={dupla} bold={row.isBold}/></td>;
+                                  if (cell.isFcstCell) return [<td key={ci+'m'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#0284c7',fontWeight:700}}>{cell.v}</td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'r'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
+                                  if (cell.isRate) return [<td key={ci+'m'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'r'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}>{cell.v}</td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
+                                  return [<td key={ci+'m'} style={{...scTd,textAlign:'center',background:'#fef2f208'}}>{cell.meta}</td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',fontWeight:600,background:'#fef2f208'}}>{cell.fcst}</td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',fontWeight:600,color:scPctColor(cell.pctA),background:'#fef2f208'}}>{cell.pctA}</td>,<td key={ci+'r'} style={{...scTd,textAlign:'center',fontWeight:700,background:'#fce4e608'}}><ScVal v={cell.real} metric={row.key} ym={cell.ym} dupla={dupla} bold color={clr}/></td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',background:'#fefce808'}}>{cell.mtdMeta}</td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',fontWeight:700,background:'#fefce808'}}><ScVal v={cell.mtdReal} metric={row.key} ym={cell.ym} dupla={dupla} bold color={clr}/></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',fontWeight:600,color:scPctColor(cell.mtdPct),background:'#fef9c308'}}>{cell.mtdPct}</td>];
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       {/* DETAIL PANEL */}
       {selectedBrand && (
         <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', boxShadow: '-4px 0 30px rgba(0,0,0,.12)', zIndex: 50, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
