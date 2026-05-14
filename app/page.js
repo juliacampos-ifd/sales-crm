@@ -26,12 +26,6 @@ export default function CRMPage() {
   const [filterPDV, setFilterPDV] = useState([]);
   const [filterBaseElegivel, setFilterBaseElegivel] = useState([]);
   const [filterHaas, setFilterHaas] = useState([]);
-  // ── Forecast state ──
-  const [forecastMetas, setForecastMetas] = useState([]);
-  const [forecastEntries, setForecastEntries] = useState([]);
-  const [forecastSection, setForecastSection] = useState('3s_pm');
-  const [newForecastMarca, setNewForecastMarca] = useState('');
-  const [newForecastLojas, setNewForecastLojas] = useState('');
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [detailTab, setDetailTab] = useState('info');
   const [brandHistory, setBrandHistory] = useState([]);
@@ -410,74 +404,6 @@ export default function CRMPage() {
   // ══════════════════════════════════════════════════════════════
   // HELPERS
   // ══════════════════════════════════════════════════════════════
-  // ── Forecast data fetch ──
-  const fetchForecast = useCallback(async () => {
-    try {
-      const res = await fetch('/api/forecast');
-      const data = await res.json();
-      if (data.metas) setForecastMetas(data.metas);
-      if (data.entries) setForecastEntries(data.entries);
-    } catch (err) { console.error('Forecast fetch error:', err); }
-  }, []);
-  useEffect(() => { if (user && view === 'forecast') fetchForecast(); }, [user, view, fetchForecast]);
-
-  // ── Forecast helpers ──
-  const FORECAST_SECTIONS = [
-    { key: '3s_pm', label: '3S Checkout P/M', subtitle: 'Contrato assinado', color: '#EA1D2C' },
-    { key: '3s_g', label: '3S Checkout G', subtitle: 'Contrato assinado', color: '#b91c1c' },
-    { key: 'saipos', label: 'Saipos', subtitle: 'Lojas enviando forms', color: '#2563eb' },
-    { key: 'totem', label: 'Totem', subtitle: 'Novos totens', color: '#7c3aed' },
-  ];
-  const FISCAL_MONTHS = [
-    { year: 2026, month: 4 }, { year: 2026, month: 5 }, { year: 2026, month: 6 },
-    { year: 2026, month: 7 }, { year: 2026, month: 8 }, { year: 2026, month: 9 },
-    { year: 2026, month: 10 }, { year: 2026, month: 11 }, { year: 2026, month: 12 },
-    { year: 2027, month: 1 }, { year: 2027, month: 2 }, { year: 2027, month: 3 },
-  ];
-  const MONTH_SHORT = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-  const canEditForecast = profile?.role === 'gestor' || profile?.role === 'admin';
-
-  const addForecastEntry = async (section, year, month) => {
-    if (!newForecastMarca.trim()) return;
-    try {
-      const res = await fetch('/api/forecast', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'add_entry', section, year, month, marca: newForecastMarca.trim(), lojas: Number(newForecastLojas) || 0, user_id: user?.id, user_name: profile?.name }),
-      });
-      const entry = await res.json();
-      if (entry.id) { setForecastEntries(prev => [...prev, entry]); setNewForecastMarca(''); setNewForecastLojas(''); }
-    } catch (err) { console.error('Add forecast error:', err); }
-  };
-
-  const toggleForecastCheck = async (entryId, currentChecked) => {
-    try {
-      await fetch('/api/forecast', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: entryId, checked: !currentChecked }) });
-      setForecastEntries(prev => prev.map(e => e.id === entryId ? { ...e, checked: !currentChecked } : e));
-    } catch (err) { console.error('Toggle check error:', err); }
-  };
-
-  const deleteForecastEntry = async (entryId) => {
-    try {
-      await fetch('/api/forecast?id=' + entryId, { method: 'DELETE' });
-      setForecastEntries(prev => prev.filter(e => e.id !== entryId));
-    } catch (err) { console.error('Delete forecast error:', err); }
-  };
-
-  const updateForecastMeta = async (section, year, month, metaLojas) => {
-    try {
-      await fetch('/api/forecast', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update_meta', section, year, month, meta_lojas: Number(metaLojas) || 0 }) });
-      setForecastMetas(prev => { const idx = prev.findIndex(m => m.section === section && m.year === year && m.month === month); if (idx >= 0) { const copy = [...prev]; copy[idx] = { ...copy[idx], meta_lojas: Number(metaLojas) || 0 }; return copy; } return [...prev, { section, year, month, meta_lojas: Number(metaLojas) || 0 }]; });
-    } catch (err) { console.error('Update meta error:', err); }
-  };
-
-  const updateForecastLojas = async (entryId, newLojas) => {
-    try {
-      await fetch('/api/forecast', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: entryId, lojas: Number(newLojas) || 0 }) });
-      setForecastEntries(prev => prev.map(e => e.id === entryId ? { ...e, lojas: Number(newLojas) || 0 } : e));
-    } catch (err) { console.error('Update lojas error:', err); }
-  };
-
   const NavBtn = ({ id, icon: Icon, label }) => (
     <button onClick={() => setView(id)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
       <Icon size={16} /> {label}
@@ -573,7 +499,6 @@ export default function CRMPage() {
           <a href="/rv" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Award size={16} /> RV
           </a>
-          <NavBtn id="forecast" icon={Calendar} label="Forecast" />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {profile?.role === 'admin' && (
@@ -737,121 +662,6 @@ export default function CRMPage() {
           </div>
         )}
 
-        {/* FORECAST */}
-        {view === 'forecast' && (
-          <div>
-            {/* Section tabs */}
-            <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-              {FORECAST_SECTIONS.map(s => (
-                <button key={s.key} onClick={() => setForecastSection(s.key)} style={{ padding: '8px 18px', borderRadius: 10, border: forecastSection === s.key ? `2px solid ${s.color}` : '1px solid #e2e8f0', background: forecastSection === s.key ? s.color + '10' : '#fff', color: forecastSection === s.key ? s.color : '#64748b', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
-            {(() => {
-              const sec = FORECAST_SECTIONS.find(s => s.key === forecastSection);
-              const secColor = sec?.color || '#EA1D2C';
-              return (
-                <div>
-                  <div style={{ marginBottom: 16 }}>
-                    <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#1e293b' }}>{sec?.label}</h3>
-                    <p style={{ margin: '2px 0 0', fontSize: 13, color: '#94a3b8' }}>{sec?.subtitle}</p>
-                  </div>
-                  {/* Summary bar */}
-                  {(() => {
-                    const totalMeta = FISCAL_MONTHS.reduce((s, fm) => { const m = forecastMetas.find(x => x.section === forecastSection && x.year === fm.year && x.month === fm.month); return s + (m?.meta_lojas || 0); }, 0);
-                    const totalAtingido = forecastEntries.filter(e => e.section === forecastSection && e.checked).reduce((s, e) => s + (e.lojas || 0), 0);
-                    const totalForecast = forecastEntries.filter(e => e.section === forecastSection).reduce((s, e) => s + (e.lojas || 0), 0);
-                    const pct = totalMeta > 0 ? Math.round(totalAtingido / totalMeta * 100) : 0;
-                    return (
-                      <div style={{ display: 'flex', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
-                        <div style={{ flex: 1, minWidth: 140, background: '#fff', borderRadius: 12, padding: '14px 18px', border: '1px solid #e2e8f0' }}>
-                          <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>Meta Anual (Lojas)</div>
-                          <div style={{ fontSize: 24, fontWeight: 800, color: '#1e293b' }}>{totalMeta}</div>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 140, background: '#fff', borderRadius: 12, padding: '14px 18px', border: '1px solid #e2e8f0' }}>
-                          <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>Atingido (checked)</div>
-                          <div style={{ fontSize: 24, fontWeight: 800, color: '#22c55e' }}>{totalAtingido}</div>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 140, background: '#fff', borderRadius: 12, padding: '14px 18px', border: '1px solid #e2e8f0' }}>
-                          <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>Forecast Total</div>
-                          <div style={{ fontSize: 24, fontWeight: 800, color: secColor }}>{totalForecast}</div>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 140, background: '#fff', borderRadius: 12, padding: '14px 18px', border: '1px solid #e2e8f0' }}>
-                          <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>Ating% Anual</div>
-                          <div style={{ fontSize: 24, fontWeight: 800, color: pct >= 100 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444' }}>{pct}%</div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  {/* Month columns */}
-                  <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 20 }}>
-                    {FISCAL_MONTHS.map(fm => {
-                      const meta = forecastMetas.find(m => m.section === forecastSection && m.year === fm.year && m.month === fm.month);
-                      const metaLojas = meta?.meta_lojas || 0;
-                      const entries = forecastEntries.filter(e => e.section === forecastSection && e.year === fm.year && e.month === fm.month);
-                      const totalLojas = entries.reduce((s, e) => s + (e.lojas || 0), 0);
-                      const checkedLojas = entries.filter(e => e.checked).reduce((s, e) => s + (e.lojas || 0), 0);
-                      const pctMTD = metaLojas > 0 ? Math.round(checkedLojas / metaLojas * 100) : 0;
-                      const pctFcts = metaLojas > 0 ? Math.round(totalLojas / metaLojas * 100) : 0;
-                      const isCurrent = fm.year === new Date().getFullYear() && fm.month === new Date().getMonth() + 1;
-                      return (
-                        <div key={`${fm.year}-${fm.month}`} style={{ flex: '0 0 200px', background: isCurrent ? '#fffbeb' : '#fff', borderRadius: 14, border: `1px solid ${isCurrent ? '#fde68a' : '#e2e8f0'}`, display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 300px)' }}>
-                          <div style={{ padding: '10px 14px 8px', borderBottom: `2px solid ${secColor}`, position: 'sticky', top: 0, background: isCurrent ? '#fffbeb' : '#fff', borderRadius: '14px 14px 0 0', zIndex: 1 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontWeight: 700, fontSize: 13 }}>{MONTH_SHORT[fm.month]}/{fm.year.toString().slice(2)}</span>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: pctMTD >= 100 ? '#22c55e' : '#64748b' }}>{checkedLojas}/{metaLojas}</span>
-                            </div>
-                            {canEditForecast && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                                <span style={{ fontSize: 10, color: '#94a3b8' }}>Meta:</span>
-                                <input type="number" defaultValue={metaLojas} onBlur={e => updateForecastMeta(forecastSection, fm.year, fm.month, e.target.value)} style={{ width: 50, padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11, textAlign: 'center', outline: 'none' }} />
-                              </div>
-                            )}
-                            {!canEditForecast && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>Meta: {metaLojas}</div>}
-                            <div style={{ marginTop: 6, background: '#f1f5f9', borderRadius: 4, height: 6 }}>
-                              <div style={{ background: '#22c55e', height: 6, borderRadius: 4, width: `${Math.min(pctMTD, 100)}%`, transition: 'width .3s' }} />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-                              <span style={{ fontSize: 9, color: '#94a3b8' }}>MTD {pctMTD}%</span>
-                              <span style={{ fontSize: 9, color: '#94a3b8' }}>Fcts {pctFcts}%</span>
-                            </div>
-                          </div>
-                          <div style={{ padding: 6, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, minHeight: 50 }}>
-                            {entries.map(entry => (
-                              <div key={entry.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: entry.checked ? '#f0fdf4' : '#f8fafc', borderRadius: 8, border: `1px solid ${entry.checked ? '#bbf7d0' : '#f1f5f9'}`, fontSize: 12 }}>
-                                <button onClick={() => canEditForecast && toggleForecastCheck(entry.id, entry.checked)} disabled={!canEditForecast} style={{ width: 20, height: 20, borderRadius: 6, border: entry.checked ? 'none' : '2px solid #d1d5db', background: entry.checked ? '#22c55e' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: canEditForecast ? 'pointer' : 'default', flexShrink: 0 }}>
-                                  {entry.checked && <Check size={12} color="#fff" />}
-                                </button>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontWeight: 600, color: entry.checked ? '#166534' : '#1e293b', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.marca}</div>
-                                </div>
-                                <input type="number" defaultValue={entry.lojas} disabled={!canEditForecast} onBlur={e => updateForecastLojas(entry.id, e.target.value)} style={{ width: 40, padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: 4, fontSize: 11, textAlign: 'center', outline: 'none', opacity: canEditForecast ? 1 : 0.6 }} />
-                                <span style={{ fontSize: 10, color: '#94a3b8' }}>lj</span>
-                                {canEditForecast && <button onClick={() => deleteForecastEntry(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db' }}><X size={12} /></button>}
-                              </div>
-                            ))}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', fontSize: 11, fontWeight: 700, color: '#64748b', borderTop: '1px solid #e2e8f0', marginTop: 2 }}>
-                              <span>Total</span>
-                              <span>{totalLojas} lojas</span>
-                            </div>
-                          </div>
-                          {canEditForecast && (
-                            <div style={{ padding: '6px 8px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 4 }}>
-                              <input placeholder="Marca" value={newForecastMarca} onChange={e => setNewForecastMarca(e.target.value)} style={{ flex: 1, padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, outline: 'none', minWidth: 0 }} />
-                              <input placeholder="Lj" type="number" value={newForecastLojas} onChange={e => setNewForecastLojas(e.target.value)} style={{ width: 36, padding: '4px 4px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, textAlign: 'center', outline: 'none' }} />
-                              <button onClick={() => addForecastEntry(forecastSection, fm.year, fm.month)} style={{ padding: '4px 8px', background: secColor, color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}><Plus size={12} /></button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        )}
       </div>
       {/* DETAIL PANEL */}
       {selectedBrand && (
