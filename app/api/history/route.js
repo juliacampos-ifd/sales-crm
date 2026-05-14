@@ -33,3 +33,25 @@ export async function GET(request) {
 
   return NextResponse.json({ history: data });
 }
+
+// DELETE /api/history?id=123 - Delete a specific history entry (admin only)
+export async function DELETE(request) {
+  const supabase = createServerClient();
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+
+  if (!id) {
+    return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from('pipeline_history')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
