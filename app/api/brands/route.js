@@ -189,4 +189,5 @@ export async function PATCH(request) {
     });
   }
 
-  return NextResponse.json({ b
+  return NextResponse.json({ brand: data });
+}
