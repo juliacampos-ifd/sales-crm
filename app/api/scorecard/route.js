@@ -51,7 +51,6 @@ export async function GET(request) {
       .order('year', { ascending: true }).order('month', { ascending: true });
     if (mErr) throw mErr;
 
-    // Include classificacao in the query to filter P and M only
     const allBrands = await paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,qtd_lojas_fisicas,base_elegivel');
     const allPipes = await paginate(sb, 'pipelines', 'brand_id,stage', [['product','3s']]);
 
@@ -60,19 +59,20 @@ export async function GET(request) {
     const brandLk = {};
     allBrands.forEach(b => { brandLk[b.id] = b; });
 
-    // Find the "active" brand_id for each marca name (newest non-reativado)
+    // Build activeBrand map: for each marca name, find the ACTIVE entry
+    // (newest non-reativado, or newest overall if all are reativado)
     const byName = {};
     allBrands.forEach(b => {
       const name = (b.marca || '').trim().toLowerCase();
       if (!byName[name]) byName[name] = [];
       byName[name].push(b);
     });
-    const activeBrandId = {};
-    Object.values(byName).forEach(group => {
+    // activeBrand: keyed by marca name (lowercase) -> the active brand object
+    const activeBrand = {};
+    Object.entries(byName).forEach(([name, group]) => {
       group.sort((a, b) => (a.id > b.id ? 1 : -1));
       const nonR = group.filter(b => pipeLk[b.id] !== '13. Reativado');
-      const pick = nonR.length > 0 ? nonR[nonR.length - 1] : group[group.length - 1];
-      group.forEach(b => { activeBrandId[b.id] = pick; });
+      activeBrand[name] = nonR.length > 0 ? nonR[nonR.length - 1] : group[group.length - 1];
     });
 
     // Elegiveis: only P and M brands
@@ -98,30 +98,33 @@ export async function GET(request) {
     }
 
     const realized = {};
+    const _seen = new Set();
     allHist.forEach(e => {
       const br = brandLk[e.brand_id];
       if (!br) return;
-      // Only count P and M brands in the scorecard
       if (!isPorM(br)) return;
-      const active = activeBrandId[e.brand_id];
+      const marcaKey = (br.marca || '').trim().toLowerCase();
+      const active = activeBrand[marcaKey];
       if (!active) return;
       const dt = new Date(e.created_at);
       const ym = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
       const metric = stageToMetric(e.to_stage);
       if (!metric) return;
-      // Deduplicate: only count once per marca+month+metric
-      const dedupKey = `${(br.marca||'').trim().toLowerCase()}|${ym}|${metric}`;
-      if (!realized._seen) realized._seen = new Set();
-      if (realized._seen.has(dedupKey)) return;
-      realized._seen.add(dedupKey);
+      // Dedup: once per marca+month+metric
+      const dedupKey = `${marcaKey}|${ym}|${metric}`;
+      if (_seen.has(dedupKey)) return;
+      _seen.add(dedupKey);
       if (!realized[ym]) realized[ym] = { total: emptyM(), lidia_gabi: emptyM(), joao_diego: emptyM(), michel_emerson: emptyM() };
-      // Use ACTIVE brand's closer for dupla assignment (not the history entry's brand)
+      // Use ACTIVE brand's closer for dupla assignment
       const d = closerToDupla(active.responsavel_closer);
-      realized[ym].total[metric]++; realized[ym][d][metric]++;
-      if (metric === 'fechadas' && active.qtd_lojas_fisicas) { realized[ym].total.lojas += active.qtd_lojas_fisicas; realized[ym][d].lojas += active.qtd_lojas_fisicas; }
+      realized[ym].total[metric]++;
+      realized[ym][d][metric]++;
+      // Lojas: always use active brand's current qtd_lojas_fisicas
+      if (metric === 'fechadas' && active.qtd_lojas_fisicas) {
+        realized[ym].total.lojas += active.qtd_lojas_fisicas;
+        realized[ym][d].lojas += active.qtd_lojas_fisicas;
+      }
     });
-
-    delete realized._seen;
 
     // Forecast integration: fetch 3s_pm entries and map to duplas
     const { data: fcstEntries } = await sb.from('forecast_entries').select('*').eq('section', '3s_pm');
@@ -129,9 +132,8 @@ export async function GET(request) {
     (fcstEntries || []).forEach(e => {
       const ym = `${e.year}-${String(e.month).padStart(2,'0')}`;
       const marcaLower = (e.marca || '').trim().toLowerCase();
-      // Find brand to get dupla
-      const brandMatch = allBrands.find(b => (b.marca || '').trim().toLowerCase() === marcaLower);
-      const dupla = brandMatch ? closerToDupla(brandMatch.responsavel_closer) : 'michel_emerson';
+      const active = activeBrand[marcaLower];
+      const dupla = active ? closerToDupla(active.responsavel_closer) : 'michel_emerson';
       if (!forecast[ym]) forecast[ym] = { total: { marcas: 0, lojas: 0 }, lidia_gabi: { marcas: 0, lojas: 0 }, joao_diego: { marcas: 0, lojas: 0 }, michel_emerson: { marcas: 0, lojas: 0 } };
       forecast[ym][dupla].marcas++;
       forecast[ym][dupla].lojas += (e.lojas || 0);
