@@ -142,7 +142,9 @@ export async function GET(request) {
       forecast[ym].total.lojas += (e.lojas || 0);
     });
 
-    return NextResponse.json({ metas: metas || [], realized, elegiveis, forecast });
+    const res = NextResponse.json({ metas: metas || [], realized, elegiveis, forecast });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   } catch (error) {
     console.error('Scorecard API error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
