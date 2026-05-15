@@ -1196,4 +1196,14 @@ export default function CRMPage() {
                       <span style={{ color: '#94a3b8', marginLeft: 4 }}>({PRODUCTS[h.product]?.name || h.product})</span>
                     </div>
                     <div style={{ flex: '0 0 100px', color: '#94a3b8', textAlign: 'right' }}>{h.changed_by_name || 'â'}</div>
-                    {profile?.role === 'admin' && <button onClick={() => deleteHistory(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, c
+                    {profile?.role === 'admin' && <button onClick={() => deleteHistory(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db', flexShrink: 0 }} title="Excluir"><X size={14} /></button>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
