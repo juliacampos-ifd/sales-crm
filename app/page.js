@@ -176,7 +176,7 @@ export default function CRMPage() {
         }
       } catch (err) { console.error('Error changing stage:', err); }
     }
-    loadScorecard();
+    await loadScorecard();
     setSaving(false);
   };
   // ── Save pending responsavel changes (batch) ──
@@ -253,7 +253,7 @@ export default function CRMPage() {
     try {
       await fetch('/api/history?id=' + histId, { method: 'DELETE' });
       setBrandHistory(prev => prev.filter(h => h.id !== histId));
-      loadScorecard();
+      await loadScorecard();
     } catch (err) { console.error('Error deleting history:', err); }
   };
   // ── Save info changes (button click) — respects testMode ──
