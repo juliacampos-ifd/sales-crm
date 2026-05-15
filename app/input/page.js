@@ -1,28 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PRODUCTS } from '@/lib/constants';
 import { ArrowLeft, Check, Plus, Target } from 'lucide-react';
-
-// Field and SelectField OUTSIDE the component to prevent re-creation on each render
-const Field = ({ label, value, onChange, placeholder, type }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>{label}</label>
-    <input type={type || 'text'} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-      style={{ padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', background: '#fff' }} />
-  </div>
-);
-
-const SelectField = ({ label, value, onChange, options, placeholder }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-    <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>{label}</label>
-    <select value={value} onChange={e => onChange(e.target.value)}
-      style={{ padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', background: '#fff', color: value ? '#1e293b' : '#94a3b8' }}>
-      <option value="">{placeholder || 'Selecione...'}</option>
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
-  </div>
-);
 
 const UF = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
 
@@ -40,9 +20,9 @@ export default function InputPage() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
-  const toggleProduct = (pk) => {
+  const toggleProduct = useCallback((pk) => {
     setActiveProducts(prev => prev.includes(pk) ? prev.filter(p => p !== pk) : [...prev, pk]);
-  };
+  }, []);
 
   const handleSubmit = async () => {
     if (!marca.trim()) { setError('Nome da marca e obrigatorio'); return; }
@@ -99,6 +79,9 @@ export default function InputPage() {
     setSaving(false);
   };
 
+  const inputStyle = { padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', background: '#fff', width: '100%', boxSizing: 'border-box' };
+  const labelStyle = { fontSize: 12, fontWeight: 600, color: '#64748b' };
+
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '10px 28px', display: 'flex', alignItems: 'center', gap: 16, position: 'sticky', top: 0, zIndex: 40 }}>
@@ -114,21 +97,48 @@ export default function InputPage() {
 
           <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', borderBottom: '1px solid #f1f5f9', paddingBottom: 12 }}>Dados da marca</div>
 
-          <Field label="Nome da marca *" value={marca} onChange={setMarca} placeholder="Ex: Burger King" />
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <Field label="Qtd de lojas fisicas" value={qtdLojas} onChange={setQtdLojas} placeholder="0" type="number" />
-            <SelectField label="Classificacao" value={classificacao} onChange={setClassificacao} options={['P', 'M', 'G']} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={labelStyle}>Nome da marca *</label>
+            <input type="text" value={marca} onChange={e => setMarca(e.target.value)} placeholder="Ex: Burger King" style={inputStyle} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <Field label="Marca TOP KA" value={topKa} onChange={setTopKa} placeholder="Sim / Nao" />
-            <Field label="Marca no BP" value={noBP} onChange={setNoBP} placeholder="Sim / Nao" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={labelStyle}>Qtd de lojas fisicas</label>
+              <input type="number" value={qtdLojas} onChange={e => setQtdLojas(e.target.value)} placeholder="0" style={inputStyle} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={labelStyle}>Classificacao</label>
+              <select value={classificacao} onChange={e => setClassificacao(e.target.value)} style={{ ...inputStyle, color: classificacao ? '#1e293b' : '#94a3b8' }}>
+                <option value="">Selecione...</option>
+                {['P', 'M', 'G'].map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <Field label="PDV atual" value={pdv} onChange={setPdv} placeholder="Ex: Linx, TOTVS" />
-            <SelectField label="Estado" value={estado} onChange={setEstado} options={UF} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={labelStyle}>Marca TOP KA</label>
+              <input type="text" value={topKa} onChange={e => setTopKa(e.target.value)} placeholder="Sim / Nao" style={inputStyle} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={labelStyle}>Marca no BP</label>
+              <input type="text" value={noBP} onChange={e => setNoBP(e.target.value)} placeholder="Sim / Nao" style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={labelStyle}>PDV atual</label>
+              <input type="text" value={pdv} onChange={e => setPdv(e.target.value)} placeholder="Ex: Linx, TOTVS" style={inputStyle} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={labelStyle}>Estado</label>
+              <select value={estado} onChange={e => setEstado(e.target.value)} style={{ ...inputStyle, color: estado ? '#1e293b' : '#94a3b8' }}>
+                <option value="">Selecione...</option>
+                {UF.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
           </div>
 
           <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', borderBottom: '1px solid #f1f5f9', paddingBottom: 12, marginTop: 8 }}>Produtos ativos</div>
