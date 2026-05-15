@@ -1,6 +1,8 @@
 import { createServerClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/history?brand_id=123&product=3s
 export async function GET(request) {
   const supabase = createServerClient();
@@ -53,5 +55,4 @@ export async function DELETE(request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
-}
+  r
