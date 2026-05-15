@@ -47,9 +47,9 @@ export default function CRMPage() {
   const [pipelinesChanged, setPipelinesChanged] = useState(false);
   // Track pending responsavel changes
   const [pendingResp, setPendingResp] = useState({});
-  // ── TEST MODE ──
+  // ââ TEST MODE ââ
   const [testMode, setTestMode] = useState(false);
-  // ── SCORECARD ──
+  // ââ SCORECARD ââ
   const [scData, setScData] = useState(null);
   const [scMonth, setScMonth] = useState(new Date().getMonth() + 1);
   const [scYear, setScYear] = useState(new Date().getFullYear());
@@ -57,9 +57,9 @@ export default function CRMPage() {
   const [scModal, setScModal] = useState(null);
   const [scModalBrands, setScModalBrands] = useState([]);
   const [scModalLoading, setScModalLoading] = useState(false);
-  // ── Open filter tracking ──
+  // ââ Open filter tracking ââ
   const [openFilter, setOpenFilter] = useState(null);
-  // ── Init edit fields when selecting a brand ──
+  // ââ Init edit fields when selecting a brand ââ
   const openBrandDetail = (brand, tab) => {
     setSelectedBrand(brand);
     setDetailTab(tab || 'info');
@@ -74,7 +74,7 @@ export default function CRMPage() {
     setPendingResp({});
     loadHistory(brand.id, brand._oldIds);
   };
-  // ── Auth check ──
+  // ââ Auth check ââ
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
@@ -98,7 +98,7 @@ export default function CRMPage() {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (data) setProfile(data);
   };
-  // ── Login ──
+  // ââ Login ââ
   const handleLogin = async () => {
     setLoginError('');
     const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPass });
@@ -116,7 +116,7 @@ export default function CRMPage() {
     else setLoginError('');
     alert(error ? 'Erro: ' + error.message : 'Email de recuperacao enviado! Verifique sua caixa de entrada.');
   };
-  // ── Load brands ──
+  // ââ Load brands ââ
   const loadBrands = useCallback(async () => {
     const res = await fetch('/api/brands?limit=999');
     const data = await res.json();
@@ -131,14 +131,14 @@ export default function CRMPage() {
       }).catch(console.error);
     }
   }, [user, loadBrands]);
-  // Viewer = read-only (vê tudo, não edita nada)
+  // Viewer = read-only (vÃª tudo, nÃ£o edita nada)
   const canEdit = profile?.role !== 'viewer';
-  // ── Role-based filtering ──
+  // ââ Role-based filtering ââ
   const filtered = useMemo(() => {
     let d = brands;
     if (profile?.role === 'executivo') {
       if (profile.team === 'saipos') {
-        // Marcos/Lucas: veem todas as marcas que têm pipeline saipos ou totem
+        // Marcos/Lucas: veem todas as marcas que tÃªm pipeline saipos ou totem
         d = d.filter(b => b.pipelines?.saipos || b.pipelines?.totem);
       } else {
         d = d.filter(b => b.responsavel_bdr === profile.name || b.responsavel_closer === profile.name || Object.values(b.pipelines || {}).some(p => p.responsavel && p.responsavel.includes(profile.name)));
@@ -156,7 +156,7 @@ export default function CRMPage() {
     if (filterHaas.length > 0) d = d.filter(b => { const pt = (b.produto_totem || "").split(",").map(s => s.trim()); return filterHaas.some(f => pt.includes(f)); });
     return d;
   }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas]);
-  // ── Change stage (respects testMode) ──
+  // ââ Change stage (respects testMode) ââ
   const changeStage = async (brandId, productKey, newStage) => {
     setSaving(true);
     setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { ...prev.pipelines?.[productKey], stage: newStage } } } : prev);
@@ -179,7 +179,7 @@ export default function CRMPage() {
     loadScorecard();
     setSaving(false);
   };
-  // ── Save pending responsavel changes (batch) ──
+  // ââ Save pending responsavel changes (batch) ââ
   const savePendingResponsaveis = async (brandId) => {
     if (testMode) return;
     for (const [prodKey, newResp] of Object.entries(pendingResp)) {
@@ -190,7 +190,7 @@ export default function CRMPage() {
       });
     }
   };
-  // ── Enable product ──
+  // ââ Enable product ââ
   const enableProduct = async (brandId, productKey) => {
     setSaving(true);
     setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { stage: '0. Nao Iniciado', active: true, responsavel: '' } } } : prev);
@@ -209,7 +209,7 @@ export default function CRMPage() {
     }
     setSaving(false);
   };
-  // ── Disable product ──
+  // ââ Disable product ââ
   const disableProduct = async (brandId, productKey) => {
     if (!confirm('Desativar ' + (PRODUCTS[productKey]?.name || productKey) + ' desta marca?')) return;
     setSaving(true);
@@ -240,7 +240,7 @@ export default function CRMPage() {
     }
     setSaving(false);
   };
-  // ── Load history ──
+  // ââ Load history ââ
   const loadHistory = async (brandId, oldIds) => {
     let url = `/api/history?brand_id=${brandId}`;
     if (oldIds && oldIds.length > 0) url += `&old_ids=${oldIds.join(',')}`;
@@ -256,7 +256,7 @@ export default function CRMPage() {
       loadScorecard();
     } catch (err) { console.error('Error deleting history:', err); }
   };
-  // ── Save info changes (button click) — respects testMode ──
+  // ââ Save info changes (button click) â respects testMode ââ
   const saveInfoChanges = async () => {
     if (!selectedBrand) return;
     if (testMode) { setInfoChanged(false); return; }
@@ -294,7 +294,7 @@ export default function CRMPage() {
     } catch (err) { console.error('Save error:', err); }
     setSaving(false);
   };
-  // ── Save pipelines changes (responsavel batch) — respects testMode ──
+  // ââ Save pipelines changes (responsavel batch) â respects testMode ââ
   const savePipelinesChanges = async () => {
     if (!selectedBrand) return;
     if (testMode) { setPendingResp({}); setPipelinesChanged(false); return; }
@@ -313,7 +313,7 @@ export default function CRMPage() {
     } catch (err) { console.error('Save pipelines error:', err); }
     setSaving(false);
   };
-  // ── Export data — history as separate rows ──
+  // ââ Export data â history as separate rows ââ
   const exportData = async () => {
     setSaving(true);
     try {
@@ -338,7 +338,7 @@ export default function CRMPage() {
           });
         }
       });
-      const bom = '﻿';
+      const bom = 'ï»¿';
       const blob = new Blob([bom + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -349,7 +349,7 @@ export default function CRMPage() {
     } catch (err) { console.error('Export error:', err); }
     setSaving(false);
   };
-  // ── Pipeline helpers ──
+  // ââ Pipeline helpers ââ
   const product = PRODUCTS[activeProduct];
   const pipelineStages = useMemo(() => {
     if (!product) return [];
@@ -391,9 +391,9 @@ export default function CRMPage() {
     if (editBaseElegivel.includes(opt)) setEditBaseElegivel(editBaseElegivel.filter(v => v !== opt));
     else setEditBaseElegivel([...editBaseElegivel, opt]);
   };
-  // ══════════════════════════════════════════════════════════════
+  // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   // LOADING
-  // ══════════════════════════════════════════════════════════════
+  // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
@@ -405,9 +405,9 @@ export default function CRMPage() {
       </div>
     );
   }
-  // ══════════════════════════════════════════════════════════════
+  // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   // LOGIN
-  // ══════════════════════════════════════════════════════════════
+  // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   if (!user) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)' }}>
@@ -430,10 +430,10 @@ export default function CRMPage() {
       </div>
     );
   }
-  // ══════════════════════════════════════════════════════════════
+  // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   // HELPERS
-  // ══════════════════════════════════════════════════════════════
-  // ── Forecast ──
+  // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // ââ Forecast ââ
   const FORECAST_SECTIONS = [
     { key: '3s_pm', label: '3S Checkout P/M', subtitle: 'Contrato assinado', color: '#EA1D2C' },
     { key: '3s_g', label: '3S Checkout G', subtitle: 'Contrato assinado', color: '#b91c1c' },
@@ -502,6 +502,8 @@ export default function CRMPage() {
         await fetch('/api/forecast', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: e.id, lojas: e.lojas }) });
       }
       setForecastEntries(prev => prev.map(e => ({ ...e, _dirty: false })));
+      // Reload scorecard so Forecast Marcas/Lojas lines update
+      try { const r2 = await fetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' }); const d2 = await r2.json(); setScData(d2); } catch (_) {}
     } catch (err) { console.error(err); }
     setSaving(false);
   };
@@ -576,16 +578,16 @@ export default function CRMPage() {
       </div>
     );
   };
-  // ══════════════════════════════════════════════════════════════
+  // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   // RENDER
-  // ══════════════════════════════════════════════════════════════
+  // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
       {/* TEST MODE BANNER */}
       {testMode && (
         <div style={{ background: '#fef3c7', borderBottom: '2px solid #f59e0b', padding: '8px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 13, fontWeight: 600, color: '#92400e' }}>
           <FlaskConical size={16} />
-          Modo Teste ativo — alteracoes NAO serao salvas no banco de dados
+          Modo Teste ativo â alteracoes NAO serao salvas no banco de dados
           <button onClick={() => { setTestMode(false); loadBrands(); }} style={{ marginLeft: 12, padding: '4px 12px', background: '#92400e', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Desativar e recarregar</button>
         </div>
       )}
@@ -679,7 +681,7 @@ export default function CRMPage() {
                         onMouseEnter={e => { e.currentTarget.style.borderColor = product.color; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{b.marca}</div>
-                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || '—'} / ${b.responsavel_closer || '—'}` : '—')}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || 'â'} / ${b.responsavel_closer || 'â'}` : 'â')}</div>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
                           {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
@@ -714,13 +716,13 @@ export default function CRMPage() {
                     <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => openBrandDetail(b, 'info')}
                       onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, fontSize: 13 }}>{b.marca}</td>
-                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || ''} / ${b.responsavel_closer || ''}` : '—')}</td>
+                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || ''} / ${b.responsavel_closer || ''}` : 'â')}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
-                        <span style={{ fontSize: 11, background: product.color + '15', color: product.color, padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>{shortStage(b.pipelines?.[activeProduct]?.stage || '—')}</span>
+                        <span style={{ fontSize: 11, background: product.color + '15', color: product.color, padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>{shortStage(b.pipelines?.[activeProduct]?.stage || 'â')}</span>
                       </td>
-                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontWeight: 700, color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8' }}>{b.classificacao || '—'}</td>
-                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.estado || '—'}</td>
-                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.qtd_lojas_fisicas || '—'}</td>
+                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontWeight: 700, color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8' }}>{b.classificacao || 'â'}</td>
+                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.estado || 'â'}</td>
+                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.qtd_lojas_fisicas || 'â'}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
                         <button onClick={e => { e.stopPropagation(); openBrandDetail(b, 'pipelines'); }} style={{ background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}><Eye size={13} color="#EA1D2C" /></button>
                       </td>
@@ -895,7 +897,7 @@ export default function CRMPage() {
             { key:'fcst_marcas', label:'Forecast Marcas', isForecast:true },
             { key:'fcst_lojas', label:'Forecast Lojas', isForecast:true, isBold:true },
           ];
-          const scPctColor = (p) => { if (!p || p === '—') return '#94a3b8'; const n = parseInt(p); return n >= 100 ? '#22c55e' : n >= 70 ? '#f59e0b' : '#ef4444'; };
+          const scPctColor = (p) => { if (!p || p === 'â') return '#94a3b8'; const n = parseInt(p); return n >= 100 ? '#22c55e' : n >= 70 ? '#f59e0b' : '#ef4444'; };
           const today = new Date();
           const scTotalBD = getMonthBusinessDays(scYear, scMonth - 1);
           const scMtdBD = scYear === today.getFullYear() && scMonth === today.getMonth() + 1 ? getMonthBusinessDaysMTD(scYear, scMonth - 1, today) : scTotalBD;
@@ -921,11 +923,11 @@ export default function CRMPage() {
               const row = {...def, cells:[]};
               scMonthCols.forEach(col => {
                 const isCur = col.y===scYear && col.m===scMonth;
-                if (def.key==='elegiveis') { if (isCur) row.cells.push({isCur:true,meta:elegMeta,fcst:eleg,pctA:elegMeta>0?Math.round((eleg/elegMeta)*100)+'%':'—',real:eleg,mtdMeta:eleg,mtdReal:eleg,mtdPct:'100%',ym:col.k}); else row.cells.push({v:scGm(dupla,col.y,col.m,'elegiveis'),ym:col.k}); }
-                else if (def.key==='media_lojas') { const fch=isCur?cmR.fechadas:scGr(dupla,col.k,'fechadas'), loj=isCur?cmR.lojas:scGr(dupla,col.k,'lojas'), v=fch>0?Math.round((loj/fch)*10)/10:0; if (isCur) { const ml=scGm(dupla,scYear,scMonth,'media_lojas'); row.cells.push({isCur:true,meta:ml,fcst:v,pctA:ml>0?Math.round((v/ml)*100)+'%':'—',real:v,mtdMeta:v,mtdReal:v,mtdPct:'—',isLive:true,ym:col.k}); } else row.cells.push({v,ym:col.k}); }
+                if (def.key==='elegiveis') { if (isCur) row.cells.push({isCur:true,meta:elegMeta,fcst:eleg,pctA:elegMeta>0?Math.round((eleg/elegMeta)*100)+'%':'â',real:eleg,mtdMeta:eleg,mtdReal:eleg,mtdPct:'100%',ym:col.k}); else row.cells.push({v:scGm(dupla,col.y,col.m,'elegiveis'),ym:col.k}); }
+                else if (def.key==='media_lojas') { const fch=isCur?cmR.fechadas:scGr(dupla,col.k,'fechadas'), loj=isCur?cmR.lojas:scGr(dupla,col.k,'lojas'), v=fch>0?Math.round((loj/fch)*10)/10:0; if (isCur) { const ml=scGm(dupla,scYear,scMonth,'media_lojas'); row.cells.push({isCur:true,meta:ml,fcst:v,pctA:ml>0?Math.round((v/ml)*100)+'%':'â',real:v,mtdMeta:v,mtdReal:v,mtdPct:'â',isLive:true,ym:col.k}); } else row.cells.push({v,ym:col.k}); }
                 else if (def.isForecast) { const ff=def.key==='fcst_marcas'?'marcas':'lojas', v=scGf(dupla,col.k,ff); if (isCur) row.cells.push({isCur:true,isFcstCell:true,v,ym:col.k}); else row.cells.push({v,ym:col.k}); }
                 else if (def.isPercent) { let num=0,den=1; if (isCur) { if(def.key==='taxa_pc'){num=cmR.primeiro_contato;den=eleg;}else if(def.key==='taxa_apres'){num=cmR.apresentacao;den=cmR.primeiro_contato;}else if(def.key==='taxa_neg'){num=cmR.negociacao;den=cmR.apresentacao;}else if(def.key==='taxa_fechadas'){num=cmR.fechadas;den=cmR.negociacao;} } else { const gv=field=>scGr(dupla,col.k,field); if(def.key==='taxa_pc'){num=gv('primeiro_contato');den=scGm(dupla,col.y,col.m,'elegiveis');}else if(def.key==='taxa_apres'){num=gv('apresentacao');den=gv('primeiro_contato');}else if(def.key==='taxa_neg'){num=gv('negociacao');den=gv('apresentacao');}else if(def.key==='taxa_fechadas'){num=gv('fechadas');den=gv('negociacao');} } const pct=den>0?Math.round((num/den)*100)+'%':'0%'; row.cells.push(isCur?{isCur:true,isRate:true,v:pct,ym:col.k}:{v:pct,ym:col.k}); }
-                else { const f=def.key; if (isCur) { const pctA=cmM[f]>0?Math.round((fcst[f]/cmM[f])*100)+'%':'—', pctMtd=mtdM[f]>0?Math.round((cmR[f]/mtdM[f])*100)+'%':'—'; row.cells.push({isCur:true,meta:cmM[f],fcst:fcst[f],pctA,real:cmR[f],mtdMeta:mtdM[f],mtdReal:cmR[f],mtdPct:pctMtd,ym:col.k}); } else row.cells.push({v:scGr(dupla,col.k,def.key),ym:col.k}); }
+                else { const f=def.key; if (isCur) { const pctA=cmM[f]>0?Math.round((fcst[f]/cmM[f])*100)+'%':'â', pctMtd=mtdM[f]>0?Math.round((cmR[f]/mtdM[f])*100)+'%':'â'; row.cells.push({isCur:true,meta:cmM[f],fcst:fcst[f],pctA,real:cmR[f],mtdMeta:mtdM[f],mtdReal:cmR[f],mtdPct:pctMtd,ym:col.k}); } else row.cells.push({v:scGr(dupla,col.k,def.key),ym:col.k}); }
               });
               return row;
             });
@@ -960,7 +962,7 @@ export default function CRMPage() {
                 <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setScModal(null)}>
                   <div style={{background:'#fff',borderRadius:16,width:'90%',maxWidth:600,maxHeight:'80vh',display:'flex',flexDirection:'column',overflow:'hidden'}} onClick={e=>e.stopPropagation()}>
                     <div style={{padding:'16px 20px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                      <div><div style={{fontSize:16,fontWeight:700,color:'#1e293b'}}>{scModal.label}</div><div style={{fontSize:12,color:'#94a3b8'}}>{MONTH_NAMES[parseInt(scModal.ym.split('-')[1])-1]} {scModal.ym.split('-')[0]} — {SC_DUPLA_LABELS[scModal.dupla]}</div></div>
+                      <div><div style={{fontSize:16,fontWeight:700,color:'#1e293b'}}>{scModal.label}</div><div style={{fontSize:12,color:'#94a3b8'}}>{MONTH_NAMES[parseInt(scModal.ym.split('-')[1])-1]} {scModal.ym.split('-')[0]} â {SC_DUPLA_LABELS[scModal.dupla]}</div></div>
                       <button onClick={()=>setScModal(null)} style={{background:'none',border:'none',cursor:'pointer',padding:4}}><X size={20} color="#94a3b8"/></button>
                     </div>
                     <div style={{padding:'12px 20px',overflowY:'auto',flex:1}}>
@@ -1059,10 +1061,10 @@ export default function CRMPage() {
             {/* INFO TAB */}
             {detailTab === 'info' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {[['Responsavel', selectedBrand.pipelines?.['3s']?.responsavel || `${selectedBrand.responsavel_bdr || '—'} / ${selectedBrand.responsavel_closer || '—'}`], ['Coord. Delivery', selectedBrand.coordenador_delivery], ['Exec. Delivery', selectedBrand.executivo_delivery], ].map(([l, v]) => (
+                {[['Responsavel', selectedBrand.pipelines?.['3s']?.responsavel || `${selectedBrand.responsavel_bdr || 'â'} / ${selectedBrand.responsavel_closer || 'â'}`], ['Coord. Delivery', selectedBrand.coordenador_delivery], ['Exec. Delivery', selectedBrand.executivo_delivery], ].map(([l, v]) => (
                   <div key={l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
                     <span style={{ color: '#64748b' }}>{l}</span>
-                    <span style={{ fontWeight: 500, color: '#1e293b' }}>{v || '—'}</span>
+                    <span style={{ fontWeight: 500, color: '#1e293b' }}>{v || 'â'}</span>
                   </div>
                 ))}
                 {/* HAAS/SAAS multi-select */}
@@ -1190,18 +1192,8 @@ export default function CRMPage() {
                     <div style={{ flex: '0 0 80px', color: '#94a3b8' }}>{new Date(h.created_at).toLocaleDateString('pt-BR')}</div>
                     <div style={{ flex: 1 }}>
                       <span style={{ color: '#94a3b8' }}>{shortStage(h.from_stage)}</span>
-                      <span style={{ color: '#64748b', fontWeight: 600 }}> → {shortStage(h.to_stage)}</span>
+                      <span style={{ color: '#64748b', fontWeight: 600 }}> â {shortStage(h.to_stage)}</span>
                       <span style={{ color: '#94a3b8', marginLeft: 4 }}>({PRODUCTS[h.product]?.name || h.product})</span>
                     </div>
-                    <div style={{ flex: '0 0 100px', color: '#94a3b8', textAlign: 'right' }}>{h.changed_by_name || '—'}</div>
-                    {profile?.role === 'admin' && <button onClick={() => deleteHistory(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db', flexShrink: 0 }} title="Excluir"><X size={14} /></button>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                    <div style={{ flex: '0 0 100px', color: '#94a3b8', textAlign: 'right' }}>{h.changed_by_name || 'â'}</div>
+                    {profile?.role === 'admin' && <button onClick={() => deleteHistory(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, c
