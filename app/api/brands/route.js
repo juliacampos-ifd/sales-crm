@@ -1,6 +1,8 @@
 import { createServerClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/brands - List all brands with their pipelines
 export async function GET(request) {
   const supabase = createServerClient();
@@ -189,5 +191,4 @@ export async function PATCH(request) {
     });
   }
 
-  return NextResponse.json({ brand: data });
-}
+  retu
