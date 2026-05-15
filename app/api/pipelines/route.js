@@ -1,6 +1,8 @@
 import { createServerClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 // PATCH /api/pipelines - Update a brand's pipeline stage and/or responsavel
 export async function PATCH(request) {
   const supabase = createServerClient();
@@ -22,7 +24,7 @@ export async function PATCH(request) {
 
   const from_stage = current?.stage || null;
 
-  // Build update object — always keep current stage if not changing it
+  // Build update object â always keep current stage if not changing it
   const update = { brand_id, product, active: true, updated_by: user_id };
   if (new_stage) {
     update.stage = new_stage;
