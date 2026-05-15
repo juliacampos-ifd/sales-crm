@@ -8,7 +8,11 @@ export async function GET(request) {
   const supabase = createServerClient();
   const { data: metas } = await supabase.from('forecast_metas').select('*');
   const { data: entries } = await supabase.from('forecast_entries').select('*').order('created_at', { ascending: true });
-  return NextResponse.json({ metas: metas || [], entries: entries || [] });
+  const res = NextResponse.json({ metas: metas || [], entries: entries || [] });
+  res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0');
+  res.headers.set('CDN-Cache-Control', 'no-store');
+  res.headers.set('Vercel-CDN-Cache-Control', 'no-store');
+  return res;
 }
 
 // POST /api/forecast - Add entry or update meta
