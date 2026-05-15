@@ -212,7 +212,9 @@ export async function GET(request) {
     });
 
     const res = NextResponse.json({ metas: metas || [], realized, elegiveis, forecast, brandLists, eligBrands });
-    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0');
+    res.headers.set('CDN-Cache-Control', 'no-store');
+    res.headers.set('Vercel-CDN-Cache-Control', 'no-store');
     return res;
   } catch (error) {
     console.error('Scorecard API error:', error);
