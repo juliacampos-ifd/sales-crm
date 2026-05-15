@@ -118,14 +118,14 @@ export default function CRMPage() {
   };
   // ── Load brands ──
   const loadBrands = useCallback(async () => {
-    const res = await fetch('/api/brands?limit=999');
+    const res = await fetch('/api/brands?limit=999', { cache: 'no-store' });
     const data = await res.json();
     if (data.brands) setBrands(data.brands);
   }, []);
   useEffect(() => {
     if (user) {
       loadBrands();
-      fetch('/api/forecast').then(r => r.json()).then(d => {
+      fetch('/api/forecast', { cache: 'no-store' }).then(r => r.json()).then(d => {
         if (d.metas) setForecastMetas(d.metas);
         if (d.entries) setForecastEntries(d.entries);
       }).catch(console.error);
@@ -168,7 +168,7 @@ export default function CRMPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brand_id: brandId, product: productKey, new_stage: newStage, user_id: user?.id, user_name: profile?.name }),
         });
-        const freshRes = await fetch('/api/brands?limit=999');
+        const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
         const freshData = await freshRes.json();
         if (freshData.brands) {
           setBrands(freshData.brands);
@@ -200,7 +200,7 @@ export default function CRMPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brand_id: brandId, product: productKey, user_id: user?.id, user_name: profile?.name }),
       });
-      const freshRes = await fetch('/api/brands?limit=999');
+      const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
       const freshData = await freshRes.json();
       if (freshData.brands) {
         setBrands(freshData.brands);
@@ -231,7 +231,7 @@ export default function CRMPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brand_id: brandId, product: productKey, new_stage: '14. Desativado', user_id: user?.id, user_name: profile?.name }),
       });
-      const freshRes = await fetch('/api/brands?limit=999');
+      const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
       const freshData = await freshRes.json();
       if (freshData.brands) {
         setBrands(freshData.brands);
@@ -276,7 +276,7 @@ export default function CRMPage() {
           body: JSON.stringify({ id: selectedBrand.id, ...updates, user_id: user?.id, user_name: profile?.name }),
         });
       }
-      const freshRes = await fetch('/api/brands?limit=999');
+      const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
       const freshData = await freshRes.json();
       if (freshData.brands) {
         setBrands(freshData.brands);
@@ -301,7 +301,7 @@ export default function CRMPage() {
     setSaving(true);
     try {
       await savePendingResponsaveis(selectedBrand.id);
-      const freshRes = await fetch('/api/brands?limit=999');
+      const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
       const freshData = await freshRes.json();
       if (freshData.brands) {
         setBrands(freshData.brands);
@@ -317,7 +317,7 @@ export default function CRMPage() {
   const exportData = async () => {
     setSaving(true);
     try {
-      const histRes = await fetch('/api/history?limit=9999');
+      const histRes = await fetch('/api/history?limit=9999', { cache: 'no-store' });
       const histData = await histRes.json();
       const allHistory = histData.history || [];
       const prodKeys = Object.keys(PRODUCTS);
@@ -451,7 +451,7 @@ export default function CRMPage() {
 
   const loadForecast = async () => {
     try {
-      const res = await fetch('/api/forecast');
+      const res = await fetch('/api/forecast', { cache: 'no-store' });
       const data = await res.json();
       if (data.metas) setForecastMetas(data.metas);
       if (data.entries) setForecastEntries(data.entries);
