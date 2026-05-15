@@ -877,25 +877,48 @@ export default function CRMPage() {
       </div>
       {/* SCORECARD */}
         {view === 'scorecard' && (() => {
-          // Load data on first view
           if (!scData) { return <div style={{ textAlign:'center', padding:40 }}><p style={{ color:'#94a3b8' }}>Carregando scorecard...</p></div>; }
           const SC_DUPLA_LABELS = { total:'FUNIL DE VENDA', lidia_gabi:'Lidia e Gabi', joao_diego:'Joao e Diego', michel_emerson:'Michel e Emerson' };
           const SC_DUPLA_COLORS = { total:'#EA1D2C', lidia_gabi:'#DA5D69', joao_diego:'#9C050B', michel_emerson:'#A02331' };
-          const SC_METRIC_LABELS = { elegiveis:'Marcas Elegiveis', primeiro_contato:'Primeiro Contato', apresentacao:'Apresentacao', negociacao:'Negociacao', fechadas:'Marcas Fechadas', lojas:'Lojas Fechadas' };
+          const SC_METRIC_LABELS = {
+            elegiveis:'Marcas Elegiveis',
+            nao_iniciado:'Nao Iniciado', iniciado:'Iniciado',
+            primeiro_contato:'Primeiro Contato', apresentacao:'Apresentacao',
+            diagnostico:'Diagnostico', demo_showroom:'Demo/Showroom',
+            negociacao:'Negociacao', piloto:'Piloto',
+            contrato_enviado:'Contrato Enviado', contrato_assinado:'Contrato Assinado',
+            perdido:'Perdido', stand_by:'Stand by', organico:'Organico',
+            lojas:'Lojas Fechadas',
+          };
           const SC_FUNNEL = [
             { key:'elegiveis', label:'MARCAS ELEGIVEIS', isBold:true, isLive:true },
-            { key:'taxa_pc', label:'Taxa Conversao - PRIMEIRO CONTATO', isPercent:true },
+            { key:'taxa_pc', label:'Taxa Conversao - PRIMEIRO CONTATO', isPercent:true, num:'primeiro_contato', den:'elegiveis' },
             { key:'primeiro_contato', label:'PRIMEIRO CONTATO', isBold:true },
-            { key:'taxa_apres', label:'Taxa Conversao - APRESENTACAO', isPercent:true },
+            { key:'taxa_apres', label:'Taxa Conversao - APRESENTACAO', isPercent:true, num:'apresentacao', den:'primeiro_contato' },
             { key:'apresentacao', label:'APRESENTACAO', isBold:true },
-            { key:'taxa_neg', label:'Taxa Conversao - NEGOCIACAO', isPercent:true },
+            { key:'taxa_neg', label:'Taxa Conversao - NEGOCIACAO', isPercent:true, num:'negociacao', den:'apresentacao' },
             { key:'negociacao', label:'NEGOCIACAO', isBold:true },
-            { key:'taxa_fechadas', label:'Taxa Conversao - MARCAS FECHADAS', isPercent:true },
-            { key:'fechadas', label:'MARCAS FECHADAS', isBold:true },
+            { key:'taxa_fechadas', label:'Taxa Conversao - CONTRATO ASSINADO', isPercent:true, num:'contrato_assinado', den:'negociacao' },
+            { key:'contrato_assinado', label:'CONTRATO ASSINADO', isBold:true },
             { key:'media_lojas', label:'Media de lojas por marca', isLive:true },
             { key:'lojas', label:'Lojas Fechadas', isBold:true },
             { key:'fcst_marcas', label:'Forecast Marcas', isForecast:true },
             { key:'fcst_lojas', label:'Forecast Lojas', isForecast:true, isBold:true },
+          ];
+          const SC_ALL_STAGES = [
+            { key:'nao_iniciado', label:'Nao Iniciado' },
+            { key:'iniciado', label:'Iniciado' },
+            { key:'primeiro_contato', label:'Primeiro Contato' },
+            { key:'apresentacao', label:'Apresentacao' },
+            { key:'diagnostico', label:'Diagnostico' },
+            { key:'demo_showroom', label:'Demo/Showroom' },
+            { key:'negociacao', label:'Negociacao' },
+            { key:'piloto', label:'Piloto' },
+            { key:'contrato_enviado', label:'Contrato Enviado' },
+            { key:'contrato_assinado', label:'Contrato Assinado' },
+            { key:'perdido', label:'Perdido' },
+            { key:'stand_by', label:'Stand by' },
+            { key:'organico', label:'Organico' },
           ];
           const scPctColor = (p) => { if (!p || p === '—') return '#94a3b8'; const n = parseInt(p); return n >= 100 ? '#22c55e' : n >= 70 ? '#f59e0b' : '#ef4444'; };
           const today = new Date();
@@ -903,17 +926,27 @@ export default function CRMPage() {
           const scMtdBD = scYear === today.getFullYear() && scMonth === today.getMonth() + 1 ? getMonthBusinessDaysMTD(scYear, scMonth - 1, today) : scTotalBD;
           const scCurKey = scYear + '-' + String(scMonth).padStart(2,'0');
           const DK = ['lidia_gabi','joao_diego','michel_emerson'];
+
+          // Get meta value
           const scGmS = (d,y,m,f) => { if (!scData?.metas) return 0; const x = scData.metas.find(r => r.dupla === d && r.year === y && r.month === m); return x ? (x[f]||0) : 0; };
           const scGm = (d,y,m,f) => d === 'total' ? DK.reduce((s,k) => s + scGmS(k,y,m,f), 0) : scGmS(d,y,m,f);
+          // Get realized value
           const scGr = (d,ym,f) => d === 'total' ? DK.reduce((s,k) => s + (scData?.realized?.[ym]?.[k]?.[f]||0), 0) : (scData?.realized?.[ym]?.[d]?.[f]||0);
+          // Get elegiveis
           const scGe = (d) => d === 'total' ? DK.reduce((s,k) => s + (scData?.elegiveis?.[k]||0), 0) : (scData?.elegiveis?.[d]||0);
+          // Get forecast
           const scGf = (d,ym,fl) => d === 'total' ? DK.reduce((s,k) => s + (scData?.forecast?.[ym]?.[k]?.[fl]||0), 0) : (scData?.forecast?.[ym]?.[d]?.[fl]||0);
+
+          // Month columns
           const scMonthCols = (() => { const c = []; for (let y = 2026; y <= scYear; y++) { const ms = y===2026?2:1, mx = y===scYear?scMonth:12; for (let m = ms; m <= mx; m++) c.push({y,m,k:y+'-'+String(m).padStart(2,'0')}); } return c; })();
           const scPastCols = scMonthCols.filter(c => !(c.y===scYear && c.m===scMonth));
           const scHasCur = scMonthCols.some(c => c.y===scYear && c.m===scMonth);
+
+          // Build table rows for a dupla
           const scBuildRows = (dupla) => {
             const cmR={},cmM={},fcst={},mtdM={};
-            ['primeiro_contato','apresentacao','negociacao','fechadas','lojas'].forEach(f => {
+            const metricKeys = ['primeiro_contato','apresentacao','negociacao','contrato_assinado','lojas'];
+            metricKeys.forEach(f => {
               cmR[f]=scGr(dupla,scCurKey,f); cmM[f]=scGm(dupla,scYear,scMonth,f);
               fcst[f]=scMtdBD>0?Math.round((cmR[f]/scMtdBD)*scTotalBD):0;
               mtdM[f]=scTotalBD>0?Math.round((cmM[f]/scTotalBD)*scMtdBD):0;
@@ -923,15 +956,46 @@ export default function CRMPage() {
               const row = {...def, cells:[]};
               scMonthCols.forEach(col => {
                 const isCur = col.y===scYear && col.m===scMonth;
-                if (def.key==='elegiveis') { if (isCur) row.cells.push({isCur:true,meta:elegMeta,fcst:eleg,pctA:elegMeta>0?Math.round((eleg/elegMeta)*100)+'%':'—',real:eleg,mtdMeta:eleg,mtdReal:eleg,mtdPct:'100%',ym:col.k}); else row.cells.push({v:scGm(dupla,col.y,col.m,'elegiveis'),ym:col.k}); }
-                else if (def.key==='media_lojas') { const fch=isCur?cmR.fechadas:scGr(dupla,col.k,'fechadas'), loj=isCur?cmR.lojas:scGr(dupla,col.k,'lojas'), v=fch>0?Math.round((loj/fch)*10)/10:0; if (isCur) { const ml=scGm(dupla,scYear,scMonth,'media_lojas'); row.cells.push({isCur:true,meta:ml,fcst:v,pctA:ml>0?Math.round((v/ml)*100)+'%':'—',real:v,mtdMeta:v,mtdReal:v,mtdPct:'—',isLive:true,ym:col.k}); } else row.cells.push({v,ym:col.k}); }
-                else if (def.isForecast) { const ff=def.key==='fcst_marcas'?'marcas':'lojas', v=scGf(dupla,col.k,ff); if (isCur) row.cells.push({isCur:true,isFcstCell:true,v,ym:col.k}); else row.cells.push({v,ym:col.k}); }
-                else if (def.isPercent) { let num=0,den=1; if (isCur) { if(def.key==='taxa_pc'){num=cmR.primeiro_contato;den=eleg;}else if(def.key==='taxa_apres'){num=cmR.apresentacao;den=cmR.primeiro_contato;}else if(def.key==='taxa_neg'){num=cmR.negociacao;den=cmR.apresentacao;}else if(def.key==='taxa_fechadas'){num=cmR.fechadas;den=cmR.negociacao;} } else { const gv=field=>scGr(dupla,col.k,field); if(def.key==='taxa_pc'){num=gv('primeiro_contato');den=scGm(dupla,col.y,col.m,'elegiveis');}else if(def.key==='taxa_apres'){num=gv('apresentacao');den=gv('primeiro_contato');}else if(def.key==='taxa_neg'){num=gv('negociacao');den=gv('apresentacao');}else if(def.key==='taxa_fechadas'){num=gv('fechadas');den=gv('negociacao');} } const pct=den>0?Math.round((num/den)*100)+'%':'0%'; row.cells.push(isCur?{isCur:true,isRate:true,v:pct,ym:col.k}:{v:pct,ym:col.k}); }
-                else { const f=def.key; if (isCur) { const pctA=cmM[f]>0?Math.round((fcst[f]/cmM[f])*100)+'%':'—', pctMtd=mtdM[f]>0?Math.round((cmR[f]/mtdM[f])*100)+'%':'—'; row.cells.push({isCur:true,meta:cmM[f],fcst:fcst[f],pctA,real:cmR[f],mtdMeta:mtdM[f],mtdReal:cmR[f],mtdPct:pctMtd,ym:col.k}); } else row.cells.push({v:scGr(dupla,col.k,def.key),ym:col.k}); }
+                if (def.key==='elegiveis') {
+                  if (isCur) row.cells.push({isCur:true,meta:elegMeta,fcst:eleg,pctA:elegMeta>0?Math.round((eleg/elegMeta)*100)+'%':'—',real:eleg,mtdMeta:eleg,mtdReal:eleg,mtdPct:'100%',ym:col.k});
+                  else row.cells.push({v:scGm(dupla,col.y,col.m,'elegiveis'),ym:col.k});
+                }
+                else if (def.key==='media_lojas') {
+                  const fch=isCur?cmR.contrato_assinado:scGr(dupla,col.k,'contrato_assinado'), loj=isCur?cmR.lojas:scGr(dupla,col.k,'lojas'), v=fch>0?Math.round((loj/fch)*10)/10:0;
+                  if (isCur) { const ml=scGm(dupla,scYear,scMonth,'media_lojas'); row.cells.push({isCur:true,meta:ml,fcst:v,pctA:ml>0?Math.round((v/ml)*100)+'%':'—',real:v,mtdMeta:v,mtdReal:v,mtdPct:'—',isLive:true,ym:col.k}); }
+                  else row.cells.push({v,ym:col.k});
+                }
+                else if (def.isForecast) {
+                  const ff=def.key==='fcst_marcas'?'marcas':'lojas', v=scGf(dupla,col.k,ff);
+                  if (isCur) row.cells.push({isCur:true,isFcstCell:true,v,ym:col.k});
+                  else row.cells.push({v,ym:col.k});
+                }
+                else if (def.isPercent) {
+                  let num=0,den=1;
+                  if (isCur) {
+                    if (def.den==='elegiveis') { num=cmR[def.num]; den=eleg; }
+                    else { num=cmR[def.num]; den=cmR[def.den]; }
+                  } else {
+                    if (def.den==='elegiveis') { num=scGr(dupla,col.k,def.num); den=scGm(dupla,col.y,col.m,'elegiveis'); }
+                    else { num=scGr(dupla,col.k,def.num); den=scGr(dupla,col.k,def.den); }
+                  }
+                  const pct=den>0?Math.round((num/den)*100)+'%':'0%';
+                  row.cells.push(isCur?{isCur:true,isRate:true,v:pct,ym:col.k}:{v:pct,ym:col.k});
+                }
+                else {
+                  const f=def.key;
+                  if (isCur) {
+                    const pctA=cmM[f]>0?Math.round((fcst[f]/cmM[f])*100)+'%':'—';
+                    const pctMtd=mtdM[f]>0?Math.round((cmR[f]/mtdM[f])*100)+'%':'—';
+                    row.cells.push({isCur:true,meta:cmM[f],fcst:fcst[f],pctA,real:cmR[f],mtdMeta:mtdM[f],mtdReal:cmR[f],mtdPct:pctMtd,ym:col.k});
+                  } else row.cells.push({v:scGr(dupla,col.k,def.key),ym:col.k});
+                }
               });
               return row;
             });
           };
+
+          // Open modal with brand list
           const scOpenModal = (metric, ym, dp) => {
             if (!metric || metric.startsWith('taxa_') || metric === 'media_lojas') return;
             setScModal({ metric, ym, dupla:dp, label: SC_METRIC_LABELS[metric]||metric });
@@ -949,15 +1013,20 @@ export default function CRMPage() {
               setScModalBrands(list);
             }
           };
+
+          // Styles
           const scTh = { padding:'8px 10px', fontSize:11, fontWeight:600, color:'#64748b', borderBottom:'1px solid #e2e8f0', textAlign:'center', whiteSpace:'nowrap' };
           const scTd = { padding:'6px 10px', fontSize:12, borderBottom:'1px solid #f1f5f9', whiteSpace:'nowrap' };
           const scClickable = { cursor:'pointer', textDecoration:'underline', textDecorationStyle:'dotted', textUnderlineOffset:2 };
+
           const ScVal = ({ v, metric, ym, dupla: dp, bold, color: c }) => {
             const ok = metric && !metric.startsWith('taxa_') && metric !== 'media_lojas' && v > 0;
             return ok ? <span style={{...scClickable,fontWeight:bold?700:400,color:c||'inherit'}} onClick={()=>scOpenModal(metric,ym,dp)}>{v}</span> : <span style={{fontWeight:bold?700:400,color:c||'inherit'}}>{v}</span>;
           };
+
           return (
             <div>
+              {/* Modal */}
               {scModal && (
                 <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setScModal(null)}>
                   <div style={{background:'#fff',borderRadius:16,width:'90%',maxWidth:600,maxHeight:'80vh',display:'flex',flexDirection:'column',overflow:'hidden'}} onClick={e=>e.stopPropagation()}>
@@ -977,9 +1046,10 @@ export default function CRMPage() {
                   </div>
                 </div>
               )}
+              {/* Header */}
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:10}}>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <span style={{fontSize:12,color:'#94a3b8'}}>Marcas P e M</span>
+                  <span style={{fontSize:12,color:'#94a3b8'}}>Marcas P e M | Produto: 3S Checkout</span>
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:10}}>
                   <button onClick={()=>{setScData(null);loadScorecard();}} style={{padding:'8px 16px',background:'linear-gradient(135deg,#EA1D2C,#DA5D69)',border:'none',borderRadius:8,fontSize:13,fontWeight:700,color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',gap:6,boxShadow:'0 2px 8px rgba(234,29,44,.2)'}}><TrendingUp size={14}/> Atualizar Dados</button>
@@ -993,6 +1063,40 @@ export default function CRMPage() {
                   <div style={{background:'#fef2f2',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#EA1D2C',fontWeight:600}}>{scMtdBD}/{scTotalBD} dias uteis</div>
                 </div>
               </div>
+              {/* Movimentacoes por Stage (all stages) */}
+              <div style={{background:'#fff',borderRadius:14,border:'1px solid #e2e8f0',overflow:'hidden',marginBottom:16}}>
+                <div style={{padding:'14px 20px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <span style={{fontSize:14,fontWeight:700,color:'#1e293b'}}>Movimentacoes por Stage — {MONTH_NAMES[scMonth-1]} {scYear}</span>
+                </div>
+                <div style={{overflowX:'auto'}}>
+                  <table style={{width:'100%',borderCollapse:'collapse',minWidth:700}}>
+                    <thead><tr style={{background:'#f8fafc'}}>
+                      <th style={{...scTh,textAlign:'left',width:180}}>Stage</th>
+                      <th style={scTh}>Total</th>
+                      <th style={scTh}>Lidia e Gabi</th>
+                      <th style={scTh}>Joao e Diego</th>
+                      <th style={scTh}>Michel e Emerson</th>
+                    </tr></thead>
+                    <tbody>
+                      {SC_ALL_STAGES.map((stg,i) => {
+                        const getV = (d) => scGr(d,scCurKey,stg.key);
+                        const tot = getV('total');
+                        const isBold = ['primeiro_contato','apresentacao','negociacao','contrato_assinado'].includes(stg.key);
+                        return (
+                          <tr key={stg.key} style={{background:i%2===0?'#fff':'#fafbfc'}}>
+                            <td style={{...scTd,fontWeight:isBold?700:400,color:'#1e293b'}}>{stg.label}</td>
+                            <td style={{...scTd,textAlign:'center',fontWeight:isBold?700:400}}><ScVal v={tot} metric={stg.key} ym={scCurKey} dupla="total" bold={isBold}/></td>
+                            <td style={{...scTd,textAlign:'center'}}><ScVal v={getV('lidia_gabi')} metric={stg.key} ym={scCurKey} dupla="lidia_gabi"/></td>
+                            <td style={{...scTd,textAlign:'center'}}><ScVal v={getV('joao_diego')} metric={stg.key} ym={scCurKey} dupla="joao_diego"/></td>
+                            <td style={{...scTd,textAlign:'center'}}><ScVal v={getV('michel_emerson')} metric={stg.key} ym={scCurKey} dupla="michel_emerson"/></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              {/* Funnel tables per dupla */}
               {['total','lidia_gabi','joao_diego','michel_emerson'].map(dupla => {
                 const rows = scBuildRows(dupla);
                 const open = scDupla === dupla;
@@ -1034,6 +1138,7 @@ export default function CRMPage() {
                   </div>
                 );
               })}
+              {scData?._ts && <div style={{textAlign:'right',fontSize:10,color:'#cbd5e1',marginTop:8}}>Ultima atualizacao: {new Date(scData._ts).toLocaleString('pt-BR')}</div>}
             </div>
           );
         })()}
