@@ -55,4 +55,5 @@ export async function DELETE(request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  r
+  return NextResponse.json({ ok: true });
+}
