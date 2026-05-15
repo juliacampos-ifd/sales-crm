@@ -10,16 +10,28 @@ const closerToDupla = (closer) => {
 };
 
 const stageToMetric = (stage) => {
-  const map = {
-    '2. Primeiro Contato': 'primeiro_contato',
-    '2. Primeiro Contato com a marca': 'primeiro_contato',
-    '2. Primeiro Contato Marca': 'primeiro_contato',
-    '3. Apresentacao': 'apresentacao',
-    '6. Negociacao': 'negociacao',
-    '9. Contrato Assinado': 'fechadas',
-    '9. Contrato assinado': 'fechadas',
-  };
-  return map[stage] || null;
+  const s = (stage || '').trim().toLowerCase();
+  if (s.startsWith('2.')) return 'primeiro_contato';
+  if (s.startsWith('3.')) return 'apresentacao';
+  if (s.startsWith('6.')) return 'negociacao';
+  if (s.startsWith('9.')) return 'fechadas';
+  return null;
+};
+
+// Stage priority: higher = more advanced in pipeline
+const stagePriority = (stage) => {
+  const s = (stage || '').trim();
+  if (s.startsWith('9.')) return 90;
+  if (s.startsWith('8.')) return 80;
+  if (s.startsWith('7.')) return 70;
+  if (s.startsWith('6.')) return 60;
+  if (s.startsWith('5.')) return 50;
+  if (s.startsWith('4.')) return 40;
+  if (s.startsWith('3.')) return 30;
+  if (s.startsWith('2.')) return 20;
+  if (s.startsWith('1.')) return 10;
+  if (s === '13. Reativado') return -1;
+  return 0;
 };
 
 const emptyM = () => ({ primeiro_contato: 0, apresentacao: 0, negociacao: 0, fechadas: 0, lojas: 0 });
@@ -62,19 +74,36 @@ export async function GET(request) {
     allBrands.forEach(b => { brandLk[b.id] = b; });
 
     // Build activeBrand map: for each marca name, find the ACTIVE entry
-    // (newest non-reativado, or newest overall if all are reativado)
+    // Priority: non-reativado with the most advanced pipeline stage, then highest id as tiebreaker
     const byName = {};
     allBrands.forEach(b => {
       const name = (b.marca || '').trim().toLowerCase();
       if (!byName[name]) byName[name] = [];
       byName[name].push(b);
     });
-    // activeBrand: keyed by marca name (lowercase) -> the active brand object
+
     const activeBrand = {};
     Object.entries(byName).forEach(([name, group]) => {
-      group.sort((a, b) => (a.id > b.id ? 1 : -1));
-      const nonR = group.filter(b => pipeLk[b.id] !== '13. Reativado');
-      activeBrand[name] = nonR.length > 0 ? nonR[nonR.length - 1] : group[group.length - 1];
+      if (group.length === 1) {
+        activeBrand[name] = group[0];
+        return;
+      }
+      // For each brand entry, get its pipeline stage and priority
+      const withPriority = group.map(b => ({
+        brand: b,
+        stage: pipeLk[b.id] || '0. Nao Iniciado',
+        priority: stagePriority(pipeLk[b.id] || '0. Nao Iniciado'),
+        isReativado: (pipeLk[b.id] || '') === '13. Reativado',
+      }));
+      // Prefer non-reativado entries
+      const nonR = withPriority.filter(x => !x.isReativado);
+      const candidates = nonR.length > 0 ? nonR : withPriority;
+      // Sort by pipeline priority DESC, then by id DESC (newest first)
+      candidates.sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return b.brand.id > a.brand.id ? 1 : -1;
+      });
+      activeBrand[name] = candidates[0].brand;
     });
 
     // Elegiveis: only P and M brands
@@ -88,6 +117,7 @@ export async function GET(request) {
     });
     const elegiveis = { total: eligS.total.size, lidia_gabi: eligS.lidia_gabi.size, joao_diego: eligS.joao_diego.size, michel_emerson: eligS.michel_emerson.size };
 
+    // Fetch ALL pipeline_history for 3s product with target stages
     const tgtStages = ['2. Primeiro Contato', '2. Primeiro Contato com a marca', '2. Primeiro Contato Marca', '3. Apresentacao', '6. Negociacao', '9. Contrato Assinado', '9. Contrato assinado'];
     let allHist = [], from = 0;
     while (true) {
@@ -107,7 +137,7 @@ export async function GET(request) {
       const marcaKey = (br.marca || '').trim().toLowerCase();
       const active = activeBrand[marcaKey];
       if (!active) return;
-      // Check P/M on ACTIVE brand (not the history entry's brand which may lack classification)
+      // Check P/M on ACTIVE brand
       if (!isPorM(active)) return;
       const dt = new Date(e.created_at);
       const ym = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
