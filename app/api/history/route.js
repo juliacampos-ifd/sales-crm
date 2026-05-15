@@ -33,7 +33,11 @@ export async function GET(request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ history: data });
+  const res = NextResponse.json({ history: data });
+  res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0');
+  res.headers.set('CDN-Cache-Control', 'no-store');
+  res.headers.set('Vercel-CDN-Cache-Control', 'no-store');
+  return res;
 }
 
 // DELETE /api/history?id=123 - Delete a specific history entry (admin only)
