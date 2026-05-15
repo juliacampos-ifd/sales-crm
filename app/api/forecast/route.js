@@ -1,6 +1,8 @@
 import { createServerClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/forecast - Get all forecast data (metas + entries)
 export async function GET(request) {
   const supabase = createServerClient();
@@ -77,5 +79,4 @@ export async function DELETE(request) {
 
   const { error } = await supabase.from('forecast_entries').delete().eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
-}
+  r
