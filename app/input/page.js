@@ -4,6 +4,28 @@ import { supabase } from '@/lib/supabase';
 import { PRODUCTS } from '@/lib/constants';
 import { ArrowLeft, Check, Plus, Target } from 'lucide-react';
 
+// Field and SelectField OUTSIDE the component to prevent re-creation on each render
+const Field = ({ label, value, onChange, placeholder, type }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>{label}</label>
+    <input type={type || 'text'} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+      style={{ padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', background: '#fff' }} />
+  </div>
+);
+
+const SelectField = ({ label, value, onChange, options, placeholder }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>{label}</label>
+    <select value={value} onChange={e => onChange(e.target.value)}
+      style={{ padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', background: '#fff', color: value ? '#1e293b' : '#94a3b8' }}>
+      <option value="">{placeholder || 'Selecione...'}</option>
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  </div>
+);
+
+const UF = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
+
 export default function InputPage() {
   const [marca, setMarca] = useState('');
   const [qtdLojas, setQtdLojas] = useState('');
@@ -30,7 +52,6 @@ export default function InputPage() {
     setSuccess('');
 
     try {
-      // Get BDR and Closer from 3S responsavel
       const resp3s = responsaveis['3s'] || '';
       const parts = resp3s.split('/').map(s => s.trim());
       const bdr = parts[0] || '';
@@ -56,7 +77,6 @@ export default function InputPage() {
       const data = await res.json();
       if (data.error) { setError(data.error); setSaving(false); return; }
 
-      // Set responsaveis for each active product pipeline
       const brandId = data.brand?.id;
       if (brandId) {
         for (const pk of activeProducts) {
@@ -78,27 +98,6 @@ export default function InputPage() {
     }
     setSaving(false);
   };
-
-  const UF = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
-
-  const Field = ({ label, value, onChange, placeholder, type }) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>{label}</label>
-      <input type={type || 'text'} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{ padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', background: '#fff' }} />
-    </div>
-  );
-
-  const SelectField = ({ label, value, onChange, options, placeholder }) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>{label}</label>
-      <select value={value} onChange={e => onChange(e.target.value)}
-        style={{ padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', background: '#fff', color: value ? '#1e293b' : '#94a3b8' }}>
-        <option value="">{placeholder || 'Selecione...'}</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
