@@ -1,6 +1,8 @@
 import { createServerClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 const closerToDupla = (closer) => {
   if (closer === 'Gabriela Roma') return 'lidia_gabi';
   if (closer === 'Diego Santos') return 'joao_diego';
@@ -176,7 +178,7 @@ export async function GET(request) {
       if (_seenE.has(key)) return;
       _seenE.add(key);
       const active = activeBrand[key] || b;
-      eligBrands.push({ marca: active.marca, closer: active.responsavel_closer, lojas: active.qtd_lojas_fisicas || 0, dupla: closerToDupla(active.responsavel_closer), stage: pipeLk[active.id] || '—' });
+      eligBrands.push({ marca: active.marca, closer: active.responsavel_closer, lojas: active.qtd_lojas_fisicas || 0, dupla: closerToDupla(active.responsavel_closer), stage: pipeLk[active.id] || 'â' });
     });
 
     const res = NextResponse.json({ metas: metas || [], realized, elegiveis, forecast, brandLists, eligBrands });
@@ -184,6 +186,4 @@ export async function GET(request) {
     return res;
   } catch (error) {
     console.error('Scorecard API error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+    return NextResponse.json({ error: 
