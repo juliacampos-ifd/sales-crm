@@ -176,7 +176,7 @@ export default function CRMPage() {
         }
       } catch (err) { console.error('Error changing stage:', err); }
     }
-    setScData(null);
+    loadScorecard();
     setSaving(false);
   };
   // ── Save pending responsavel changes (batch) ──
@@ -253,7 +253,7 @@ export default function CRMPage() {
     try {
       await fetch('/api/history?id=' + histId, { method: 'DELETE' });
       setBrandHistory(prev => prev.filter(h => h.id !== histId));
-      setScData(null);
+      loadScorecard();
     } catch (err) { console.error('Error deleting history:', err); }
   };
   // ── Save info changes (button click) — respects testMode ──
@@ -507,16 +507,14 @@ export default function CRMPage() {
   };
 
   const loadScorecard = async () => {
-    setSaving(true);
     try {
       const res = await fetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' });
       const d = await res.json();
       setScData(d);
     } catch (err) { console.error('Scorecard fetch error:', err); }
-    setSaving(false);
   };
   const NavBtn = ({ id, icon: Icon, label }) => (
-    <button onClick={() => { setView(id); if (id === 'scorecard') setScData(null); }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+    <button onClick={() => { setView(id); if (id === 'scorecard') { setScData(null); loadScorecard(); } }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
       <Icon size={16} /> {label}
     </button>
   );
@@ -878,7 +876,7 @@ export default function CRMPage() {
       {/* SCORECARD */}
         {view === 'scorecard' && (() => {
           // Load data on first view
-          if (!scData) { loadScorecard(); return <div style={{ textAlign:'center', padding:40 }}><p style={{ color:'#94a3b8' }}>Carregando scorecard...</p></div>; }
+          if (!scData) { return <div style={{ textAlign:'center', padding:40 }}><p style={{ color:'#94a3b8' }}>Carregando scorecard...</p></div>; }
           const SC_DUPLA_LABELS = { total:'FUNIL DE VENDA', lidia_gabi:'Lidia e Gabi', joao_diego:'Joao e Diego', michel_emerson:'Michel e Emerson' };
           const SC_DUPLA_COLORS = { total:'#EA1D2C', lidia_gabi:'#DA5D69', joao_diego:'#9C050B', michel_emerson:'#A02331' };
           const SC_METRIC_LABELS = { elegiveis:'Marcas Elegiveis', primeiro_contato:'Primeiro Contato', apresentacao:'Apresentacao', negociacao:'Negociacao', fechadas:'Marcas Fechadas', lojas:'Lojas Fechadas' };
@@ -982,12 +980,12 @@ export default function CRMPage() {
                   <span style={{fontSize:12,color:'#94a3b8'}}>Marcas P e M</span>
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:10}}>
-                  <button onClick={()=>{setScData(null);}} style={{padding:'8px 16px',background:'linear-gradient(135deg,#EA1D2C,#DA5D69)',border:'none',borderRadius:8,fontSize:13,fontWeight:700,color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',gap:6,boxShadow:'0 2px 8px rgba(234,29,44,.2)'}}><TrendingUp size={14}/> Atualizar Dados</button>
+                  <button onClick={()=>{setScData(null);loadScorecard();}} style={{padding:'8px 16px',background:'linear-gradient(135deg,#EA1D2C,#DA5D69)',border:'none',borderRadius:8,fontSize:13,fontWeight:700,color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',gap:6,boxShadow:'0 2px 8px rgba(234,29,44,.2)'}}><TrendingUp size={14}/> Atualizar Dados</button>
                   <Calendar size={14} color="#64748b"/>
-                  <select value={scMonth} onChange={e=>{setScMonth(+e.target.value);setScData(null);}} style={{border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px',fontSize:13,fontWeight:600}}>
+                  <select value={scMonth} onChange={e=>{setScMonth(+e.target.value);setScData(null);loadScorecard();}} style={{border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px',fontSize:13,fontWeight:600}}>
                     {MONTH_NAMES.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
                   </select>
-                  <select value={scYear} onChange={e=>{setScYear(+e.target.value);setScData(null);}} style={{border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px',fontSize:13,fontWeight:600}}>
+                  <select value={scYear} onChange={e=>{setScYear(+e.target.value);setScData(null);loadScorecard();}} style={{border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px',fontSize:13,fontWeight:600}}>
                     <option value={2026}>2026</option><option value={2027}>2027</option>
                   </select>
                   <div style={{background:'#fef2f2',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#EA1D2C',fontWeight:600}}>{scMtdBD}/{scTotalBD} dias uteis</div>
