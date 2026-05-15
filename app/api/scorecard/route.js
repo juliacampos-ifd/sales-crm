@@ -114,7 +114,7 @@ export async function GET(request) {
       const metric = stageToMetric(e.to_stage);
       if (!metric) return;
       // Dedup: once per marca+month+metric
-      const dedupKey = `${marcaKey}|${ym}|${metric}`;
+      const dedupKey = marcaKey + '|' + ym + '|' + metric;
       if (_seen.has(dedupKey)) return;
       _seen.add(dedupKey);
       if (!realized[ym]) realized[ym] = { total: emptyM(), lidia_gabi: emptyM(), joao_diego: emptyM(), michel_emerson: emptyM() };
@@ -133,7 +133,7 @@ export async function GET(request) {
     const { data: fcstEntries } = await sb.from('forecast_entries').select('*').eq('section', '3s_pm');
     const forecast = {};
     (fcstEntries || []).forEach(e => {
-      const ym = `${e.year}-${String(e.month).padStart(2,'0')}`;
+      const ym = e.year + '-' + String(e.month).padStart(2,'0');
       const marcaLower = (e.marca || '').trim().toLowerCase();
       const active = activeBrand[marcaLower];
       const dupla = active ? closerToDupla(active.responsavel_closer) : 'michel_emerson';
@@ -178,7 +178,7 @@ export async function GET(request) {
       if (_seenE.has(key)) return;
       _seenE.add(key);
       const active = activeBrand[key] || b;
-      eligBrands.push({ marca: active.marca, closer: active.responsavel_closer, lojas: active.qtd_lojas_fisicas || 0, dupla: closerToDupla(active.responsavel_closer), stage: pipeLk[active.id] || 'â' });
+      eligBrands.push({ marca: active.marca, closer: active.responsavel_closer, lojas: active.qtd_lojas_fisicas || 0, dupla: closerToDupla(active.responsavel_closer), stage: pipeLk[active.id] || '—' });
     });
 
     const res = NextResponse.json({ metas: metas || [], realized, elegiveis, forecast, brandLists, eligBrands });
@@ -186,4 +186,6 @@ export async function GET(request) {
     return res;
   } catch (error) {
     console.error('Scorecard API error:', error);
-    return NextResponse.json({ error: 
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
