@@ -191,4 +191,5 @@ export async function PATCH(request) {
     });
   }
 
-  retu
+  return NextResponse.json({ brand: data });
+}
