@@ -57,6 +57,7 @@ export default function CRMPage() {
   const [scModal, setScModal] = useState(null);
   const [scModalBrands, setScModalBrands] = useState([]);
   const [scModalLoading, setScModalLoading] = useState(false);
+  const [scStagesOpen, setScStagesOpen] = useState(false);
   // ── Open filter tracking ──
   const [openFilter, setOpenFilter] = useState(null);
   // ── Init edit fields when selecting a brand ──
@@ -1063,12 +1064,16 @@ export default function CRMPage() {
                   <div style={{background:'#fef2f2',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#EA1D2C',fontWeight:600}}>{scMtdBD}/{scTotalBD} dias uteis</div>
                 </div>
               </div>
-              {/* Movimentacoes por Stage (all stages) */}
+              {/* Movimentacoes por Stage (all stages) - collapsible */}
               <div style={{background:'#fff',borderRadius:14,border:'1px solid #e2e8f0',overflow:'hidden',marginBottom:16}}>
-                <div style={{padding:'14px 20px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <span style={{fontSize:14,fontWeight:700,color:'#1e293b'}}>Movimentacoes por Stage — {MONTH_NAMES[scMonth-1]} {scYear}</span>
+                <div onClick={()=>setScStagesOpen(!scStagesOpen)} style={{padding:'14px 20px',borderBottom:scStagesOpen?'2px solid #EA1D2C':'none',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',background:scStagesOpen?'#EA1D2C08':'#fff'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <div style={{width:10,height:10,borderRadius:'50%',background:'#EA1D2C'}}/>
+                    <span style={{fontSize:14,fontWeight:700,color:'#1e293b'}}>Movimentacoes por Stage — {MONTH_NAMES[scMonth-1]} {scYear}</span>
+                  </div>
+                  <Filter size={18} color="#94a3b8" style={{transform:scStagesOpen?'rotate(180deg)':'none',transition:'.2s'}}/>
                 </div>
-                <div style={{overflowX:'auto'}}>
+                {scStagesOpen && <div style={{overflowX:'auto'}}>
                   <table style={{width:'100%',borderCollapse:'collapse',minWidth:700}}>
                     <thead><tr style={{background:'#f8fafc'}}>
                       <th style={{...scTh,textAlign:'left',width:180}}>Stage</th>
@@ -1094,7 +1099,7 @@ export default function CRMPage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </div>}
               </div>
               {/* Funnel tables per dupla */}
               {['total','lidia_gabi','joao_diego','michel_emerson'].map(dupla => {
@@ -1312,3 +1317,4 @@ export default function CRMPage() {
     </div>
   );
 }
+                                                           
