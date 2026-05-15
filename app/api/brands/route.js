@@ -84,7 +84,11 @@ export async function GET(request) {
 
   brands.sort((a, b) => (a.marca || '').localeCompare(b.marca || ''));
 
-  return NextResponse.json({ brands, total: brands.length });
+  const res = NextResponse.json({ brands, total: brands.length });
+  res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0');
+  res.headers.set('CDN-Cache-Control', 'no-store');
+  res.headers.set('Vercel-CDN-Cache-Control', 'no-store');
+  return res;
 }
 
 // POST /api/brands - Create a new brand
