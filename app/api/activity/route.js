@@ -30,7 +30,7 @@ export async function GET() {
     // 2. Fetch pipeline_history (last 30 days) for movement count
     const { data: history, error: histErr } = await sb
       .from('pipeline_history')
-      .select('user_id,changed_by_name,created_at')
+      .select('changed_by,changed_by_name,created_at')
       .gte('created_at', sinceISO)
       .order('created_at', { ascending: false });
     if (histErr) throw histErr;
@@ -76,9 +76,9 @@ export async function GET() {
 
     // Count movements
     (history || []).forEach(h => {
-      if (!h.user_id) return;
-      ensureUser(h.user_id, null, h.changed_by_name);
-      const u = userActivity[h.user_id];
+      if (!h.changed_by) return;
+      ensureUser(h.changed_by, null, h.changed_by_name);
+      const u = userActivity[h.changed_by];
       u.movements_total++;
       if (h.created_at >= weekAgoISO) u.movements_week++;
       if (!u.last_movement || h.created_at > u.last_movement) u.last_movement = h.created_at;
@@ -125,6 +125,4 @@ export async function GET() {
     return res;
   } catch (error) {
     console.error('Activity API error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+    return NextResponse.json({ error: error.message }, { status: 50
