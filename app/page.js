@@ -523,7 +523,7 @@ export default function CRMPage() {
       setScData(d);
     } catch (err) { console.error('Scorecard fetch error:', err); }
   };
-  const loadActivity = async () => {
+  const loadActivity = useCallback(async () => {
     setActivityLoading(true);
     try {
       const res = await fetch('/api/activity?_t=' + Date.now(), { cache: 'no-store' });
@@ -531,11 +531,11 @@ export default function CRMPage() {
       setActivityData(d);
     } catch (err) { console.error('Activity fetch error:', err); }
     setActivityLoading(false);
-  };
+  }, []);
   // Auto-load activity for admin on login
   useEffect(() => {
     if (profile?.role === 'admin') loadActivity();
-  }, [profile]);
+  }, [profile?.role, loadActivity]);
   const NavBtn = ({ id, icon: Icon, label }) => (
     <button onClick={() => { setView(id); if (id === 'scorecard') { setScData(null); loadScorecard(); } }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
       <Icon size={16} /> {label}
