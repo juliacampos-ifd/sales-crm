@@ -84,11 +84,7 @@ export async function GET(request) {
 
   brands.sort((a, b) => (a.marca || '').localeCompare(b.marca || ''));
 
-  const res = NextResponse.json({ brands, total: brands.length });
-  res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0');
-  res.headers.set('CDN-Cache-Control', 'no-store');
-  res.headers.set('Vercel-CDN-Cache-Control', 'no-store');
-  return res;
+  return NextResponse.json({ brands, total: brands.length });
 }
 
 // POST /api/brands - Create a new brand
@@ -159,7 +155,7 @@ export async function PATCH(request) {
   const { data: current } = await supabase.from('brands').select('proximo_passo').eq('id', id).single();
 
   // Only allow safe fields to be updated
-  const allowed = ['proximo_passo', 'data_ultimo_fup', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp', 'base_elegivel', 'culinaria', 'produto_totem'];
+  const allowed = ['marca', 'proximo_passo', 'data_ultimo_fup', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp', 'base_elegivel', 'culinaria', 'produto_totem', 'coordenador_delivery', 'executivo_delivery', 'motivo_perda_standby'];
   const safeUpdates = {};
   allowed.forEach(k => { if (updates[k] !== undefined) safeUpdates[k] = updates[k]; });
 
@@ -191,9 +187,4 @@ export async function PATCH(request) {
       to_stage: updates.proximo_passo || '(vazio)',
       changed_by: user_id || null,
       changed_by_name: user_name || 'Sistema',
-      notes: 'Atualizacao de FUP',
-    });
-  }
-
-  return NextResponse.json({ brand: data });
-}
+      notes: 'At
