@@ -62,6 +62,19 @@ export default function CRMPage() {
   const [activityData, setActivityData] = useState(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  // ── DELIVERY EDIT ──
+  const [editCoordDelivery, setEditCoordDelivery] = useState('');
+  const [editExecDelivery, setEditExecDelivery] = useState('');
+  // ── MOTIVO PERDA/STAND BY MODAL ──
+  const [lossModal, setLossModal] = useState(null);
+  const [lossReason, setLossReason] = useState('');
+  // ── ADMIN: Renomear / Merge / Excluir ──
+  const [renameModal, setRenameModal] = useState(false);
+  const [renameName, setRenameName] = useState('');
+  const [mergeModal, setMergeModal] = useState(false);
+  const [mergeSearch, setMergeSearch] = useState('');
+  const [mergeTarget, setMergeTarget] = useState(null);
+  const [mergeName, setMergeName] = useState('');
   // ── Open filter tracking ──
   const [openFilter, setOpenFilter] = useState(null);
   // ── Init edit fields when selecting a brand ──
@@ -74,6 +87,8 @@ export default function CRMPage() {
     setEditBaseElegivel(be ? be.split(',').map(s => s.trim()).filter(Boolean) : []);
     setEditFUP(brand.proximo_passo || '');
     setEditCulinaria(brand.culinaria || '');
+    setEditCoordDelivery(brand.coordenador_delivery || '');
+    setEditExecDelivery(brand.executivo_delivery || '');
     setInfoChanged(false);
     setPipelinesChanged(false);
     setPendingResp({});
@@ -174,8 +189,25 @@ export default function CRMPage() {
     if (filterHaas.length > 0) d = d.filter(b => { const pt = (b.produto_totem || "").split(",").map(s => s.trim()); return filterHaas.some(f => pt.includes(f)); });
     return d;
   }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas]);
+  // ── Loss/StandBy reasons ──
+  const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
   const changeStage = async (brandId, productKey, newStage) => {
+    const isLossOrStandby = newStage.startsWith('10.') || newStage.startsWith('11.');
+    if (isLossOrStandby) {
+      setLossModal({ brandId, productKey, newStage });
+      setLossReason('');
+      return;
+    }
+    await executeStageChange(brandId, productKey, newStage, null);
+  };
+  const confirmLossReason = async () => {
+    if (!lossReason) return;
+    const { brandId, productKey, newStage } = lossModal;
+    setLossModal(null);
+    await executeStageChange(brandId, productKey, newStage, lossReason);
+  };
+  const executeStageChange = async (brandId, productKey, newStage, reason) => {
     setSaving(true);
     setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { ...prev.pipelines?.[productKey], stage: newStage } } } : prev);
     setBrands(prev => prev.map(b => b.id === brandId ? { ...b, pipelines: { ...b.pipelines, [productKey]: { ...b.pipelines?.[productKey], stage: newStage } } } : b));
@@ -186,6 +218,13 @@ export default function CRMPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brand_id: brandId, product: productKey, new_stage: newStage, user_id: user?.id, user_name: profile?.name }),
         });
+        if (reason) {
+          await fetch('/api/brands', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: brandId, motivo_perda_standby: reason }),
+          });
+        }
         const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
         const freshData = await freshRes.json();
         if (freshData.brands) {
@@ -275,6 +314,41 @@ export default function CRMPage() {
     } catch (err) { console.error('Error deleting history:', err); }
   };
   // ── Save info changes (button click) — respects testMode ──
+  // ── Admin: Rename brand ──
+  const renameBrand = async () => {
+    if (!renameName.trim() || !selectedBrand) return;
+    setSaving(true);
+    await fetch('/api/brands', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedBrand.id, marca: renameName.trim() }) });
+    setRenameModal(false);
+    const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+    const freshData = await freshRes.json();
+    if (freshData.brands) { setBrands(freshData.brands); const u = freshData.brands.find(b => b.id === selectedBrand.id); if (u) setSelectedBrand(u); }
+    setSaving(false);
+  };
+  // ── Admin: Delete brand ──
+  const deleteBrand = async () => {
+    if (!selectedBrand) return;
+    if (!confirm(`Tem certeza que deseja excluir "${selectedBrand.marca}"? Esta acao nao pode ser desfeita.`)) return;
+    setSaving(true);
+    await fetch('/api/brands', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedBrand.id }) });
+    setSelectedBrand(null);
+    const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+    const freshData = await freshRes.json();
+    if (freshData.brands) setBrands(freshData.brands);
+    setSaving(false);
+  };
+  // ── Admin: Merge brands ──
+  const mergeBrands = async () => {
+    if (!mergeTarget || !selectedBrand) return;
+    if (!confirm(`Merge: transferir pipelines e historico de "${selectedBrand.marca}" para "${mergeTarget.marca}"${mergeName ? ` e renomear para "${mergeName}"` : ''}?`)) return;
+    setSaving(true);
+    await fetch('/api/brands/merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: selectedBrand.id, targetId: mergeTarget.id, newName: mergeName.trim() || null }) });
+    setMergeModal(false); setMergeTarget(null); setMergeName(''); setSelectedBrand(null);
+    const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+    const freshData = await freshRes.json();
+    if (freshData.brands) setBrands(freshData.brands);
+    setSaving(false);
+  };
   const saveInfoChanges = async () => {
     if (!selectedBrand) return;
     if (testMode) { setInfoChanged(false); return; }
@@ -287,6 +361,8 @@ export default function CRMPage() {
       if (newBE !== (selectedBrand.base_elegivel || '')) updates.base_elegivel = newBE;
       if (editFUP !== (selectedBrand.proximo_passo || '')) updates.proximo_passo = editFUP;
       if (editCulinaria !== (selectedBrand.culinaria || '' )) updates.culinaria = editCulinaria;
+      if (editCoordDelivery !== (selectedBrand.coordenador_delivery || '')) updates.coordenador_delivery = editCoordDelivery;
+      if (editExecDelivery !== (selectedBrand.executivo_delivery || '')) updates.executivo_delivery = editExecDelivery;
       if (Object.keys(updates).length > 0) {
         await fetch('/api/brands', {
           method: 'PATCH',
@@ -392,14 +468,23 @@ export default function CRMPage() {
   const metrics = useMemo(() => {
     const f = filtered;
     const won3s = f.filter(b => b.pipelines?.['3s']?.stage === '9. Contrato assinado').length;
-    const lost3s = f.filter(b => b.pipelines?.['3s']?.stage === '10. Perdido').length;
+    const lostBrands = f.filter(b => b.pipelines?.['3s']?.stage === '10. Perdido');
+    const standbyBrands = f.filter(b => b.pipelines?.['3s']?.stage === '11. Stand by');
+    const lost3s = lostBrands.length;
+    const standby3s = standbyBrands.length;
+    const lostByReason = {};
+    const standbyByReason = {};
+    lostBrands.forEach(b => { const r = b.motivo_perda_standby || 'Sem motivo'; lostByReason[r] = (lostByReason[r] || { count: 0, lojas: 0 }); lostByReason[r].count++; lostByReason[r].lojas += (b.qtd_lojas_fisicas || 0); });
+    standbyBrands.forEach(b => { const r = b.motivo_perda_standby || 'Sem motivo'; standbyByReason[r] = (standbyByReason[r] || { count: 0, lojas: 0 }); standbyByReason[r].count++; standbyByReason[r].lojas += (b.qtd_lojas_fisicas || 0); });
+    const lostLojas = lostBrands.reduce((s, b) => s + (b.qtd_lojas_fisicas || 0), 0);
+    const standbyLojas = standbyBrands.reduce((s, b) => s + (b.qtd_lojas_fisicas || 0), 0);
     const byClass = {}; f.forEach(b => { if (b.classificacao) byClass[b.classificacao] = (byClass[b.classificacao] || 0) + 1; });
     const byEstado = {}; f.forEach(b => { if (b.estado && b.estado.length === 2) byEstado[b.estado] = (byEstado[b.estado] || 0) + 1; });
     const activeByProduct = {};
     Object.keys(PRODUCTS).forEach(pk => {
       activeByProduct[pk] = f.filter(b => { const s = b.pipelines?.[pk]?.stage; return s && !['10. Perdido','11. Stand by','8. Perdido','9. Stand by','14. Desativado'].includes(s); }).length;
     });
-    return { total: f.length, won3s, lost3s, byClass, byEstado, activeByProduct };
+    return { total: f.length, won3s, lost3s, standby3s, lostLojas, standbyLojas, lostByReason, standbyByReason, byClass, byEstado, activeByProduct };
   }, [filtered]);
   const shortStage = (s) => (s || '').replace(/^\d+\.\s*/, '');
   // Base elegivel options
@@ -821,7 +906,8 @@ export default function CRMPage() {
             <div style={{ display: 'flex', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
               <KPI icon={Building2} label="Total Marcas" value={metrics.total} color="#EA1D2C" />
               <KPI icon={Check} label="Contratos 3S" value={metrics.won3s} sub="Contrato assinado" color="#22c55e" />
-              <KPI icon={AlertCircle} label="Perdidos 3S" value={metrics.lost3s} color="#ef4444" />
+              <KPI icon={AlertCircle} label="Perdidos 3S" value={metrics.lost3s} sub={`${metrics.lostLojas} lojas`} color="#ef4444" />
+              <KPI icon={AlertCircle} label="Stand By 3S" value={metrics.standby3s} sub={`${metrics.standbyLojas} lojas`} color="#f59e0b" />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ background: '#fff', borderRadius: 14, padding: 20, border: '1px solid #e2e8f0' }}>
@@ -850,6 +936,43 @@ export default function CRMPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+            </div>
+            {/* PERDIDOS E STAND BY POR MOTIVO */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+              {[{ title: 'Perdidos por Motivo', data: metrics.lostByReason, color: '#ef4444', total: metrics.lost3s, totalLojas: metrics.lostLojas },
+                { title: 'Stand By por Motivo', data: metrics.standbyByReason, color: '#f59e0b', total: metrics.standby3s, totalLojas: metrics.standbyLojas }
+              ].map(section => (
+                <div key={section.title} style={{ background: '#fff', borderRadius: 14, padding: 20, border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>{section.title}</h4>
+                  {Object.keys(section.data).length === 0 ? (
+                    <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 20 }}>Nenhum registro</p>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                          <th style={{ textAlign: 'left', padding: '8px 0', color: '#64748b', fontWeight: 600 }}>Motivo</th>
+                          <th style={{ textAlign: 'center', padding: '8px 0', color: '#64748b', fontWeight: 600, width: 70 }}>Marcas</th>
+                          <th style={{ textAlign: 'center', padding: '8px 0', color: '#64748b', fontWeight: 600, width: 70 }}>Lojas</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(section.data).sort((a, b) => b[1].count - a[1].count).map(([reason, vals]) => (
+                          <tr key={reason} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '8px 0', color: '#1e293b' }}>{reason}</td>
+                            <td style={{ textAlign: 'center', padding: '8px 0', fontWeight: 600, color: section.color }}>{vals.count}</td>
+                            <td style={{ textAlign: 'center', padding: '8px 0', color: '#64748b' }}>{vals.lojas}</td>
+                          </tr>
+                        ))}
+                        <tr style={{ borderTop: '2px solid #e2e8f0' }}>
+                          <td style={{ padding: '8px 0', fontWeight: 700, color: '#1e293b' }}>Total</td>
+                          <td style={{ textAlign: 'center', padding: '8px 0', fontWeight: 700, color: section.color }}>{section.total}</td>
+                          <td style={{ textAlign: 'center', padding: '8px 0', fontWeight: 700, color: '#64748b' }}>{section.totalLojas}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -1242,7 +1365,16 @@ export default function CRMPage() {
             </div>
           </div>
           <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#1e293b' }}>{selectedBrand.marca}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#1e293b' }}>{selectedBrand.marca}</div>
+              {profile?.role === 'admin' && (
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button onClick={() => { setRenameName(selectedBrand.marca); setRenameModal(true); }} title="Renomear" style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 11, cursor: 'pointer' }}>Renomear</button>
+                  <button onClick={() => { setMergeSearch(''); setMergeTarget(null); setMergeName(''); setMergeModal(true); }} title="Merge" style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#3b82f6', fontSize: 11, cursor: 'pointer' }}>Merge</button>
+                  <button onClick={deleteBrand} title="Excluir" style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#ef4444', fontSize: 11, cursor: 'pointer' }}>Excluir</button>
+                </div>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               {selectedBrand.classificacao && <span style={{ fontSize: 11, background: (CLASSIFICACAO_COLORS[selectedBrand.classificacao] || '#94a3b8') + '20', color: CLASSIFICACAO_COLORS[selectedBrand.classificacao], padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>{selectedBrand.classificacao}</span>}
               {selectedBrand.estado && <span style={{ fontSize: 11, background: '#dbeafe', color: '#2563eb', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>{selectedBrand.estado}</span>}
@@ -1252,12 +1384,18 @@ export default function CRMPage() {
             {/* INFO TAB */}
             {detailTab === 'info' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {[['Responsavel', selectedBrand.pipelines?.['3s']?.responsavel || `${selectedBrand.responsavel_bdr || '—'} / ${selectedBrand.responsavel_closer || '—'}`], ['Coord. Delivery', selectedBrand.coordenador_delivery], ['Exec. Delivery', selectedBrand.executivo_delivery], ].map(([l, v]) => (
-                  <div key={l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
-                    <span style={{ color: '#64748b' }}>{l}</span>
-                    <span style={{ fontWeight: 500, color: '#1e293b' }}>{v || '—'}</span>
-                  </div>
-                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
+                  <span style={{ color: '#64748b' }}>Responsavel</span>
+                  <span style={{ fontWeight: 500, color: '#1e293b' }}>{selectedBrand.pipelines?.['3s']?.responsavel || `${selectedBrand.responsavel_bdr || '—'} / ${selectedBrand.responsavel_closer || '—'}`}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
+                  <span style={{ color: '#64748b' }}>Coord. Delivery</span>
+                  <input value={editCoordDelivery} onChange={e => { setEditCoordDelivery(e.target.value); setInfoChanged(true); }} disabled={!canEdit} placeholder="—" style={{ width: 160, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none', opacity: canEdit ? 1 : 0.6 }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
+                  <span style={{ color: '#64748b' }}>Exec. Delivery</span>
+                  <input value={editExecDelivery} onChange={e => { setEditExecDelivery(e.target.value); setInfoChanged(true); }} disabled={!canEdit} placeholder="—" style={{ width: 160, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none', opacity: canEdit ? 1 : 0.6 }} />
+                </div>
                 {/* HAAS/SAAS multi-select */}
                 <div style={{ fontSize: 13, padding: '4px 0' }}>
                   <span style={{ color: '#64748b', display: 'block', marginBottom: 6 }}>Produto Totem (HAAS/SAAS)</span>
@@ -1391,6 +1529,73 @@ export default function CRMPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* MODAL: Renomear Marca */}
+      {renameModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '28px 32px', maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', marginBottom: 16 }}>Renomear Marca</div>
+            <input value={renameName} onChange={e => setRenameName(e.target.value)} placeholder="Novo nome..." style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+              <button onClick={() => setRenameModal(false)} style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={renameBrand} disabled={!renameName.trim()} style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: renameName.trim() ? '#EA1D2C' : '#fca5a5', color: '#fff', fontSize: 14, fontWeight: 600, cursor: renameName.trim() ? 'pointer' : 'not-allowed' }}>Renomear</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL: Merge */}
+      {mergeModal && selectedBrand && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '28px 32px', maxWidth: 520, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>Merge de Marcas</div>
+            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>Transferir pipelines e historico de <strong>{selectedBrand.marca}</strong> para outra marca</div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Buscar marca destino:</label>
+              <input value={mergeSearch} onChange={e => setMergeSearch(e.target.value)} placeholder="Digite o nome..." style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            {mergeSearch.length >= 2 && (
+              <div style={{ maxHeight: 180, overflowY: 'auto', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {brands.filter(b => b.id !== selectedBrand.id && (b.marca || '').toLowerCase().includes(mergeSearch.toLowerCase())).slice(0, 10).map(b => (
+                  <button key={b.id} onClick={() => { setMergeTarget(b); setMergeName(b.marca); }} style={{ padding: '8px 12px', borderRadius: 8, border: mergeTarget?.id === b.id ? '2px solid #3b82f6' : '1px solid #e2e8f0', background: mergeTarget?.id === b.id ? '#eff6ff' : '#fff', color: '#1e293b', fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
+                    {b.marca} <span style={{ color: '#94a3b8', fontSize: 11 }}>({b.classificacao || '-'} | {b.estado || '-'})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {mergeTarget && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Nome final (opcional):</label>
+                <input value={mergeName} onChange={e => setMergeName(e.target.value)} placeholder={mergeTarget.marca} style={{ width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+              <button onClick={() => setMergeModal(false)} style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={mergeBrands} disabled={!mergeTarget} style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: mergeTarget ? '#3b82f6' : '#93c5fd', color: '#fff', fontSize: 14, fontWeight: 600, cursor: mergeTarget ? 'pointer' : 'not-allowed' }}>Fazer Merge</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL: Motivo Perda/Stand By */}
+      {lossModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '28px 32px', maxWidth: 480, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>
+              {lossModal.newStage.startsWith('10.') ? 'Motivo da Perda' : 'Motivo do Stand By'}
+            </div>
+            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>Selecione o motivo</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+              {LOSS_REASONS.map(reason => (
+                <button key={reason} onClick={() => setLossReason(reason)} style={{ padding: '10px 16px', borderRadius: 10, border: lossReason === reason ? '2px solid #EA1D2C' : '1px solid #e2e8f0', background: lossReason === reason ? '#fef2f2' : '#fff', color: lossReason === reason ? '#EA1D2C' : '#1e293b', fontSize: 13, fontWeight: lossReason === reason ? 600 : 400, cursor: 'pointer', textAlign: 'left' }}>
+                  {reason}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+              <button onClick={() => setLossModal(null)} style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={confirmLossReason} disabled={!lossReason} style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: lossReason ? '#EA1D2C' : '#fca5a5', color: '#fff', fontSize: 14, fontWeight: 600, cursor: lossReason ? 'pointer' : 'not-allowed' }}>Confirmar</button>
+            </div>
           </div>
         </div>
       )}
