@@ -61,6 +61,7 @@ export default function CRMPage() {
   // ── ATIVIDADE DO TIME (admin only) ──
   const [activityData, setActivityData] = useState(null);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   // ── Open filter tracking ──
   const [openFilter, setOpenFilter] = useState(null);
   // ── Init edit fields when selecting a brand ──
@@ -658,17 +659,18 @@ export default function CRMPage() {
       {/* ATIVIDADE DO TIME (admin only) */}
       {profile?.role === 'admin' && view === 'pipeline' && activityData && (
         <div style={{ margin: '16px 28px 0', background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,.05)', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
+          <div onClick={() => setActivityOpen(!activityOpen)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', cursor: 'pointer', userSelect: 'none' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ background: '#dbeafe', borderRadius: 8, padding: 6 }}><Users size={16} color="#3b82f6" /></div>
               <span style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>Atividade do Time</span>
               <span style={{ fontSize: 11, color: '#94a3b8' }}>(ultimos 30 dias)</span>
+              <span style={{ fontSize: 12, color: '#94a3b8', transition: 'transform .2s', display: 'inline-block', transform: activityOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
             </div>
-            <button onClick={loadActivity} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', cursor: 'pointer' }}>
+            <button onClick={e => { e.stopPropagation(); loadActivity(); }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', cursor: 'pointer' }}>
               Atualizar
             </button>
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          {activityOpen && <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
@@ -706,7 +708,7 @@ export default function CRMPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </div>}
         </div>
       )}
       {/* PRODUCT TABS */}
