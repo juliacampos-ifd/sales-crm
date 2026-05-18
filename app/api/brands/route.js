@@ -125,7 +125,7 @@ export async function POST(request) {
   const pipelineInserts = products.map(product => ({
     brand_id: brand.id,
     product,
-    stage: product === '3s' ? '0. Nao Iniciado' : product === 'saipos' ? '0. Nao Iniciado' : '0. Nao Iniciado',
+    stage: '0. Nao Iniciado',
     active: true,
     responsavel: product === '3s' ? `${body.responsavel_bdr || ''} / ${body.responsavel_closer || ''}`.trim() : null,
   }));
@@ -187,4 +187,24 @@ export async function PATCH(request) {
       to_stage: updates.proximo_passo || '(vazio)',
       changed_by: user_id || null,
       changed_by_name: user_name || 'Sistema',
-      notes: 'At
+      notes: 'Atualizacao de FUP',
+    });
+  }
+
+  return NextResponse.json({ brand: data });
+}
+
+// DELETE /api/brands - Delete a brand (admin only)
+export async function DELETE(request) {
+  const supabase = createServerClient();
+  const { id } = await request.json();
+  if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+
+  // Delete pipelines and history first (cascade should handle but be explicit)
+  await supabase.from('pipeline_history').delete().eq('brand_id', id);
+  await supabase.from('pipelines').delete().eq('brand_id', id);
+  const { error } = await supabase.from('brands').delete().eq('id', id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
+}
