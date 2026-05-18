@@ -58,6 +58,9 @@ export default function CRMPage() {
   const [scModalBrands, setScModalBrands] = useState([]);
   const [scModalLoading, setScModalLoading] = useState(false);
   const [scStagesOpen, setScStagesOpen] = useState(false);
+  // ── ATIVIDADE DO TIME (admin only) ──
+  const [activityData, setActivityData] = useState(null);
+  const [activityLoading, setActivityLoading] = useState(false);
   // ── Open filter tracking ──
   const [openFilter, setOpenFilter] = useState(null);
   // ── Init edit fields when selecting a brand ──
@@ -102,8 +105,12 @@ export default function CRMPage() {
   // ── Login ──
   const handleLogin = async () => {
     setLoginError('');
-    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPass });
-    if (error) setLoginError('Email ou senha incorretos');
+    const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPass });
+    if (error) { setLoginError('Email ou senha incorretos'); return; }
+    // Log login
+    if (data?.user) {
+      supabase.from('login_logs').insert({ user_id: data.user.id, email: data.user.email, name: data.user.email }).then(() => {});
+    }
   };
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -516,6 +523,19 @@ export default function CRMPage() {
       setScData(d);
     } catch (err) { console.error('Scorecard fetch error:', err); }
   };
+  const loadActivity = async () => {
+    setActivityLoading(true);
+    try {
+      const res = await fetch('/api/activity?_t=' + Date.now(), { cache: 'no-store' });
+      const d = await res.json();
+      setActivityData(d);
+    } catch (err) { console.error('Activity fetch error:', err); }
+    setActivityLoading(false);
+  };
+  // Auto-load activity for admin on login
+  useEffect(() => {
+    if (profile?.role === 'admin') loadActivity();
+  }, [profile]);
   const NavBtn = ({ id, icon: Icon, label }) => (
     <button onClick={() => { setView(id); if (id === 'scorecard') { setScData(null); loadScorecard(); } }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
       <Icon size={16} /> {label}
@@ -630,6 +650,60 @@ export default function CRMPage() {
           <button onClick={handleLogout} style={{ background: '#f1f5f9', border: 'none', borderRadius: 8, padding: 6, cursor: 'pointer' }}><LogOut size={16} color="#94a3b8" /></button>
         </div>
       </div>
+      {/* ATIVIDADE DO TIME (admin only) */}
+      {profile?.role === 'admin' && view === 'pipeline' && activityData && (
+        <div style={{ margin: '16px 28px 0', background: '#fff', borderRadius: 14, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,.05)', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ background: '#dbeafe', borderRadius: 8, padding: 6 }}><Users size={16} color="#3b82f6" /></div>
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>Atividade do Time</span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>(ultimos 30 dias)</span>
+            </div>
+            <button onClick={loadActivity} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', cursor: 'pointer' }}>
+              Atualizar
+            </button>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#f8fafc' }}>
+                  <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600 }}>Pessoa</th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', color: '#64748b', fontWeight: 600 }}>Logins (7d)</th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', color: '#64748b', fontWeight: 600 }}>Logins (30d)</th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', color: '#64748b', fontWeight: 600 }}>Ultimo Login</th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', color: '#64748b', fontWeight: 600 }}>Movimentacoes (7d)</th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', color: '#64748b', fontWeight: 600 }}>Movimentacoes (30d)</th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', color: '#64748b', fontWeight: 600 }}>Ultima Movimentacao</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(activityData.users || []).filter(u => u.role !== 'admin').map(u => {
+                  const noLogin = u.logins_total === 0;
+                  const noMov = u.movements_total === 0;
+                  return (
+                    <tr key={u.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '10px 16px' }}>
+                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{u.name}</div>
+                        <div style={{ fontSize: 10, color: '#94a3b8' }}>{u.role} • {u.team}</div>
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '10px 12px', color: u.logins_week > 0 ? '#16a34a' : '#ef4444', fontWeight: 600 }}>{u.logins_week}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 12px', color: '#1e293b' }}>{u.logins_total}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 12px', color: noLogin ? '#ef4444' : '#64748b', fontWeight: noLogin ? 600 : 400 }}>
+                        {u.last_login ? new Date(u.last_login).toLocaleDateString('pt-BR') + ' ' + new Date(u.last_login).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Nunca'}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '10px 12px', color: u.movements_week > 0 ? '#16a34a' : '#ef4444', fontWeight: 600 }}>{u.movements_week}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 12px', color: '#1e293b' }}>{u.movements_total}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 12px', color: noMov ? '#ef4444' : '#64748b', fontWeight: noMov ? 600 : 400 }}>
+                        {u.last_movement ? new Date(u.last_movement).toLocaleDateString('pt-BR') + ' ' + new Date(u.last_movement).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Nunca'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       {/* PRODUCT TABS */}
       {(view === 'pipeline' || view === 'contacts') && (
         <div style={{ padding: '14px 28px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1298,7 +1372,7 @@ export default function CRMPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {brandHistory.length === 0 && <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 24 }}>Nenhuma movimentacao registrada</p>}
                 {brandHistory.map(h => (
-                  <div key={h.id} style={{ display: 'flex', gap: 10, padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9', fontSize: 12, alignItems: 'center' }}>
+                  <div key={h.id} style={{ display: 'flex', gap: 10, padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9', fontSize: 12 }}>
                     <div style={{ flex: '0 0 80px', color: '#94a3b8' }}>{new Date(h.created_at).toLocaleDateString('pt-BR')}</div>
                     <div style={{ flex: 1 }}>
                       <span style={{ color: '#94a3b8' }}>{shortStage(h.from_stage)}</span>
@@ -1306,7 +1380,6 @@ export default function CRMPage() {
                       <span style={{ color: '#94a3b8', marginLeft: 4 }}>({PRODUCTS[h.product]?.name || h.product})</span>
                     </div>
                     <div style={{ flex: '0 0 100px', color: '#94a3b8', textAlign: 'right' }}>{h.changed_by_name || '—'}</div>
-                    {profile?.role === 'admin' && <button onClick={() => deleteHistory(h.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db', flexShrink: 0 }} title="Excluir"><X size={14} /></button>}
                   </div>
                 ))}
               </div>
@@ -1317,4 +1390,3 @@ export default function CRMPage() {
     </div>
   );
 }
-                                                           
