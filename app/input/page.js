@@ -167,4 +167,10 @@ export default function InputPage() {
 
           <button onClick={handleSubmit} disabled={saving}
             style={{ padding: '14px', borderRadius: 10, border: 'none', background: saving ? '#fca5a5' : '#EA1D2C', color: '#fff', fontSize: 15, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            {saving ? 'Salvando...' : <><Plu
+            {saving ? 'Salvando...' : <><Plus size={18} /> Adicionar marca</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
