@@ -1,10 +1,13 @@
 import { createServerClient } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/brands - List all brands with their pipelines
 export async function GET(request) {
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const { searchParams } = new URL(request.url);
 
@@ -89,6 +92,8 @@ export async function GET(request) {
 
 // POST /api/brands - Create a new brand
 export async function POST(request) {
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const body = await request.json();
 
@@ -143,6 +148,8 @@ export async function POST(request) {
 
 // PATCH /api/brands - Update brand fields (proximo_passo, etc)
 export async function PATCH(request) {
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const body = await request.json();
 
@@ -196,6 +203,8 @@ export async function PATCH(request) {
 
 // DELETE /api/brands - Delete a brand (admin only)
 export async function DELETE(request) {
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const { id } = await request.json();
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
