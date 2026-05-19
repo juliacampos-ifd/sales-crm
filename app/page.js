@@ -1198,9 +1198,11 @@ export default function CRMPage() {
                 else {
                   const f=def.key;
                   if (isCur) {
-                    const pctA=cmM[f]>0?Math.round((fcst[f]/cmM[f])*100)+'%':'—';
+                    const fcstOverride=def.key==='contrato_assinado'?scGf(dupla,col.k,'marcas'):def.key==='lojas'?scGf(dupla,col.k,'lojas'):null;
+                    const fcstVal=fcstOverride!==null&&fcstOverride>0?fcstOverride:fcst[f];
+                    const pctA=cmM[f]>0?Math.round((fcstVal/cmM[f])*100)+'%':'—';
                     const pctMtd=mtdM[f]>0?Math.round((cmR[f]/mtdM[f])*100)+'%':'—';
-                    row.cells.push({isCur:true,meta:cmM[f],fcst:fcst[f],pctA,real:cmR[f],mtdMeta:mtdM[f],mtdReal:cmR[f],mtdPct:pctMtd,ym:col.k});
+                    row.cells.push({isCur:true,meta:cmM[f],fcst:fcstVal,pctA,real:cmR[f],mtdMeta:mtdM[f],mtdReal:cmR[f],mtdPct:pctMtd,ym:col.k});
                   } else row.cells.push({v:scGr(dupla,col.k,def.key),ym:col.k});
                 }
               });
@@ -1228,8 +1230,8 @@ export default function CRMPage() {
           };
 
           // Styles
-          const scTh = { padding:'8px 10px', fontSize:11, fontWeight:600, color:'#64748b', borderBottom:'1px solid #e2e8f0', textAlign:'center', whiteSpace:'nowrap' };
-          const scTd = { padding:'6px 10px', fontSize:12, borderBottom:'1px solid #f1f5f9', whiteSpace:'nowrap' };
+          const scTh = { padding:'8px 10px', fontSize:12, fontWeight:600, color:'#64748b', borderBottom:'1px solid #e2e8f0', textAlign:'center', whiteSpace:'nowrap' };
+          const scTd = { padding:'6px 10px', fontSize:14, borderBottom:'1px solid #f1f5f9', whiteSpace:'nowrap' };
           const scClickable = { cursor:'pointer', textDecoration:'underline', textDecorationStyle:'dotted', textUnderlineOffset:2 };
 
           const ScVal = ({ v, metric, ym, dupla: dp, bold, color: c }) => {
@@ -1331,17 +1333,26 @@ export default function CRMPage() {
                     {open && (
                       <div style={{overflowX:'auto'}}>
                         <table style={{width:'100%',borderCollapse:'collapse',minWidth:900}}>
-                          <thead><tr style={{background:'#f8fafc'}}>
-                            <th style={{...scTh,width:250,textAlign:'left',position:'sticky',left:0,background:'#f8fafc',zIndex:2}}></th>
-                            {scPastCols.map(c=><th key={c.k} style={{...scTh,fontSize:10}}>{MONTH_NAMES[c.m-1]} Real</th>)}
-                            {scHasCur && <><th style={{...scTh,background:'#fef2f2',fontSize:10}}>{MONTH_NAMES[scMonth-1]} Meta</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>% Atig</th><th style={{...scTh,background:'#fce4e6',fontSize:10,color:'#EA1D2C'}}>Real</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Meta</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Real</th><th style={{...scTh,background:'#fef9c3',fontSize:10}}>MTD %</th></>}
-                          </tr></thead>
+                          <thead>
+                            <tr>
+                              <th style={{...scTh,textAlign:'left',position:'sticky',left:0,background:'#f8fafc',zIndex:2}}></th>
+                              {scPastCols.map(c=><th key={c.k} style={{...scTh,background:'#64748b',color:'#fff',fontSize:10}}>Mês</th>)}
+                              {scHasCur && <>
+                                <th colSpan={3} style={{...scTh,background:'#EA1D2C',color:'#fff',fontSize:11,textAlign:'center'}}>Mês</th>
+                                <th colSpan={4} style={{...scTh,background:'#1e293b',color:'#fff',fontSize:11,textAlign:'center'}}>MTD</th>
+                              </>}
+                            </tr>
+                            <tr style={{background:'#f8fafc'}}>
+                              <th style={{...scTh,width:250,textAlign:'left',position:'sticky',left:0,background:'#f8fafc',zIndex:2}}></th>
+                              {scPastCols.map(c=><th key={c.k} style={{...scTh,fontSize:10}}>{MONTH_NAMES[c.m-1]} Real</th>)}
+                              {scHasCur && <><th style={{...scTh,background:'#fca5a5',fontSize:10}}>{MONTH_NAMES[scMonth-1]} Meta</th><th style={{...scTh,background:'#fca5a5',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fca5a5',fontSize:10}}>% Atig</th><th style={{...scTh,background:'#EA1D2C',fontSize:10,color:'#fff'}}>Real</th><th style={{...scTh,background:'#475569',fontSize:10,color:'#fff'}}>MTD Meta</th><th style={{...scTh,background:'#475569',fontSize:10,color:'#fff'}}>MTD Real</th><th style={{...scTh,background:'#334155',fontSize:10,color:'#fff'}}>MTD %</th></>}
+                            </tr></thead>
                           <tbody>
                             {rows.map((row,ri) => (
-                              <tr key={ri} style={{background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff'}}>
-                                <td style={{...scTd,fontWeight:row.isBold?700:400,fontSize:row.isPercent?11:12,color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#1e293b',position:'sticky',left:0,background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff',zIndex:1}}>{row.label}</td>
+                              <tr key={ri} style={{background:row.isForecast?'#f0f9ff':row.isBold?'#1e293b':'#fff'}}>
+                                <td style={{...scTd,fontWeight:row.isBold?700:400,fontSize:row.isPercent?11:12,color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':row.isBold?'#fff':'#1e293b',position:'sticky',left:0,background:row.isForecast?'#f0f9ff':row.isBold?'#1e293b':'#fff',zIndex:1}}>{row.label}</td>
                                 {row.cells.map((cell,ci) => {
-                                  if (!cell.isCur) return <td key={ci} style={{...scTd,textAlign:'center',fontWeight:row.isBold?600:400,color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#475569'}}><ScVal v={cell.v} metric={row.key} ym={cell.ym} dupla={dupla} bold={row.isBold}/></td>;
+                                  if (!cell.isCur) return <td key={ci} style={{...scTd,textAlign:'center',fontWeight:row.isBold?600:400,color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':row.isBold?'#fff':'#475569'}}><ScVal v={cell.v} metric={row.key} ym={cell.ym} dupla={dupla} bold={row.isBold}/></td>;
                                   if (cell.isFcstCell) return [<td key={ci+'m'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#0284c7',fontWeight:700}}>{cell.v}</td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'r'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
                                   if (cell.isRate) return [<td key={ci+'m'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'r'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}>{cell.v}</td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
                                   return [<td key={ci+'m'} style={{...scTd,textAlign:'center',background:'#fef2f208'}}>{cell.meta}</td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',fontWeight:600,background:'#fef2f208'}}>{cell.fcst}</td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',fontWeight:600,color:scPctColor(cell.pctA),background:'#fef2f208'}}>{cell.pctA}</td>,<td key={ci+'r'} style={{...scTd,textAlign:'center',fontWeight:700,background:'#fce4e608'}}><ScVal v={cell.real} metric={row.key} ym={cell.ym} dupla={dupla} bold color={clr}/></td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',background:'#fefce808'}}>{cell.mtdMeta}</td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',fontWeight:700,background:'#fefce808'}}><ScVal v={cell.mtdReal} metric={row.key} ym={cell.ym} dupla={dupla} bold color={clr}/></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',fontWeight:600,color:scPctColor(cell.mtdPct),background:'#fef9c308'}}>{cell.mtdPct}</td>];
