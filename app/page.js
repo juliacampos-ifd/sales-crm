@@ -1141,7 +1141,13 @@ export default function CRMPage() {
           const DK = ['lidia_gabi','joao_diego','michel_emerson'];
 
           // Get meta value
-          const scGmS = (d,y,m,f) => { if (!scData?.metas) return 0; const x = scData.metas.find(r => r.dupla === d && r.year === y && r.month === m); return x ? (x[f]||0) : 0; };
+          const scGmS = (d,y,m,f) => {
+            if (!scData?.metas) return 0;
+            const x = scData.metas.find(r => r.dupla === d && r.year === y && r.month === m);
+            if (!x) return 0;
+            const fieldMap = { contrato_assinado: 'marca_fechada' };
+            return x[fieldMap[f] || f] || 0;
+          };
           const scGm = (d,y,m,f) => d === 'total' ? DK.reduce((s,k) => s + scGmS(k,y,m,f), 0) : scGmS(d,y,m,f);
           // Get realized value
           const scGr = (d,ym,f) => d === 'total' ? DK.reduce((s,k) => s + (scData?.realized?.[ym]?.[k]?.[f]||0), 0) : (scData?.realized?.[ym]?.[d]?.[f]||0);
@@ -1174,8 +1180,17 @@ export default function CRMPage() {
                   else row.cells.push({v:scGm(dupla,col.y,col.m,'elegiveis'),ym:col.k});
                 }
                 else if (def.key==='media_lojas') {
-                  const fch=isCur?cmR.contrato_assinado:scGr(dupla,col.k,'contrato_assinado'), loj=isCur?cmR.lojas:scGr(dupla,col.k,'lojas'), v=fch>0?Math.round((loj/fch)*10)/10:0;
-                  if (isCur) { const ml=scGm(dupla,scYear,scMonth,'media_lojas'); row.cells.push({isCur:true,meta:ml,fcst:v,pctA:ml>0?Math.round((v/ml)*100)+'%':'—',real:v,mtdMeta:v,mtdReal:v,mtdPct:'—',isLive:true,ym:col.k}); }
+                  const fch = isCur ? cmR.contrato_assinado : scGr(dupla,col.k,'contrato_assinado');
+                  const loj = isCur ? cmR.lojas : scGr(dupla,col.k,'lojas');
+                  const v = fch > 0 ? Math.round((loj/fch)*10)/10 : 0;
+                  if (isCur) {
+                    const ml = scGm(dupla,scYear,scMonth,'media_lojas');
+                    // Para o Fcst, usar os valores de forecast (scGf) em vez dos reais
+                    const fcstMarcas = scGf(dupla,col.k,'marcas') || cmR.contrato_assinado;
+                    const fcstLojas = scGf(dupla,col.k,'lojas') || cmR.lojas;
+                    const fcstMedia = fcstMarcas > 0 ? Math.round((fcstLojas/fcstMarcas)*10)/10 : 0;
+                    row.cells.push({isCur:true,meta:ml,fcst:fcstMedia,pctA:ml>0?Math.round((fcstMedia/ml)*100)+'%':'—',real:v,mtdMeta:v,mtdReal:v,mtdPct:'—',isLive:true,ym:col.k});
+                  }
                   else row.cells.push({v,ym:col.k});
                 }
                 else if (def.isForecast) {
