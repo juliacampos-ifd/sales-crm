@@ -1158,7 +1158,7 @@ export default function CRMPage() {
             if (!scData?.metas) return 0;
             const x = scData.metas.find(r => r.dupla === d && r.year === y && r.month === m);
             if (!x) return 0;
-            const fieldMap = { contrato_assinado: 'marca_fechada' };
+            const fieldMap = { contrato_assinado: 'fechadas' };
             return x[fieldMap[f] || f] || 0;
           };
           const scGm = (d,y,m,f) => d === 'total' ? DK.reduce((s,k) => s + scGmS(k,y,m,f), 0) : scGmS(d,y,m,f);
