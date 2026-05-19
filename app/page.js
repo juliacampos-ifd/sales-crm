@@ -314,7 +314,7 @@ export default function CRMPage() {
   const loadHistory = async (brandId, oldIds) => {
     let url = `/api/history?brand_id=${brandId}`;
     if (oldIds && oldIds.length > 0) url += `&old_ids=${oldIds.join(',')}`;
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     const data = await res.json();
     if (data.history) setBrandHistory(data.history);
   };
