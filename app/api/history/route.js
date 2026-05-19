@@ -12,6 +12,7 @@ export async function GET(request) {
   const old_ids = searchParams.get('old_ids');
   const product = searchParams.get('product');
   const limit = parseInt(searchParams.get('limit') || '50');
+  const offset = parseInt(searchParams.get('offset') || '0');
 
   // Collect all IDs to query (current + old reactivated entries)
   const allIds = [];
@@ -22,7 +23,7 @@ export async function GET(request) {
     .from('pipeline_history')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (allIds.length > 0) query = query.in('brand_id', allIds);
   if (product) query = query.eq('product', product);
