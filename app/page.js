@@ -4,6 +4,19 @@ import { supabase } from '@/lib/supabase';
 import { PRODUCTS, CLASSIFICACAO_COLORS, MONTH_NAMES, DUPLAS, getMonthBusinessDays, getMonthBusinessDaysMTD } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload, Plus, Save, Sparkles, Award, FlaskConical, X } from 'lucide-react';
+
+// Helper que adiciona Authorization header em todas as chamadas de API
+async function apiFetch(url, options = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token || '';
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+}
 // ====================================================================
 // MAIN CRM PAGE
 // ====================================================================
@@ -120,7 +133,7 @@ export default function CRMPage() {
       setProfile(data);
       if (data.role === 'admin') {
         try {
-          const res = await fetch('/api/activity?_t=' + Date.now(), { cache: 'no-store' });
+          const res = await apiFetch('/api/activity?_t=' + Date.now(), { cache: 'no-store' });
           const d = await res.json();
           setActivityData(d);
         } catch (err) { console.error('Activity fetch error:', err); }
@@ -151,14 +164,14 @@ export default function CRMPage() {
   };
   // ── Load brands ──
   const loadBrands = useCallback(async () => {
-    const res = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+    const res = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
     const data = await res.json();
     if (data.brands) setBrands(data.brands);
   }, []);
   useEffect(() => {
     if (user) {
       loadBrands();
-      fetch('/api/forecast', { cache: 'no-store' }).then(r => r.json()).then(d => {
+      apiFetch('/api/forecast', { cache: 'no-store' }).then(r => r.json()).then(d => {
         if (d.metas) setForecastMetas(d.metas);
         if (d.entries) setForecastEntries(d.entries);
       }).catch(console.error);
@@ -213,19 +226,19 @@ export default function CRMPage() {
     setBrands(prev => prev.map(b => b.id === brandId ? { ...b, pipelines: { ...b.pipelines, [productKey]: { ...b.pipelines?.[productKey], stage: newStage } } } : b));
     if (!testMode) {
       try {
-        await fetch('/api/pipelines', {
+        await apiFetch('/api/pipelines', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brand_id: brandId, product: productKey, new_stage: newStage, user_id: user?.id, user_name: profile?.name }),
         });
         if (reason) {
-          await fetch('/api/brands', {
+          await apiFetch('/api/brands', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: brandId, motivo_perda_standby: reason }),
           });
         }
-        const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+        const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
         const freshData = await freshRes.json();
         if (freshData.brands) {
           setBrands(freshData.brands);
@@ -240,7 +253,7 @@ export default function CRMPage() {
   const savePendingResponsaveis = async (brandId) => {
     if (testMode) return;
     for (const [prodKey, newResp] of Object.entries(pendingResp)) {
-      await fetch('/api/pipelines', {
+      await apiFetch('/api/pipelines', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brand_id: brandId, product: prodKey, responsavel: newResp, user_id: user?.id, user_name: profile?.name }),
@@ -252,12 +265,12 @@ export default function CRMPage() {
     setSaving(true);
     setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { stage: '0. Nao Iniciado', active: true, responsavel: '' } } } : prev);
     if (!testMode) {
-      await fetch('/api/pipelines', {
+      await apiFetch('/api/pipelines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brand_id: brandId, product: productKey, user_id: user?.id, user_name: profile?.name }),
       });
-      const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+      const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
       const freshData = await freshRes.json();
       if (freshData.brands) {
         setBrands(freshData.brands);
@@ -283,12 +296,12 @@ export default function CRMPage() {
       return { ...b, pipelines: newPipelines };
     }));
     if (!testMode) {
-      await fetch('/api/pipelines', {
+      await apiFetch('/api/pipelines', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brand_id: brandId, product: productKey, new_stage: '14. Desativado', user_id: user?.id, user_name: profile?.name }),
       });
-      const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+      const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
       const freshData = await freshRes.json();
       if (freshData.brands) {
         setBrands(freshData.brands);
@@ -308,7 +321,7 @@ export default function CRMPage() {
   const deleteHistory = async (histId) => {
     if (!confirm('Excluir esta movimentacao do historico?')) return;
     try {
-      await fetch('/api/history?id=' + histId, { method: 'DELETE' });
+      await apiFetch('/api/history?id=' + histId, { method: 'DELETE' });
       setBrandHistory(prev => prev.filter(h => h.id !== histId));
       await loadScorecard();
     } catch (err) { console.error('Error deleting history:', err); }
@@ -318,9 +331,9 @@ export default function CRMPage() {
   const renameBrand = async () => {
     if (!renameName.trim() || !selectedBrand) return;
     setSaving(true);
-    await fetch('/api/brands', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedBrand.id, marca: renameName.trim() }) });
+    await apiFetch('/api/brands', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedBrand.id, marca: renameName.trim() }) });
     setRenameModal(false);
-    const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+    const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
     const freshData = await freshRes.json();
     if (freshData.brands) { setBrands(freshData.brands); const u = freshData.brands.find(b => b.id === selectedBrand.id); if (u) setSelectedBrand(u); }
     setSaving(false);
@@ -330,9 +343,9 @@ export default function CRMPage() {
     if (!selectedBrand) return;
     if (!confirm(`Tem certeza que deseja excluir "${selectedBrand.marca}"? Esta acao nao pode ser desfeita.`)) return;
     setSaving(true);
-    await fetch('/api/brands', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedBrand.id }) });
+    await apiFetch('/api/brands', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedBrand.id }) });
     setSelectedBrand(null);
-    const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+    const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
     const freshData = await freshRes.json();
     if (freshData.brands) setBrands(freshData.brands);
     setSaving(false);
@@ -342,9 +355,9 @@ export default function CRMPage() {
     if (!mergeTarget || !selectedBrand) return;
     if (!confirm(`Merge: transferir pipelines e historico de "${selectedBrand.marca}" para "${mergeTarget.marca}"${mergeName ? ` e renomear para "${mergeName}"` : ''}?`)) return;
     setSaving(true);
-    await fetch('/api/brands/merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: selectedBrand.id, targetId: mergeTarget.id, newName: mergeName.trim() || null }) });
+    await apiFetch('/api/brands/merge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: selectedBrand.id, targetId: mergeTarget.id, newName: mergeName.trim() || null }) });
     setMergeModal(false); setMergeTarget(null); setMergeName(''); setSelectedBrand(null);
-    const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+    const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
     const freshData = await freshRes.json();
     if (freshData.brands) setBrands(freshData.brands);
     setSaving(false);
@@ -364,13 +377,13 @@ export default function CRMPage() {
       if (editCoordDelivery !== (selectedBrand.coordenador_delivery || '')) updates.coordenador_delivery = editCoordDelivery;
       if (editExecDelivery !== (selectedBrand.executivo_delivery || '')) updates.executivo_delivery = editExecDelivery;
       if (Object.keys(updates).length > 0) {
-        await fetch('/api/brands', {
+        await apiFetch('/api/brands', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: selectedBrand.id, ...updates, user_id: user?.id, user_name: profile?.name }),
         });
       }
-      const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+      const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
       const freshData = await freshRes.json();
       if (freshData.brands) {
         setBrands(freshData.brands);
@@ -395,7 +408,7 @@ export default function CRMPage() {
     setSaving(true);
     try {
       await savePendingResponsaveis(selectedBrand.id);
-      const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
+      const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
       const freshData = await freshRes.json();
       if (freshData.brands) {
         setBrands(freshData.brands);
@@ -415,7 +428,7 @@ export default function CRMPage() {
       let histOffset = 0;
       const HIST_PAGE = 1000;
       while (true) {
-        const histRes = await fetch(`/api/history?limit=${HIST_PAGE}&offset=${histOffset}`, { cache: 'no-store' });
+        const histRes = await apiFetch(`/api/history?limit=${HIST_PAGE}&offset=${histOffset}`, { cache: 'no-store' });
         const histData = await histRes.json();
         const page = histData.history || [];
         allHistory = allHistory.concat(page);
@@ -562,7 +575,7 @@ export default function CRMPage() {
 
   const loadForecast = async () => {
     try {
-      const res = await fetch('/api/forecast', { cache: 'no-store' });
+      const res = await apiFetch('/api/forecast', { cache: 'no-store' });
       const data = await res.json();
       if (data.metas) setForecastMetas(data.metas);
       if (data.entries) setForecastEntries(data.entries);
@@ -572,7 +585,7 @@ export default function CRMPage() {
   const addForecastEntry = async (section, year, month) => {
     if (!newForecastMarca.trim()) return;
     try {
-      const res = await fetch('/api/forecast', {
+      const res = await apiFetch('/api/forecast', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'add_entry', section, year, month, marca: newForecastMarca.trim(), lojas: Number(newForecastLojas) || 0, user_id: user?.id, user_name: profile?.name }),
       });
@@ -583,21 +596,21 @@ export default function CRMPage() {
 
   const toggleForecastCheck = async (entryId, checked) => {
     try {
-      await fetch('/api/forecast', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: entryId, checked: !checked }) });
+      await apiFetch('/api/forecast', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: entryId, checked: !checked }) });
       setForecastEntries(prev => prev.map(e => e.id === entryId ? { ...e, checked: !checked } : e));
     } catch (err) { console.error(err); }
   };
 
   const deleteForecastEntry = async (entryId) => {
     try {
-      await fetch('/api/forecast?id=' + entryId, { method: 'DELETE' });
+      await apiFetch('/api/forecast?id=' + entryId, { method: 'DELETE' });
       setForecastEntries(prev => prev.filter(e => e.id !== entryId));
     } catch (err) { console.error(err); }
   };
 
   const updateForecastMeta = async (section, year, month, val) => {
     try {
-      await fetch('/api/forecast', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update_meta', section, year, month, meta_lojas: Number(val) || 0 }) });
+      await apiFetch('/api/forecast', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update_meta', section, year, month, meta_lojas: Number(val) || 0 }) });
       setForecastMetas(prev => { const idx = prev.findIndex(m => m.section === section && m.year === year && m.month === month); if (idx >= 0) { const c = [...prev]; c[idx] = { ...c[idx], meta_lojas: Number(val) || 0 }; return c; } return [...prev, { section, year, month, meta_lojas: Number(val) || 0 }]; });
     } catch (err) { console.error(err); }
   };
@@ -610,18 +623,18 @@ export default function CRMPage() {
     try {
       const dirty = forecastEntries.filter(e => e._dirty);
       for (const e of dirty) {
-        await fetch('/api/forecast', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: e.id, lojas: e.lojas }) });
+        await apiFetch('/api/forecast', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: e.id, lojas: e.lojas }) });
       }
       setForecastEntries(prev => prev.map(e => ({ ...e, _dirty: false })));
       // Reload scorecard so Forecast Marcas/Lojas lines update
-      try { const r2 = await fetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' }); const d2 = await r2.json(); setScData(d2); } catch (_) {}
+      try { const r2 = await apiFetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' }); const d2 = await r2.json(); setScData(d2); } catch (_) {}
     } catch (err) { console.error(err); }
     setSaving(false);
   };
 
   const loadScorecard = async () => {
     try {
-      const res = await fetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' });
+      const res = await apiFetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' });
       const d = await res.json();
       setScData(d);
     } catch (err) { console.error('Scorecard fetch error:', err); }
@@ -629,7 +642,7 @@ export default function CRMPage() {
   const loadActivity = async () => {
     setActivityLoading(true);
     try {
-      const res = await fetch('/api/activity?_t=' + Date.now(), { cache: 'no-store' });
+      const res = await apiFetch('/api/activity?_t=' + Date.now(), { cache: 'no-store' });
       const d = await res.json();
       setActivityData(d);
     } catch (err) { console.error('Activity fetch error:', err); }
@@ -1442,7 +1455,7 @@ export default function CRMPage() {
                           const cur = (selectedBrand.produto_totem || '').split(',').map(s => s.trim()).filter(Boolean);
                           const next = isSelected ? cur.filter(x => x !== opt) : [...cur, opt];
                           const val = next.join(', ') || null;
-                          await fetch('/api/brands', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedBrand.id, produto_totem: val }) });
+                          await apiFetch('/api/brands', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedBrand.id, produto_totem: val }) });
                           setSelectedBrand(prev => ({ ...prev, produto_totem: val }));
                           setBrands(prev => prev.map(b => b.id === selectedBrand.id ? { ...b, produto_totem: val } : b));
                         }} style={{ padding: '4px 12px', borderRadius: 20, border: isSelected ? '2px solid #a16207' : '1px solid #e2e8f0', background: isSelected ? '#fefce8' : '#fff', color: isSelected ? '#a16207' : '#64748b', fontSize: 12, fontWeight: 600, cursor: canEdit ? 'pointer' : 'default', opacity: canEdit ? 1 : 0.6 }}>
