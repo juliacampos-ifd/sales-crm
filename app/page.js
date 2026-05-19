@@ -411,9 +411,17 @@ export default function CRMPage() {
   const exportData = async () => {
     setSaving(true);
     try {
-      const histRes = await fetch('/api/history?limit=9999', { cache: 'no-store' });
-      const histData = await histRes.json();
-      const allHistory = histData.history || [];
+      let allHistory = [];
+      let histOffset = 0;
+      const HIST_PAGE = 1000;
+      while (true) {
+        const histRes = await fetch(`/api/history?limit=${HIST_PAGE}&offset=${histOffset}`, { cache: 'no-store' });
+        const histData = await histRes.json();
+        const page = histData.history || [];
+        allHistory = allHistory.concat(page);
+        if (page.length < HIST_PAGE) break;
+        histOffset += HIST_PAGE;
+      }
       const prodKeys = Object.keys(PRODUCTS);
       const headers = ['Marca', 'Classificacao', 'Estado', 'Lojas', 'PDV Atual', 'BDR', 'Closer'];
       prodKeys.forEach(pk => { headers.push(`Status ${PRODUCTS[pk].name}`); headers.push(`Resp. ${PRODUCTS[pk].name}`); });
