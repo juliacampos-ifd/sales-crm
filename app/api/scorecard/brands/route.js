@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
 const closerToDupla = (closer) => {
@@ -41,6 +42,8 @@ const isPorM = (b) => {
 };
 
 export async function GET(request) {
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const { searchParams } = new URL(request.url);
     const ym = searchParams.get('ym');
