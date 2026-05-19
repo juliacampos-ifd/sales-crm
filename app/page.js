@@ -1533,6 +1533,15 @@ export default function CRMPage() {
                       <span style={{ color: '#94a3b8', marginLeft: 4 }}>({PRODUCTS[h.product]?.name || h.product})</span>
                     </div>
                     <div style={{ flex: '0 0 100px', color: '#94a3b8', textAlign: 'right' }}>{h.changed_by_name || '—'}</div>
+                    {profile?.role === 'admin' && (
+                      <button
+                        onClick={() => deleteHistory(h.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db', display: 'flex', alignItems: 'center' }}
+                        title="Excluir movimentação"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
