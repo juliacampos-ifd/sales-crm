@@ -11,6 +11,18 @@ function closerToDupla(closer) {
   return 'michel_emerson';
 }
 
+function getCloserFromPipeResp(pipeResp) {
+  if (!pipeResp) return null;
+  const parts = pipeResp.split('/');
+  return parts.length > 1 ? parts[parts.length - 1].trim() : pipeResp.trim();
+}
+
+function getDupla(activeBrand, pipeByBrand) {
+  const pipe = pipeByBrand[activeBrand.id];
+  const closerFromPipe = getCloserFromPipeResp(pipe?.responsavel);
+  return closerToDupla(closerFromPipe || activeBrand.responsavel_closer);
+}
+
 function stageToMetric(stage) {
   const s = (stage || '').trim().toLowerCase();
   if (s.startsWith('0.')) return 'nao_iniciado';
@@ -134,7 +146,7 @@ export async function GET() {
       if (!isPorM(b)) return;
       if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
       if ((pipeLk[b.id] || '').startsWith('13.')) return;
-      const d = closerToDupla(b.responsavel_closer);
+      const d = getDupla(b, pipeByBrand);
       const marcaLower = (b.marca || '').trim().toLowerCase();
       eligSets.total.add(marcaLower);
       eligSets[d].add(marcaLower);
@@ -158,7 +170,7 @@ export async function GET() {
       const dedupKey = marcaKey + '|' + ym + '|' + metric;
       if (seen.has(dedupKey)) return;
       seen.add(dedupKey);
-      const dupla = closerToDupla(active.responsavel_closer);
+      const dupla = getDupla(active, pipeByBrand);
       if (!realized[ym]) {
         realized[ym] = { total: emptyMetrics() };
         DUPLA_KEYS.forEach(k => { realized[ym][k] = emptyMetrics(); });
@@ -187,12 +199,12 @@ export async function GET() {
       const dedupKey = marcaKey + '|' + ym + '|' + metric;
       if (seen2.has(dedupKey)) return;
       seen2.add(dedupKey);
-      const dupla = closerToDupla(active.responsavel_closer);
+      const dupla = getDupla(active, pipeByBrand);
       const listKey = ym + '|' + metric;
       if (!brandLists[listKey]) brandLists[listKey] = [];
       brandLists[listKey].push({
         marca: active.marca,
-        closer: active.responsavel_closer,
+        closer: getCloserFromPipeResp(pipeByBrand[active.id]?.responsavel) || active.responsavel_closer,
         lojas: active.qtd_lojas_fisicas || 0,
         dupla,
         date: entry.created_at,
@@ -211,9 +223,9 @@ export async function GET() {
       const active = activeBrand[key] || b;
       eligBrands.push({
         marca: active.marca,
-        closer: active.responsavel_closer,
+        closer: getCloserFromPipeResp(pipeByBrand[active.id]?.responsavel) || active.responsavel_closer,
         lojas: active.qtd_lojas_fisicas || 0,
-        dupla: closerToDupla(active.responsavel_closer),
+        dupla: getDupla(active, pipeByBrand),
         stage: pipeLk[active.id] || '—',
       });
     });
@@ -223,7 +235,7 @@ export async function GET() {
       const ym = e.year + '-' + String(e.month).padStart(2, '0');
       const marcaLower = (e.marca || '').trim().toLowerCase();
       const active = activeBrand[marcaLower];
-      const dupla = active ? closerToDupla(active.responsavel_closer) : 'michel_emerson';
+      const dupla = active ? getDupla(active, pipeByBrand) : 'michel_emerson';
       if (!forecast[ym]) {
         forecast[ym] = { total: { marcas: 0, lojas: 0 } };
         DUPLA_KEYS.forEach(k => { forecast[ym][k] = { marcas: 0, lojas: 0 }; });
