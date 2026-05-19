@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase';
+import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
 // Column mapping: CSV header -> database field
@@ -42,6 +43,8 @@ const PIPELINE_COLUMNS = {
 };
 
 export async function POST(request) {
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const { rows, headers } = await request.json();
     if (!rows || !headers || rows.length === 0) {
