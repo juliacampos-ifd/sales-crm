@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase';
-import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 const closerToDupla = (closer) => {
   if (closer === 'Gabriela Roma') return 'lidia_gabi';
@@ -42,8 +42,9 @@ const isPorM = (b) => {
 };
 
 export async function GET(request) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   try {
     const { searchParams } = new URL(request.url);
     const ym = searchParams.get('ym');
