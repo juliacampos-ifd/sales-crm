@@ -20,19 +20,18 @@ export async function GET() {
       .select('user_id,email,name,logged_at')
       .gte('logged_at', sinceISO)
       .order('logged_at', { ascending: false });
-    if (logErr) console.error('login_logs error:', logErr.message);
+    if (logErr) throw logErr;
 
     const { data: history, error: histErr } = await sb
       .from('pipeline_history')
       .select('changed_by,changed_by_name,created_at')
       .gte('created_at', sinceISO)
       .order('created_at', { ascending: false });
-    if (histErr) console.error('pipeline_history error:', histErr.message);
+    if (histErr) throw histErr;
 
-    const { data: profiles, error: profErr } = await sb
+    const { data: profiles } = await sb
       .from('profiles')
       .select('id,name,email,role,team');
-    if (profErr) console.error('profiles error:', profErr.message);
 
     const profileMap = {};
     (profiles || []).forEach(p => { profileMap[p.id] = p; });
