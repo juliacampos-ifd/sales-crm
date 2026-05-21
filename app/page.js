@@ -244,12 +244,12 @@ export default function CRMPage() {
             body: JSON.stringify({ id: brandId, motivo_perda_standby: reason }),
           });
         }
-        const freshRes = await fetch('/api/brands?limit=999', { cache: 'no-store' });
-        const freshData = await freshRes.json();
-        if (freshData.brands) {
-          setBrands(freshData.brands);
-          setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev);
-        }
+        // Não fazer reload completo — o update otimista já foi aplicado no início
+        // Apenas garantir que selectedBrand reflete a etapa nova
+        setSelectedBrand(prev => prev && prev.id === brandId
+          ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { ...(prev.pipelines?.[productKey] || {}), stage: newStage } } }
+          : prev
+        );
       } catch (err) { console.error('Error changing stage:', err); }
     }
     await loadScorecard();
