@@ -1,11 +1,12 @@
 import { createServerClient } from '@/lib/supabase';
-import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 // GET /api/rv/evidencias?executivo=Joao&status=pendente&year=2026&month=5
 export async function GET(request) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const supabase = createServerClient();
   const { searchParams } = new URL(request.url);
   const executivo = searchParams.get('executivo');
@@ -31,8 +32,9 @@ export async function GET(request) {
 
 // POST /api/rv/evidencias - Submit new evidence
 export async function POST(request) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const supabase = createServerClient();
   const body = await request.json();
   const { executivo, pilar, marca, data_atividade, link_evidencia, descricao } = body;
@@ -57,8 +59,9 @@ export async function POST(request) {
 
 // PATCH /api/rv/evidencias - Approve or reject evidence
 export async function PATCH(request) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const supabase = createServerClient();
   const body = await request.json();
   const { id, status, aprovado_por, motivo_reprovacao } = body;
