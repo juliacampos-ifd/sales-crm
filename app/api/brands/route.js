@@ -1,14 +1,13 @@
 import { createServerClient } from '@/lib/supabase';
-import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/brands - List all brands with their pipelines
 export async function GET(request) {
-  const auth = await requireAuth(request);
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const { searchParams } = new URL(request.url);
 
@@ -93,9 +92,8 @@ export async function GET(request) {
 
 // POST /api/brands - Create a new brand
 export async function POST(request) {
-  const auth = await requireAuth(request);
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const body = await request.json();
 
@@ -150,9 +148,8 @@ export async function POST(request) {
 
 // PATCH /api/brands - Update brand fields (proximo_passo, etc)
 export async function PATCH(request) {
-  const auth = await requireAuth(request);
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const body = await request.json();
 
@@ -165,7 +162,7 @@ export async function PATCH(request) {
   const { data: current } = await supabase.from('brands').select('proximo_passo').eq('id', id).single();
 
   // Only allow safe fields to be updated
-  const allowed = ['marca', 'proximo_passo', 'data_ultimo_fup', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp', 'base_elegivel', 'culinaria', 'produto_totem', 'coordenador_delivery', 'executivo_delivery', 'motivo_perda_standby', 'analise_teste_pdv'];
+  const allowed = ['marca', 'proximo_passo', 'data_ultimo_fup', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp', 'base_elegivel', 'culinaria', 'produto_totem', 'coordenador_delivery', 'executivo_delivery', 'motivo_perda_standby'];
   const safeUpdates = {};
   allowed.forEach(k => { if (updates[k] !== undefined) safeUpdates[k] = updates[k]; });
 
@@ -206,9 +203,8 @@ export async function PATCH(request) {
 
 // DELETE /api/brands - Delete a brand (admin only)
 export async function DELETE(request) {
-  const auth = await requireAuth(request);
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const { id } = await request.json();
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
