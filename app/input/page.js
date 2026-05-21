@@ -51,7 +51,9 @@ export default function InputPage() {
     setError('');
     setSuccess('');
 
-    try {
+        try {
+      const { data: { session } } = await supabase.auth.getSession();
+
       const resp3s = responsaveis['3s'] || '';
       const parts = resp3s.split('/').map(s => s.trim());
       const bdr = parts[0] || '';
@@ -59,7 +61,10 @@ export default function InputPage() {
 
       const res = await fetch('/api/brands', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
         body: JSON.stringify({
           marca: marca.trim(),
           responsavel_bdr: bdr || null,
