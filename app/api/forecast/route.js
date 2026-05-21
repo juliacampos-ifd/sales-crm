@@ -1,13 +1,14 @@
 import { createServerClient } from '@/lib/supabase';
-import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/forecast - Get all forecast data (metas + entries)
 export async function GET(request) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const supabase = createServerClient();
   const { data: metas } = await supabase.from('forecast_metas').select('*');
   const { data: entries } = await supabase.from('forecast_entries').select('*').order('created_at', { ascending: true });
@@ -20,8 +21,9 @@ export async function GET(request) {
 
 // POST /api/forecast - Add entry or update meta
 export async function POST(request) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const supabase = createServerClient();
   const body = await request.json();
 
@@ -52,8 +54,9 @@ export async function POST(request) {
 
 // PATCH /api/forecast - Update an entry
 export async function PATCH(request) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const supabase = createServerClient();
   const body = await request.json();
   const { id, ...fields } = body;
@@ -72,8 +75,9 @@ export async function PATCH(request) {
 
 // DELETE /api/forecast?id=123
 export async function DELETE(request) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const supabase = createServerClient();
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
