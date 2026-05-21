@@ -1,14 +1,13 @@
 import { createServerClient } from '@/lib/supabase';
-import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 // PATCH /api/pipelines - Update a brand's pipeline stage and/or responsavel
 export async function PATCH(request) {
-  const auth = await requireAuth(request);
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const body = await request.json();
 
@@ -65,9 +64,8 @@ export async function PATCH(request) {
 
 // POST /api/pipelines - Enable a new product for a brand
 export async function POST(request) {
-  const auth = await requireAuth(request);
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const body = await request.json();
 
