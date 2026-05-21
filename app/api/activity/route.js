@@ -1,14 +1,11 @@
 import { createServerClient } from '@/lib/supabase';
-import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
 
-export async function GET(request) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET() {
   try {
     const sb = createServerClient();
     const since = new Date();
@@ -23,18 +20,19 @@ export async function GET(request) {
       .select('user_id,email,name,logged_at')
       .gte('logged_at', sinceISO)
       .order('logged_at', { ascending: false });
-    if (logErr) throw logErr;
+    if (logErr) console.error('login_logs error:', logErr.message);
 
     const { data: history, error: histErr } = await sb
       .from('pipeline_history')
       .select('changed_by,changed_by_name,created_at')
       .gte('created_at', sinceISO)
       .order('created_at', { ascending: false });
-    if (histErr) throw histErr;
+    if (histErr) console.error('pipeline_history error:', histErr.message);
 
-    const { data: profiles } = await sb
+    const { data: profiles, error: profErr } = await sb
       .from('profiles')
       .select('id,name,email,role,team');
+    if (profErr) console.error('profiles error:', profErr.message);
 
     const profileMap = {};
     (profiles || []).forEach(p => { profileMap[p.id] = p; });
