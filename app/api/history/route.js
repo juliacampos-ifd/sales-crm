@@ -11,7 +11,7 @@ export async function GET(request) {
   const brand_id = searchParams.get('brand_id');
   const old_ids = searchParams.get('old_ids');
   const product = searchParams.get('product');
-  const limit = parseInt(searchParams.get('limit') || '200');
+  const limit = parseInt(searchParams.get('limit') || '50');
 
   // Collect all IDs to query (current + old reactivated entries)
   const allIds = [];
