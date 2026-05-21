@@ -1,12 +1,13 @@
 import { createServerClient } from '@/lib/supabase';
-import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 // GET /api/rv/dashboard?year=2026&month=5&executivo=Joao
 // Returns: config + approved counts + atingimento per pilar + acelerador
 export async function GET(request) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const supabase = createServerClient();
   const { searchParams } = new URL(request.url);
   const year = parseInt(searchParams.get('year') || new Date().getFullYear());
