@@ -1,9 +1,13 @@
 import { createServerClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 export const maxDuration = 60;
 
 export async function POST(request) {
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   try {
     const sb = createServerClient();
     const { entries, secret } = await request.json();
