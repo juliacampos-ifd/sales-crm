@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase';
-import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -10,6 +10,18 @@ function closerToDupla(closer) {
   if (closer === 'Gabriela Roma' || closer === 'Lidia Esteves') return 'lidia_gabi';
   if (closer === 'Diego Santos' || closer === 'Joao Biagiotti') return 'joao_diego';
   return 'michel_emerson';
+}
+
+function getCloserFromPipeResp(pipeResp) {
+  if (!pipeResp) return null;
+  const parts = pipeResp.split('/');
+  return parts.length > 1 ? parts[parts.length - 1].trim() : pipeResp.trim();
+}
+
+function getDupla(activeBrand, pipeByBrand) {
+  const pipe = pipeByBrand[activeBrand.id];
+  const closerFromPipe = getCloserFromPipeResp(pipe?.responsavel);
+  return closerToDupla(closerFromPipe || activeBrand.responsavel_closer);
 }
 
 function stageToMetric(stage) {
@@ -64,29 +76,21 @@ function emptyMetrics() {
   return obj;
 }
 
-export async function GET() {
-  const auth = await requireAuth(request);
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+export async function GET(request) {
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const sb = createServerClient();
     const DUPLA_KEYS = ['lidia_gabi', 'joao_diego', 'michel_emerson'];
 
-    const sinceDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
-    const [allBrands, allPipes, allHistResult, metasResult, fcstResult] = await Promise.all([
+    const [allBrands, allPipes, allHistRaw, metasResult, fcstResult] = await Promise.all([
       paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,qtd_lojas_fisicas,base_elegivel'),
       paginate(sb, 'pipelines', 'brand_id,stage,responsavel,updated_at', [['product', '3s']]),
-      sb.from('pipeline_history')
-        .select('brand_id,to_stage,created_at,changed_by_name')
-        .eq('product', '3s')
-        .gte('created_at', sinceDate)
-        .order('created_at', { ascending: false })
-        .limit(2000),
+      paginate(sb, 'pipeline_history', 'brand_id,to_stage,created_at,changed_by_name', [['product', '3s']]),
       sb.from('funnel_metas').select('*').order('year').order('month'),
       sb.from('forecast_entries').select('*').eq('section', '3s_pm'),
     ]);
 
-    const allHistRaw = allHistResult.data || [];
     const metas = metasResult.data || [];
     const fcstEntries = fcstResult.data || [];
 
@@ -145,7 +149,7 @@ export async function GET() {
       if (!isPorM(b)) return;
       if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
       if ((pipeLk[b.id] || '').startsWith('13.')) return;
-      const d = closerToDupla(b.responsavel_closer);
+      const d = getDupla(b, pipeByBrand);
       const marcaLower = (b.marca || '').trim().toLowerCase();
       eligSets.total.add(marcaLower);
       eligSets[d].add(marcaLower);
@@ -169,7 +173,7 @@ export async function GET() {
       const dedupKey = marcaKey + '|' + ym + '|' + metric;
       if (seen.has(dedupKey)) return;
       seen.add(dedupKey);
-      const dupla = closerToDupla(active.responsavel_closer);
+      const dupla = getDupla(active, pipeByBrand);
       if (!realized[ym]) {
         realized[ym] = { total: emptyMetrics() };
         DUPLA_KEYS.forEach(k => { realized[ym][k] = emptyMetrics(); });
@@ -198,12 +202,12 @@ export async function GET() {
       const dedupKey = marcaKey + '|' + ym + '|' + metric;
       if (seen2.has(dedupKey)) return;
       seen2.add(dedupKey);
-      const dupla = closerToDupla(active.responsavel_closer);
+      const dupla = getDupla(active, pipeByBrand);
       const listKey = ym + '|' + metric;
       if (!brandLists[listKey]) brandLists[listKey] = [];
       brandLists[listKey].push({
         marca: active.marca,
-        closer: active.responsavel_closer,
+        closer: getCloserFromPipeResp(pipeByBrand[active.id]?.responsavel) || active.responsavel_closer,
         lojas: active.qtd_lojas_fisicas || 0,
         dupla,
         date: entry.created_at,
@@ -222,9 +226,9 @@ export async function GET() {
       const active = activeBrand[key] || b;
       eligBrands.push({
         marca: active.marca,
-        closer: active.responsavel_closer,
+        closer: getCloserFromPipeResp(pipeByBrand[active.id]?.responsavel) || active.responsavel_closer,
         lojas: active.qtd_lojas_fisicas || 0,
-        dupla: closerToDupla(active.responsavel_closer),
+        dupla: getDupla(active, pipeByBrand),
         stage: pipeLk[active.id] || '—',
       });
     });
@@ -234,7 +238,7 @@ export async function GET() {
       const ym = e.year + '-' + String(e.month).padStart(2, '0');
       const marcaLower = (e.marca || '').trim().toLowerCase();
       const active = activeBrand[marcaLower];
-      const dupla = active ? closerToDupla(active.responsavel_closer) : 'michel_emerson';
+      const dupla = active ? getDupla(active, pipeByBrand) : 'michel_emerson';
       if (!forecast[ym]) {
         forecast[ym] = { total: { marcas: 0, lojas: 0 } };
         DUPLA_KEYS.forEach(k => { forecast[ym][k] = { marcas: 0, lojas: 0 }; });
