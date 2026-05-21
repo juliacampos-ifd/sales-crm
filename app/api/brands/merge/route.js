@@ -1,14 +1,13 @@
 import { createServerClient } from '@/lib/supabase';
-import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 // POST /api/brands/merge - Merge source brand into target brand
 export async function POST(request) {
-  const auth = await requireAuth(request);
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const { sourceId, targetId, newName } = await request.json();
 
