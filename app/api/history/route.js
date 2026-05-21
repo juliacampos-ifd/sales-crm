@@ -1,10 +1,14 @@
 import { createServerClient } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/history?brand_id=123&product=3s
 export async function GET(request) {
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const supabase = createServerClient();
   const { searchParams } = new URL(request.url);
 
@@ -42,6 +46,9 @@ export async function GET(request) {
 
 // DELETE /api/history?id=123 - Delete a specific history entry (admin only)
 export async function DELETE(request) {
+  const auth = await requireAuth(request);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const supabase = createServerClient();
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
