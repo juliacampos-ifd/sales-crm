@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PRODUCTS } from '@/lib/constants';
 import { ArrowLeft, Check, Plus, Target } from 'lucide-react';
@@ -39,6 +39,8 @@ export default function InputPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const toggleProduct = (pk) => {
     setActiveProducts(prev => prev.includes(pk) ? prev.filter(p => p !== pk) : [...prev, pk]);
@@ -104,6 +106,28 @@ export default function InputPage() {
     }
     setSaving(false);
   };
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) setUser(session.user);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+      <div style={{ width: 40, height: 40, border: '3px solid #e2e8f0', borderTopColor: '#EA1D2C', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+    </div>
+  );
+  if (!user) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+      <div style={{ textAlign: 'center', color: '#64748b' }}>
+        <p>Voce precisa estar logado para acessar o Input de Marcas.</p>
+        <a href="/" style={{ color: '#EA1D2C', fontWeight: 600 }}>Ir para o CRM</a>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
