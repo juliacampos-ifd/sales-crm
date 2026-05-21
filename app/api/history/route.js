@@ -1,14 +1,13 @@
 import { createServerClient } from '@/lib/supabase';
-import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/history?brand_id=123&product=3s
 export async function GET(request) {
-  const auth = await requireAuth(request);
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const { searchParams } = new URL(request.url);
 
@@ -16,6 +15,7 @@ export async function GET(request) {
   const old_ids = searchParams.get('old_ids');
   const product = searchParams.get('product');
   const limit = parseInt(searchParams.get('limit') || '50');
+  const offset = parseInt(searchParams.get('offset') || '0');
 
   // Collect all IDs to query (current + old reactivated entries)
   const allIds = [];
@@ -26,7 +26,7 @@ export async function GET(request) {
     .from('pipeline_history')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (allIds.length > 0) query = query.in('brand_id', allIds);
   if (product) query = query.eq('product', product);
@@ -46,9 +46,8 @@ export async function GET(request) {
 
 // DELETE /api/history?id=123 - Delete a specific history entry (admin only)
 export async function DELETE(request) {
-  const auth = await requireAuth(request);
-  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+  const user = await requireAuth(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
