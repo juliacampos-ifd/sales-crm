@@ -82,9 +82,6 @@ export default function CRMPage() {
   // ── Open filter tracking ──
   const [openFilter, setOpenFilter] = useState(null);
   const [dashboardTab, setDashboardTab] = useState('geral');
-  const [gEdits, setGEdits] = useState({});
-  const [gDirty, setGDirty] = useState(false);
-  const [dashboardG, setDashboardG] = useState({});
   // ── Init edit fields when selecting a brand ──
   const openBrandDetail = (brand, tab) => {
     setSelectedBrand(brand);
@@ -167,13 +164,6 @@ export default function CRMPage() {
   useEffect(() => {
     if (user) {
       loadBrands();
-      fetch('/api/dashboard-g', { cache: 'no-store' }).then(r => r.json()).then(d => {
-        if (d.data) {
-          const map = {};
-          d.data.forEach(row => { map[row.brand_id] = { evolucao_frente: row.evolucao_frente, andamento: row.andamento }; });
-          setDashboardG(map);
-        }
-      }).catch(console.error);
       fetch('/api/forecast', { cache: 'no-store' }).then(r => r.json()).then(d => {
         if (d.metas) setForecastMetas(d.metas);
         if (d.entries) setForecastEntries(d.entries);
@@ -228,15 +218,20 @@ export default function CRMPage() {
   };
   const executeStageChange = async (brandId, productKey, newStage, reason) => {
     setSaving(true);
+    const fromStage = brands.find(b => b.id === brandId)?.pipelines?.[productKey]?.stage || '';
     setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { ...prev.pipelines?.[productKey], stage: newStage } } } : prev);
     setBrands(prev => prev.map(b => b.id === brandId ? { ...b, pipelines: { ...b.pipelines, [productKey]: { ...b.pipelines?.[productKey], stage: newStage } } } : b));
     if (!testMode) {
       try {
-        await fetch('/api/pipelines', {
+        const pipelineRes = await fetch('/api/pipelines', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brand_id: brandId, product: productKey, new_stage: newStage, user_id: user?.id, user_name: profile?.name }),
         });
+        if (!pipelineRes.ok) {
+          const errData = await pipelineRes.json().catch(() => ({}));
+          throw new Error(errData.error || `Erro ${pipelineRes.status}`);
+        }
         if (reason) {
           await fetch('/api/brands', {
             method: 'PATCH',
@@ -244,13 +239,16 @@ export default function CRMPage() {
             body: JSON.stringify({ id: brandId, motivo_perda_standby: reason }),
           });
         }
-        // Não fazer reload completo — o update otimista já foi aplicado no início
-        // Apenas garantir que selectedBrand reflete a etapa nova
+      } catch (err) {
+        console.error('Erro ao salvar etapa:', err);
         setSelectedBrand(prev => prev && prev.id === brandId
-          ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { ...(prev.pipelines?.[productKey] || {}), stage: newStage } } }
-          : prev
-        );
-      } catch (err) { console.error('Error changing stage:', err); }
+          ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { ...prev.pipelines?.[productKey], stage: fromStage } } }
+          : prev);
+        setBrands(prev => prev.map(b => b.id === brandId
+          ? { ...b, pipelines: { ...b.pipelines, [productKey]: { ...b.pipelines?.[productKey], stage: fromStage } } }
+          : b));
+        alert('Erro ao salvar movimentação: ' + err.message + '\nTente novamente.');
+      }
     }
     await loadScorecard();
     setSaving(false);
@@ -318,7 +316,7 @@ export default function CRMPage() {
   };
   // ── Load history ──
   const loadHistory = async (brandId, oldIds) => {
-    let url = `/api/history?brand_id=${brandId}&limit=200`;
+    let url = `/api/history?brand_id=${brandId}&limit=50`;
     if (oldIds && oldIds.length > 0) url += `&old_ids=${oldIds.join(',')}`;
     const res = await fetch(url);
     const data = await res.json();
@@ -935,12 +933,10 @@ export default function CRMPage() {
             {/* Dashboard Tab Bar */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
               {[
-                { key: 'geral', label: '3S Checkout', color: '#EA1D2C' },
-                { key: 'marcas_g', label: '3S Checkout G', color: '#1e293b' },
-                { key: 'saipos', label: 'Saipos', color: '#065f46' },
-                { key: 'totem', label: 'Totem', color: '#831843' },
+                { key: 'geral', label: 'Visao Geral', color: '#EA1D2C' },
                 { key: 'comer_fora', label: 'Comer Fora', color: '#f59e0b' },
                 { key: 'emilia_vision', label: 'Emilia Vision', color: '#8b5cf6' },
+                { key: 'marcas_g', label: 'Marcas G', color: '#1e293b' },
               ].map(tab => (
                 <button key={tab.key} onClick={() => setDashboardTab(tab.key)} style={{ padding: '8px 18px', borderRadius: 10, border: dashboardTab === tab.key ? '2px solid ' + tab.color : '1px solid #e2e8f0', background: dashboardTab === tab.key ? tab.color + '10' : '#fff', color: dashboardTab === tab.key ? tab.color : '#64748b', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
                   {tab.label}
@@ -1026,101 +1022,7 @@ export default function CRMPage() {
             )}
 
             {/* COMER FORA */}
-            {/* SAIPOS */}
-            {dashboardTab === 'saipos' && (() => {
-              const saiposBrands = brands.filter(b => b.pipelines?.saipos?.stage && b.pipelines.saipos.stage !== '0. Nao Iniciado' && b.pipelines.saipos.stage !== '14. Desativado');
-              return (
-                <div>
-                  <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                    <div style={{ padding: '14px 20px', borderBottom: '2px solid #10b981', display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Saipos</h4>
-                      <span style={{ background: '#d1fae5', color: '#065f46', borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 600 }}>{saiposBrands.length} marcas</span>
-                    </div>
-                    {saiposBrands.length === 0 ? (
-                      <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 30 }}>Nenhuma marca com pipeline Saipos ativo</p>
-                    ) : (
-                      <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                          <thead>
-                            <tr style={{ background: '#f8fafc' }}>
-                              <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Marca</th>
-                              <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Etapa</th>
-                              <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Responsavel</th>
-                              <th style={{ textAlign: 'center', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Lojas</th>
-                              <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Culinaria</th>
-                              <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Ultimo FUP</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {saiposBrands.map(b => (
-                              <tr key={b.id} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }} onClick={() => openBrandDetail(b, 'pipelines')}>
-                                <td style={{ padding: '10px 16px', fontWeight: 600, color: '#1e293b' }}>{b.marca || b.nome}</td>
-                                <td style={{ padding: '10px 16px' }}>
-                                  <span style={{ background: '#d1fae5', color: '#065f46', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{b.pipelines?.saipos?.stage || '—'}</span>
-                                </td>
-                                <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{b.responsavel_bdr || b.responsavel_closer || '—'}</td>
-                                <td style={{ padding: '10px 16px', textAlign: 'center', color: '#1e293b' }}>{b.qtd_lojas_fisicas || '—'}</td>
-                                <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{b.culinaria || '—'}</td>
-                                <td style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 12 }}>{b.data_ultimo_fup ? new Date(b.data_ultimo_fup).toLocaleDateString('pt-BR') : '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* TOTEM */}
-            {dashboardTab === 'totem' && (() => {
-              const totemBrands = brands.filter(b => b.pipelines?.totem?.stage && b.pipelines.totem.stage !== '0. Nao Iniciado' && b.pipelines.totem.stage !== '14. Desativado');
-              return (
-                <div>
-                  <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                    <div style={{ padding: '14px 20px', borderBottom: '2px solid #db2777', display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Totem</h4>
-                      <span style={{ background: '#fce7f3', color: '#831843', borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 600 }}>{totemBrands.length} marcas</span>
-                    </div>
-                    {totemBrands.length === 0 ? (
-                      <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 30 }}>Nenhuma marca com pipeline Totem ativo</p>
-                    ) : (
-                      <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                          <thead>
-                            <tr style={{ background: '#f8fafc' }}>
-                              <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Marca</th>
-                              <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Etapa</th>
-                              <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Responsavel</th>
-                              <th style={{ textAlign: 'center', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Lojas</th>
-                              <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Culinaria</th>
-                              <th style={{ textAlign: 'left', padding: '10px 16px', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Ultimo FUP</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {totemBrands.map(b => (
-                              <tr key={b.id} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }} onClick={() => openBrandDetail(b, 'pipelines')}>
-                                <td style={{ padding: '10px 16px', fontWeight: 600, color: '#1e293b' }}>{b.marca || b.nome}</td>
-                                <td style={{ padding: '10px 16px' }}>
-                                  <span style={{ background: '#fce7f3', color: '#831843', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{b.pipelines?.totem?.stage || '—'}</span>
-                                </td>
-                                <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{b.responsavel_bdr || b.responsavel_closer || '—'}</td>
-                                <td style={{ padding: '10px 16px', textAlign: 'center', color: '#1e293b' }}>{b.qtd_lojas_fisicas || '—'}</td>
-                                <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{b.culinaria || '—'}</td>
-                                <td style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 12 }}>{b.data_ultimo_fup ? new Date(b.data_ultimo_fup).toLocaleDateString('pt-BR') : '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-                        {dashboardTab === 'comer_fora' && (() => {
+            {dashboardTab === 'comer_fora' && (() => {
               const coFBrands = brands.filter(b => b.pipelines?.comer_fora?.stage && b.pipelines.comer_fora.stage !== '0. Nao Iniciado' && b.pipelines.comer_fora.stage !== '14. Desativado');
               return (
                 <div>
@@ -1155,7 +1057,7 @@ export default function CRMPage() {
                                 <td style={{ padding: '10px 16px' }}>
                                   <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{b.pipelines?.comer_fora?.stage || '—'}</span>
                                 </td>
-                                <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{b.responsavel_bdr || b.responsavel_closer || '—'}</td>
+                                <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{b.pipelines?.comer_fora?.responsavel_bdr || b.pipelines?.comer_fora?.responsavel_closer || '—'}</td>
                                 <td style={{ padding: '10px 16px', textAlign: 'center', color: '#1e293b' }}>{b.qtd_lojas_fisicas || '—'}</td>
                                 <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{b.culinaria || '—'}</td>
                                 <td style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 12 }}>{b.data_ultimo_fup ? new Date(b.data_ultimo_fup).toLocaleDateString('pt-BR') : '—'}</td>
@@ -1206,7 +1108,7 @@ export default function CRMPage() {
                                 <td style={{ padding: '10px 16px' }}>
                                   <span style={{ background: '#ede9fe', color: '#5b21b6', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{b.pipelines?.emilia_vision?.stage || '—'}</span>
                                 </td>
-                                <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{b.responsavel_bdr || b.responsavel_closer || '—'}</td>
+                                <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{b.pipelines?.emilia_vision?.responsavel_bdr || b.pipelines?.emilia_vision?.responsavel_closer || '—'}</td>
                                 <td style={{ padding: '10px 16px', textAlign: 'center', color: '#1e293b' }}>{b.qtd_lojas_fisicas || '—'}</td>
                                 <td style={{ padding: '10px 16px', color: '#64748b', fontSize: 12 }}>{b.culinaria || '—'}</td>
                                 <td style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 12 }}>{b.data_ultimo_fup ? new Date(b.data_ultimo_fup).toLocaleDateString('pt-BR') : '—'}</td>
@@ -1221,18 +1123,17 @@ export default function CRMPage() {
               );
             })()}
 
-            {/* 3S CHECKOUT G */}
+            {/* MARCAS G */}
             {dashboardTab === 'marcas_g' && (() => {
-              const NEG_AVANCADAS_STAGES = ['7. Negociacao', '8. Contrato em elaboracao', '9. Contrato assinado'];
+              const NEG_AVANCADAS_STAGES = ['6. Proposta', '7. Negociacao', '8. Contrato em elaboracao', '9. Contrato assinado'];
               const get3SStage = b => b.pipelines?.['3s']?.stage || b.pipelines?.['3s_pm']?.stage || b.pipelines?.['3s_g']?.stage || '';
               const has3SActive = b => { const s = get3SStage(b); return s && s !== '0. Nao Iniciado' && s !== '14. Desativado'; };
               const marcasG = brands.filter(b => b.classificacao === 'G');
-              const negAvancadas = marcasG.filter(b => /^[789]\./.test(get3SStage(b)));
-              const novasNeg = marcasG.filter(b => has3SActive(b) && !/^[789]\./.test(get3SStage(b)));
+              const negAvancadas = marcasG.filter(b => NEG_AVANCADAS_STAGES.includes(get3SStage(b)));
+              const novasNeg = marcasG.filter(b => has3SActive(b) && !NEG_AVANCADAS_STAGES.includes(get3SStage(b)));
               const thStyle = { padding: '10px 14px', background: '#1e293b', color: '#fff', fontWeight: 600, fontSize: 12, textAlign: 'left', borderBottom: '1px solid #334155' };
-              const tdStyle = (last) => ({ padding: '10px 14px', borderBottom: last ? 'none' : '1px solid #e2e8f0', fontSize: 13, color: '#1e293b', verticalAlign: 'top' });
-              const andamentoColor = (v) => v === 'Concluido' ? '#22c55e' : v === 'Avancado' ? '#f59e0b' : '#3b82f6';
-              const MarcasGTable = ({ rows, sectionLabel, sectionColor, gEdits, setGEdits, setGDirty, setBrands }) => (
+              const tdStyle = (last) => ({ padding: '10px 14px', borderBottom: last ? 'none' : '1px solid #e2e8f0', fontSize: 13, color: '#1e293b' });
+              const MarcasGTable = ({ rows, sectionLabel, sectionColor }) => (
                 <div style={{ display: 'flex', marginBottom: 16 }}>
                   <div style={{ width: 32, background: sectionColor, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px 0 0 8px', flexShrink: 0 }}>
                     <span style={{ color: '#fff', fontWeight: 700, fontSize: 11, writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', letterSpacing: 1, whiteSpace: 'nowrap' }}>{sectionLabel}</span>
@@ -1245,61 +1146,32 @@ export default function CRMPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                           <thead>
                             <tr>
-                              <th style={thStyle}>Marca</th>
-                              <th style={{ ...thStyle, textAlign: 'center', width: 70 }}>N Lojas</th>
-                              <th style={{ ...thStyle, width: 200 }}>FCA</th>
-                              <th style={{ ...thStyle, width: 200 }}>Evolucao da frente</th>
+                              <th style={thStyle}>Rollout</th>
+                              <th style={{ ...thStyle, textAlign: 'center', width: 80 }}>N Lojas</th>
+                              <th style={thStyle}>FCA</th>
+                              <th style={thStyle}>Evolucao da frente</th>
                               <th style={thStyle}>Responsavel</th>
-                              <th style={{ ...thStyle, textAlign: 'center', width: 130 }}>ANDAMENTO</th>
+                              <th style={{ ...thStyle, textAlign: 'center', width: 100 }}>ANDAMENTO</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {rows.map((b, idx) => {
-                              const edits = gEdits[b.id] || {};
-                              const fcaVal = edits.fca !== undefined ? edits.fca : (b.proximo_passo || '');
-                              const evolucaoVal = edits.evolucao !== undefined ? edits.evolucao : (dashboardG[b.id]?.evolucao_frente || '');
-                              const andamentoVal = edits.andamento !== undefined ? edits.andamento : (dashboardG[b.id]?.andamento || 'Em andamento');
-                              const isLast = idx === rows.length - 1;
-                              return (
-                                <tr key={b.id} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                                  <td style={tdStyle(isLast)}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      {b.logo_url ? <img src={b.logo_url} alt={b.marca || b.nome} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} onError={e => { e.target.style.display = 'none'; }} /> : null}
-                                      <span style={{ fontWeight: 600 }}>{b.marca || b.nome}</span>
-                                    </div>
-                                  </td>
-                                  <td style={{ ...tdStyle(isLast), textAlign: 'center', fontWeight: 700 }}>{b.qtd_lojas_fisicas || 0}</td>
-                                  <td style={tdStyle(isLast)}>
-                                    <textarea
-                                      rows={2}
-                                      value={fcaVal}
-                                      style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 4, padding: '4px 6px', fontSize: 12, resize: 'vertical', fontFamily: 'inherit' }}
-                                      onChange={e => { setGEdits(prev => ({ ...prev, [b.id]: { ...prev[b.id], fca: e.target.value } })); setGDirty(true); }}
-                                    />
-                                  </td>
-                                  <td style={tdStyle(isLast)}>
-                                    <textarea
-                                      rows={2}
-                                      value={evolucaoVal}
-                                      style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 4, padding: '4px 6px', fontSize: 12, resize: 'vertical', fontFamily: 'inherit' }}
-                                      onChange={e => { setGEdits(prev => ({ ...prev, [b.id]: { ...prev[b.id], evolucao: e.target.value } })); setGDirty(true); }}
-                                    />
-                                  </td>
-                                  <td style={{ ...tdStyle(isLast), color: '#64748b', fontSize: 12 }}>{b.responsavel_closer || b.responsavel_bdr || '—'}</td>
-                                  <td style={{ ...tdStyle(isLast), textAlign: 'center' }}>
-                                    <select
-                                      value={andamentoVal}
-                                      style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 12, background: '#fff', color: andamentoColor(andamentoVal), fontWeight: 700, cursor: 'pointer' }}
-                                      onChange={e => { setGEdits(prev => ({ ...prev, [b.id]: { ...prev[b.id], andamento: e.target.value } })); setGDirty(true); }}
-                                    >
-                                      <option value="Em andamento" style={{ color: '#3b82f6' }}>Em andamento</option>
-                                      <option value="Avancado" style={{ color: '#f59e0b' }}>Avancado</option>
-                                      <option value="Concluido" style={{ color: '#22c55e' }}>Concluido</option>
-                                    </select>
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                            {rows.map((b, idx) => (
+                              <tr key={b.id} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc', cursor: 'pointer' }} onClick={() => openBrandDetail(b, 'pipelines')}>
+                                <td style={tdStyle(idx === rows.length - 1)}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    {b.logo_url ? <img src={b.logo_url} alt={b.nome} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} onError={e => { e.target.style.display = 'none'; }} /> : null}
+                                    <span style={{ fontWeight: 600 }}>{b.nome}</span>
+                                  </div>
+                                </td>
+                                <td style={{ ...tdStyle(idx === rows.length - 1), textAlign: 'center', fontWeight: 700 }}>{b.qtd_lojas_fisicas || '—'}</td>
+                                <td style={{ ...tdStyle(idx === rows.length - 1), color: '#64748b', fontSize: 12 }}>{b.proximo_passo || '—'}</td>
+                                <td style={{ ...tdStyle(idx === rows.length - 1), color: '#64748b', fontSize: 12 }}>{b.proximo_passo || '—'}</td>
+                                <td style={{ ...tdStyle(idx === rows.length - 1), color: '#64748b', fontSize: 12 }}>{b.pipelines?.['3s']?.responsavel_closer || b.pipelines?.['3s']?.responsavel_bdr || b.pipelines?.['3s_g']?.responsavel_closer || b.pipelines?.['3s_g']?.responsavel_bdr || '—'}</td>
+                                <td style={{ ...tdStyle(idx === rows.length - 1), textAlign: 'center' }}>
+                                  <span style={{ background: '#22c55e', color: '#fff', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>ANDAMENTO</span>
+                                </td>
+                              </tr>
+                            ))}
                           </tbody>
                         </table>
                       </div>
@@ -1307,74 +1179,16 @@ export default function CRMPage() {
                   </div>
                 </div>
               );
-              const saveGEdits = async () => {
-                const entries = Object.entries(gEdits);
-                await Promise.all(entries.map(([brandId, edits]) => {
-                  const promises = [];
-                  // Save proximo_passo to brands API
-                  if (edits.fca !== undefined) {
-                    promises.push(
-                      fetch('/api/brands', {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id: brandId, proximo_passo: edits.fca }),
-                      })
-                    );
-                  }
-                  // Save evolucao_frente and andamento to dashboard_g API
-                  if (edits.evolucao !== undefined || edits.andamento !== undefined) {
-                    promises.push(
-                      fetch('/api/dashboard-g', {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ brand_id: brandId, evolucao_frente: edits.evolucao, andamento: edits.andamento }),
-                      })
-                    );
-                  }
-                  return Promise.all(promises);
-                }));
-                // Update brands state for proximo_passo changes
-                setBrands(prev => prev.map(b => {
-                  if (gEdits[b.id]) {
-                    const e = gEdits[b.id];
-                    return { ...b, proximo_passo: e.fca !== undefined ? e.fca : b.proximo_passo };
-                  }
-                  return b;
-                }));
-                // Update dashboardG state for evolucao/andamento changes
-                setDashboardG(prev => {
-                  const updated = { ...prev };
-                  entries.forEach(([brandId, edits]) => {
-                    const idKey = parseInt(brandId);
-                    updated[idKey] = {
-                      ...(updated[idKey] || {}),
-                      ...(edits.evolucao !== undefined ? { evolucao_frente: edits.evolucao } : {}),
-                      ...(edits.andamento !== undefined ? { andamento: edits.andamento } : {}),
-                    };
-                  });
-                  return updated;
-                });
-                setGEdits({});
-                setGDirty(false);
-              };
               return (
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, position: 'sticky', top: 0, background: '#f8fafc', zIndex: 10, padding: '8px 0' }}>
-                    <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#1e293b' }}>3S Checkout G</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                    <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#1e293b' }}>Marcas G</h3>
                     <span style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 20, padding: '2px 12px', fontSize: 12, fontWeight: 700 }}>{marcasG.length} marcas G no total</span>
                     <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 20, padding: '2px 12px', fontSize: 12, fontWeight: 600 }}>{negAvancadas.length} neg. avancadas</span>
                     <span style={{ background: '#e0e7ff', color: '#3730a3', borderRadius: 20, padding: '2px 12px', fontSize: 12, fontWeight: 600 }}>{novasNeg.length} novas neg.</span>
-                    {gDirty && (
-                      <button
-                        onClick={saveGEdits}
-                        style={{ marginLeft: 'auto', background: '#EA1D2C', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-                      >
-                        Salvar Alteracoes
-                      </button>
-                    )}
                   </div>
-                  <MarcasGTable rows={negAvancadas} sectionLabel="Neg. Avancadas" sectionColor="#7f1d1d" gEdits={gEdits} setGEdits={setGEdits} setGDirty={setGDirty} setBrands={setBrands} />
-                  <MarcasGTable rows={novasNeg} sectionLabel="Novas Negociacoes" sectionColor="#991b1b" gEdits={gEdits} setGEdits={setGEdits} setGDirty={setGDirty} setBrands={setBrands} />
+                  <MarcasGTable rows={negAvancadas} sectionLabel="Neg. Avancadas" sectionColor="#7f1d1d" />
+                  <MarcasGTable rows={novasNeg} sectionLabel="Novas Negociacoes" sectionColor="#991b1b" />
                 </div>
               );
             })()}
