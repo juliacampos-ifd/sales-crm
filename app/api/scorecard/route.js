@@ -68,21 +68,14 @@ export async function GET() {
     const sb = createServerClient();
     const DUPLA_KEYS = ['lidia_gabi', 'joao_diego', 'michel_emerson'];
 
-    const sinceDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
-    const [allBrands, allPipes, allHistResult, metasResult, fcstResult] = await Promise.all([
+    const [allBrands, allPipes, allHistRaw, metasResult, fcstResult] = await Promise.all([
       paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,qtd_lojas_fisicas,base_elegivel'),
       paginate(sb, 'pipelines', 'brand_id,stage,responsavel,updated_at', [['product', '3s']]),
-      sb.from('pipeline_history')
-        .select('brand_id,to_stage,created_at,changed_by_name')
-        .eq('product', '3s')
-        .gte('created_at', sinceDate)
-        .order('created_at', { ascending: false })
-        .limit(2000),
+      paginate(sb, 'pipeline_history', 'brand_id,to_stage,created_at,changed_by_name', [['product', '3s']]),
       sb.from('funnel_metas').select('*').order('year').order('month'),
       sb.from('forecast_entries').select('*').eq('section', '3s_pm'),
     ]);
 
-    const allHistRaw = allHistResult.data || [];
     const metas = metasResult.data || [];
     const fcstEntries = fcstResult.data || [];
 
