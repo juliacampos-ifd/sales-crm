@@ -40,6 +40,7 @@ export default function CRMPage() {
   const [filterStage, setFilterStage] = useState([]);
   const [filterCulinaria, setFilterCulinaria] = useState([]);
   const [filterTag, setFilterTag] = useState(false);
+  const [filterTopDown, setFilterTopDown] = useState('');
   const [filterBaseElegivel, setFilterBaseElegivel] = useState([]);
   const [filterHaas, setFilterHaas] = useState([]);
   // Forecast
@@ -204,10 +205,11 @@ export default function CRMPage() {
     if (filterStage.length > 0) d = d.filter(b => filterStage.includes(b.pipelines?.[activeProduct]?.stage));
     if (filterCulinaria.length > 0) d = d.filter(b => filterCulinaria.includes(b.culinaria));
     if (filterTag) d = d.filter(b => b.analise_teste_pdv === true);
+    if (filterTopDown) d = d.filter(b => b.top_down === filterTopDown);
     if (filterBaseElegivel.length > 0) d = d.filter(b => { const be = (b.base_elegivel || "").split(",").map(s => s.trim()); return filterBaseElegivel.some(f => be.includes(f)); });
     if (filterHaas.length > 0) d = d.filter(b => { const pt = (b.produto_totem || "").split(",").map(s => s.trim()); return filterHaas.some(f => pt.includes(f)); });
     return d;
-  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, activeProduct]);
+  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct]);
   // ── Loss/StandBy reasons ──
   const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
@@ -843,6 +845,13 @@ export default function CRMPage() {
           <MultiFilter label="Etapa" selected={filterStage} onChange={setFilterStage} options={PRODUCTS[activeProduct]?.stages || []} filterId="stage" />
           {brands.some(b => b.culinaria) && <MultiFilter label="Culinaria" selected={filterCulinaria} onChange={setFilterCulinaria} options={[...new Set(brands.map(b => b.culinaria).filter(Boolean))].sort()} filterId="culinaria" />}
           <button onClick={() => setFilterTag(p => !p)} style={{ padding: '6px 14px', borderRadius: 8, border: filterTag ? '2px solid #7c3aed' : '1px solid #e2e8f0', background: filterTag ? '#f3e8ff' : '#fff', color: filterTag ? '#7c3aed' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>AT</button>
+          {activeProduct === 'saipos' && (
+            <select value={filterTopDown} onChange={e => setFilterTopDown(e.target.value)} style={{ padding: '6px 12px', borderRadius: 8, border: filterTopDown ? '2px solid #b45309' : '1px solid #e2e8f0', background: filterTopDown ? '#fef3c7' : '#fff', color: filterTopDown ? '#b45309' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer', outline: 'none' }}>
+              <option value="">Top Down</option>
+              <option value="Top Down">Top Down</option>
+              <option value="Não Top Down">Não Top Down</option>
+            </select>
+          )}
           <MultiFilter label="Base Elegivel" selected={filterBaseElegivel} onChange={setFilterBaseElegivel} options={["FY26","FY27","Organico 3S"]} filterId="base" />
           {activeProduct === 'totem' && <MultiFilter label="HAAS/SAAS" selected={filterHaas} onChange={setFilterHaas} options={["HAAS","SAAS"]} filterId="haas" />}
           {product?.closedStages && (
@@ -882,6 +891,8 @@ export default function CRMPage() {
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
                           {b.analise_teste_pdv && <span style={{ fontSize: 10, background: '#f3e8ff', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>AT</span>}
+                          {b.top_down === 'Top Down' && <span style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>TD</span>}
+                          {b.top_down === 'Não Top Down' && <span style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>NTD</span>}
                           {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
                           {b.culinaria && <span style={{ fontSize: 10, background: "#faf5ff", color: "#7c3aed", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.culinaria}</span>}
                           {b.produto_totem && <span style={{ fontSize: 10, background: "#fefce8", color: "#a16207", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.produto_totem}</span>}
