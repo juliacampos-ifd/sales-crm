@@ -579,7 +579,7 @@ export default function CRMPage() {
     { year: 2027, month: 1 }, { year: 2027, month: 2 }, { year: 2027, month: 3 },
   ];
   const MONTH_LABELS = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  const canEditForecast = profile?.role === 'gestor' || profile?.role === 'admin';
+  const canEditForecast = profile?.role === 'gestor' || profile?.role === 'admin' || profile?.role === 'executivo';
 
   const loadForecast = async () => {
     try {
@@ -896,6 +896,7 @@ export default function CRMPage() {
                           {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
                           {b.culinaria && <span style={{ fontSize: 10, background: "#faf5ff", color: "#7c3aed", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.culinaria}</span>}
                           {b.produto_totem && <span style={{ fontSize: 10, background: "#fefce8", color: "#a16207", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.produto_totem}</span>}
+                          {b.base_totem && <span style={{ fontSize: 10, background: "#f0f9ff", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 2 }}>{b.base_totem}</span>}
                           {Object.entries(b.pipelines || {}).filter(([k, v]) => k !== activeProduct && v.stage).map(([k]) => (
                             <div key={k} title={PRODUCTS[k]?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: PRODUCTS[k]?.color, marginTop: 3 }} />
                           ))}
@@ -946,7 +947,7 @@ export default function CRMPage() {
         {view === 'dashboard' && (
           <div>
 
-            {/* PIPELINE PRODUTOS POR PRODUTO */}
+            {/* PIPELINE PDVs POR PRODUTO */}
             {(() => {
               const getPdvBrands = (pk, stages, classFilter) => brands.filter(b => {
                 const st = b.pipelines?.[pk]?.stage;
@@ -1049,7 +1050,7 @@ export default function CRMPage() {
 
               return (
                 <div style={{ marginBottom: 20 }}>
-                  <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Pipeline Produtos</h4>
+                  <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Pipeline PDVs</h4>
                   {pdvRows.map((row) => {
                     const topoB = getPdvBrands(row.pk, row.topo, row.classFilter);
                     const meioB = getPdvBrands(row.pk, row.meio, row.classFilter);
@@ -1570,6 +1571,35 @@ export default function CRMPage() {
                   <span style={{ color: '#64748b' }}>Exec. Delivery</span>
                   <input value={editExecDelivery} onChange={e => { setEditExecDelivery(e.target.value); setInfoChanged(true); }} disabled={!canEdit} placeholder="—" style={{ width: 160, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none', opacity: canEdit ? 1 : 0.6 }} />
                 </div>
+                {/* Base Totem (origem: Hunting VS, Inbound VS, etc.) */}
+                {selectedBrand?.pipelines?.totem && canEdit && (
+                  <div style={{ marginBottom: 12 }}>
+                    <span style={{ color: '#64748b', display: 'block', marginBottom: 6 }}>Base Totem (origem)</span>
+                    <select
+                      value={selectedBrand.base_totem || ''}
+                      onChange={async (e) => {
+                        const val = e.target.value;
+                        await apiFetch('/api/brands', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedBrand.id, base_totem: val }) });
+                        setSelectedBrand(prev => ({ ...prev, base_totem: val }));
+                        setBrands(prev => prev.map(b => b.id === selectedBrand.id ? { ...b, base_totem: val } : b));
+                      }}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, background: '#fff', color: '#1e293b', cursor: 'pointer', outline: 'none' }}
+                    >
+                      <option value="">Selecionar origem...</option>
+                      <option value="HUNTING VS">HUNTING VS</option>
+                      <option value="Farming 3S">Farming 3S</option>
+                      <option value="HUNTING 3S">HUNTING 3S</option>
+                      <option value="HUNTING SAIPOS">HUNTING SAIPOS</option>
+                      <option value="Inbound VS">Inbound VS</option>
+                    </select>
+                  </div>
+                )}
+                {selectedBrand?.pipelines?.totem && !canEdit && selectedBrand.base_totem && (
+                  <div style={{ marginBottom: 12 }}>
+                    <span style={{ color: '#64748b', display: 'block', marginBottom: 4, fontSize: 12 }}>Base Totem</span>
+                    <span style={{ fontSize: 13, color: '#1e293b', fontWeight: 600 }}>{selectedBrand.base_totem}</span>
+                  </div>
+                )}
                 {/* HAAS/SAAS multi-select */}
                 <div style={{ fontSize: 13, padding: '4px 0' }}>
                   <span style={{ color: '#64748b', display: 'block', marginBottom: 6 }}>Produto Totem (HAAS/SAAS)</span>
