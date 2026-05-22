@@ -102,7 +102,7 @@ export default function CRMPage() {
     setEditPDV(brand.pdv_atual || '');
     const be = brand.base_elegivel || '';
     setEditBaseElegivel(be ? be.split(',').map(s => s.trim()).filter(Boolean) : []);
-    setEditFUP(brand.proximo_passo || '');
+    setEditFUP(brand.pipelines?.[activeProduct]?.proximo_passo || '');
     setEditCulinaria(brand.culinaria || '');
     setEditCoordDelivery(brand.coordenador_delivery || '');
     setEditExecDelivery(brand.executivo_delivery || '');
@@ -380,7 +380,7 @@ export default function CRMPage() {
       if (editPDV !== (selectedBrand.pdv_atual || '')) updates.pdv_atual = editPDV;
       const newBE = editBaseElegivel.join(', ');
       if (newBE !== (selectedBrand.base_elegivel || '')) updates.base_elegivel = newBE;
-      if (editFUP !== (selectedBrand.proximo_passo || '')) updates.proximo_passo = editFUP;
+      if (editFUP !== (selectedBrand.pipelines?.[activeProduct]?.proximo_passo || '')) updates.proximo_passo = editFUP;
       if (editCulinaria !== (selectedBrand.culinaria || '' )) updates.culinaria = editCulinaria;
       if (editCoordDelivery !== (selectedBrand.coordenador_delivery || '')) updates.coordenador_delivery = editCoordDelivery;
       if (editExecDelivery !== (selectedBrand.executivo_delivery || '')) updates.executivo_delivery = editExecDelivery;
@@ -388,7 +388,7 @@ export default function CRMPage() {
         await apiFetch('/api/brands', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: selectedBrand.id, ...updates, user_id: user?.id, user_name: profile?.name }),
+          body: JSON.stringify({ id: selectedBrand.id, ...updates, product: activeProduct, user_id: user?.id, user_name: profile?.name }),
         });
       }
       const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
@@ -402,7 +402,7 @@ export default function CRMPage() {
           setEditPDV(updated.pdv_atual || '');
           const be = updated.base_elegivel || '';
           setEditBaseElegivel(be ? be.split(',').map(s => s.trim()).filter(Boolean) : []);
-          setEditFUP(updated.proximo_passo || '');
+          setEditFUP(updated.pipelines?.[activeProduct]?.proximo_passo || '');
         }
       }
       setInfoChanged(false);
@@ -895,8 +895,8 @@ export default function CRMPage() {
                           {b.top_down === 'Não Top Down' && <span style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>NTD</span>}
                           {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
                           {b.culinaria && <span style={{ fontSize: 10, background: "#faf5ff", color: "#7c3aed", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.culinaria}</span>}
-                          {b.produto_totem && <span style={{ fontSize: 10, background: "#fefce8", color: "#a16207", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.produto_totem}</span>}
-                          {b.base_totem && <span style={{ fontSize: 10, background: "#f0f9ff", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 2 }}>{b.base_totem}</span>}
+                          {activeProduct === 'totem' && b.produto_totem && <span style={{ fontSize: 10, background: "#fefce8", color: "#a16207", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.produto_totem}</span>}
+                          {activeProduct === 'totem' && b.base_totem && <span style={{ fontSize: 10, background: "#f0f9ff", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 2 }}>{b.base_totem}</span>}
                           {Object.entries(b.pipelines || {}).filter(([k, v]) => k !== activeProduct && v.stage).map(([k]) => (
                             <div key={k} title={PRODUCTS[k]?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: PRODUCTS[k]?.color, marginTop: 3 }} />
                           ))}
@@ -1011,7 +1011,7 @@ export default function CRMPage() {
                   perdidasLabel: 'Perdido',
                 },
                 {
-                  label: 'Comer Fora', color: '#f59e0b', pk: 'comer_fora', classFilter: null,
+                  label: 'Comer Fora', color: '#9C050B', pk: 'comer_fora', classFilter: null,
                   topo: ['Buscando Reuniao','Reuniao Agendada'],
                   topoLabel: 'Buscando · Reunião ag.',
                   meio: ['Reuniao Realizada'],
@@ -1024,7 +1024,7 @@ export default function CRMPage() {
                   perdidasLabel: null,
                 },
                 {
-                  label: 'Emilia Vision', color: '#06b6d4', pk: 'emilia_vision', classFilter: null,
+                  label: 'Emilia Vision', color: '#fa8072', pk: 'emilia_vision', classFilter: null,
                   topo: ['Buscando Reuniao','Reuniao Agendada'],
                   topoLabel: 'Buscando · Reunião ag.',
                   meio: ['Reuniao Realizada'],
