@@ -946,7 +946,7 @@ export default function CRMPage() {
         {view === 'dashboard' && (
           <div>
 
-            {/* PIPELINE PDVs POR PRODUTO */}
+            {/* PIPELINE PRODUTOS POR PRODUTO */}
             {(() => {
               const getPdvBrands = (pk, stages, classFilter) => brands.filter(b => {
                 const st = b.pipelines?.[pk]?.stage;
@@ -1049,7 +1049,7 @@ export default function CRMPage() {
 
               return (
                 <div style={{ marginBottom: 20 }}>
-                  <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Pipeline PDVs</h4>
+                  <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Pipeline Produtos</h4>
                   {pdvRows.map((row) => {
                     const topoB = getPdvBrands(row.pk, row.topo, row.classFilter);
                     const meioB = getPdvBrands(row.pk, row.meio, row.classFilter);
