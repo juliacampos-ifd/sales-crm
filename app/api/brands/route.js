@@ -23,7 +23,7 @@ export async function GET(request) {
   while (true) {
     let query = supabase
       .from('brands')
-      .select(`*, pipelines (id, product, stage, active, updated_at, responsavel)`)
+      .select(`*, pipelines(id, product, stage, active, updated_at, responsavel, proximo_passo, data_ultimo_fup)`)
       .order('marca', { ascending: true })
       .range(from, from + 999);
 
@@ -57,7 +57,7 @@ export async function GET(request) {
   const transformed = all.map(brand => {
     const pipelinesObj = {};
     (brand.pipelines || []).forEach(p => {
-      pipelinesObj[p.product] = { stage: p.stage, active: p.active, updated_at: p.updated_at, responsavel: p.responsavel };
+      pipelinesObj[p.product] = { stage: p.stage, active: p.active, updated_at: p.updated_at, responsavel: p.responsavel, proximo_passo: p.proximo_passo, data_ultimo_fup: p.data_ultimo_fup };
     });
     return { ...brand, pipelines: pipelinesObj };
   });
@@ -153,9 +153,74 @@ export async function PATCH(request) {
   const supabase = createServerClient();
   const body = await request.json();
 
-  const { id, user_id, user_name, ...updates } = body;
+  const { id, user_id, user_name, product, ...updates } = body;
   if (!id) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
+  }
+
+  // If product is provided and FUP fields are being updated, update pipelines table
+  const hasFupFields = updates.proximo_passo !== undefined || updates.data_ultimo_fup !== undefined;
+  if (product && hasFupFields) {
+    // Get current pipeline FUP value for history
+    const { data: currentPipeline } = await supabase
+      .from('pipelines')
+      .select('proximo_passo')
+      .eq('brand_id', id)
+      .eq('product', product)
+      .single();
+
+    const pipelineUpdates = {};
+    if (updates.proximo_passo !== undefined) pipelineUpdates.proximo_passo = updates.proximo_passo;
+    if (updates.data_ultimo_fup !== undefined) pipelineUpdates.data_ultimo_fup = updates.data_ultimo_fup;
+
+    const { error: pipelineError } = await supabase
+      .from('pipelines')
+      .update(pipelineUpdates)
+      .eq('brand_id', id)
+      .eq('product', product);
+
+    if (pipelineError) {
+      return NextResponse.json({ error: pipelineError.message }, { status: 500 });
+    }
+
+    // Log FUP changes in pipeline_history
+    if (updates.proximo_passo !== undefined && updates.proximo_passo !== (currentPipeline?.proximo_passo || '')) {
+      await supabase.from('pipeline_history').insert({
+        brand_id: id,
+        product: product,
+        from_stage: currentPipeline?.proximo_passo || '(vazio)',
+        to_stage: updates.proximo_passo || '(vazio)',
+        changed_by: user_id || null,
+        changed_by_name: user_name || 'Sistema',
+        notes: 'Atualizacao de FUP',
+      });
+    }
+
+    // Handle non-FUP fields normally if any
+    const nonFupUpdates = { ...updates };
+    delete nonFupUpdates.proximo_passo;
+    delete nonFupUpdates.data_ultimo_fup;
+    if (Object.keys(nonFupUpdates).length === 0) {
+      // No brand-level updates needed, fetch current brand and return
+      const { data: brandData } = await supabase.from('brands').select().eq('id', id).single();
+      return NextResponse.json({ brand: brandData });
+    }
+    // Continue with brand-level updates for non-FUP fields
+    const updates2 = nonFupUpdates;
+    const allowed2 = ['marca', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp', 'base_elegivel', 'culinaria', 'produto_totem', 'base_totem', 'coordenador_delivery', 'executivo_delivery', 'motivo_perda_standby', 'analise_teste_pdv', 'top_down'];
+    const safeUpdates2 = {};
+    allowed2.forEach(k => { if (updates2[k] !== undefined) safeUpdates2[k] = updates2[k]; });
+    if (safeUpdates2.qtd_lojas_fisicas !== undefined) {
+      const lojas = Number(safeUpdates2.qtd_lojas_fisicas) || 0;
+      if (lojas <= 30) safeUpdates2.classificacao = 'P';
+      else if (lojas <= 60) safeUpdates2.classificacao = 'M';
+      else safeUpdates2.classificacao = 'G';
+    }
+    if (Object.keys(safeUpdates2).length > 0) {
+      await supabase.from('brands').update(safeUpdates2).eq('id', id);
+    }
+    const { data: brandData2 } = await supabase.from('brands').select().eq('id', id).single();
+    return NextResponse.json({ brand: brandData2 });
   }
 
   // Get current values before update (for history)
