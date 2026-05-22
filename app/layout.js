@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'SalesCRM - iFood 3S',
+  title: 'SalesCRM - Hunting Salão',
   description: 'CRM de vendas multi-produto: 3S Checkout, Saipos, Comer Fora, GetIn, Emilia Vision',
 };
 
