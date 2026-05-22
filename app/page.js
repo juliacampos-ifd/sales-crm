@@ -945,12 +945,7 @@ export default function CRMPage() {
         {/* DASHBOARD */}
         {view === 'dashboard' && (
           <div>
-            <div style={{ display: 'flex', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
-              <KPI icon={Building2} label="Total Marcas" value={metrics.total} color="#EA1D2C" />
-              <KPI icon={Check} label="Contratos 3S" value={metrics.won3s} sub="Contrato assinado" color="#22c55e" />
-              <KPI icon={AlertCircle} label="Perdidos 3S" value={metrics.lost3s} sub={`${metrics.lostLojas} lojas`} color="#ef4444" />
-              <KPI icon={AlertCircle} label="Stand By 3S" value={metrics.standby3s} sub={`${metrics.standbyLojas} lojas`} color="#f59e0b" />
-            </div>
+
             {/* PIPELINE PDVs POR PRODUTO */}
             {(() => {
               const getPdvBrands = (pk, stages, classFilter) => brands.filter(b => {
@@ -965,56 +960,88 @@ export default function CRMPage() {
                 {
                   label: '3S P/M', color: '#EA1D2C', pk: '3s', classFilter: ['P','M'],
                   topo: ['1. Iniciado','2. Primeiro Contato Marca','3. Apresentacao'],
+                  topoLabel: 'Iniciado · Contato · Apresentação',
                   meio: ['4. Diagnostico','5. Demo/Showroom'],
+                  meioLabel: 'Diagnóstico · Demo/Showroom',
                   avanc: ['6. Negociacao','7. Piloto','8. Contrato enviado'],
+                  avancLabel: 'Negociação · Piloto · Contrato env.',
                   fechadas: ['9. Contrato assinado'],
+                  fechadasLabel: 'Contrato assinado',
                   perdidas: ['10. Perdido','11. Stand by'],
+                  perdidasLabel: 'Perdido · Stand by',
                 },
                 {
                   label: '3S G', color: '#EA1D2C', pk: '3s', classFilter: ['G'],
                   topo: ['1. Iniciado','2. Primeiro Contato Marca','3. Apresentacao'],
+                  topoLabel: 'Iniciado · Contato · Apresentação',
                   meio: ['4. Diagnostico','5. Demo/Showroom'],
+                  meioLabel: 'Diagnóstico · Demo/Showroom',
                   avanc: ['6. Negociacao','7. Piloto','8. Contrato enviado'],
+                  avancLabel: 'Negociação · Piloto · Contrato env.',
                   fechadas: ['9. Contrato assinado'],
+                  fechadasLabel: 'Contrato assinado',
                   perdidas: ['10. Perdido','11. Stand by'],
+                  perdidasLabel: 'Perdido · Stand by',
                 },
                 {
                   label: 'Saipos', color: '#3b82f6', pk: 'saipos', classFilter: null,
                   topo: ['1. Tentativa de contato','2. Contato inicial','3. Apresentacao'],
+                  topoLabel: 'Tentativa · Contato · Apresentação',
                   meio: ['4. Negociacao','5. Piloto'],
+                  meioLabel: 'Negociação · Piloto',
                   avanc: ['6. Contrato enviado'],
+                  avancLabel: 'Contrato enviado',
                   fechadas: ['7. Contrato assinado'],
+                  fechadasLabel: 'Contrato assinado',
                   perdidas: ['8. Perdido','9. Stand by'],
+                  perdidasLabel: 'Perdido · Stand by',
                 },
                 {
                   label: 'Totem', color: '#eab308', pk: 'totem', classFilter: null,
                   topo: ['1. Contato inicial'],
+                  topoLabel: 'Contato inicial',
                   meio: ['2. Negociacao'],
+                  meioLabel: 'Negociação',
                   avanc: ['3. Contrato Enviado','4. Primeiro Contrato Assinado'],
+                  avancLabel: 'Contrato env. · 1º Contrato',
                   fechadas: ['5. Rollout Finalizado'],
+                  fechadasLabel: 'Rollout finalizado',
                   perdidas: ['6. Perdido'],
+                  perdidasLabel: 'Perdido',
                 },
                 {
                   label: 'Comer Fora', color: '#f59e0b', pk: 'comer_fora', classFilter: null,
                   topo: ['Buscando Reuniao','Reuniao Agendada'],
+                  topoLabel: 'Buscando · Reunião ag.',
                   meio: ['Reuniao Realizada'],
+                  meioLabel: 'Reunião realizada',
                   avanc: ['Em negociacao'],
+                  avancLabel: 'Em negociação',
                   fechadas: ['Aceite'],
+                  fechadasLabel: 'Aceite',
                   perdidas: [],
+                  perdidasLabel: null,
                 },
                 {
                   label: 'Emilia Vision', color: '#06b6d4', pk: 'emilia_vision', classFilter: null,
                   topo: ['Buscando Reuniao','Reuniao Agendada'],
+                  topoLabel: 'Buscando · Reunião ag.',
                   meio: ['Reuniao Realizada'],
+                  meioLabel: 'Reunião realizada',
                   avanc: ['Em negociacao'],
+                  avancLabel: 'Em negociação',
                   fechadas: ['Aceite'],
+                  fechadasLabel: 'Aceite',
                   perdidas: [],
+                  perdidasLabel: null,
                 },
               ];
 
-              const PdvCard = ({ label, marcas, lojas, color }) => (
+              const PdvCard = ({ label, stageLabel, marcas, lojas, color }) => (
                 <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, boxShadow: '0 1px 3px rgba(0,0,0,.05)', border: '1px solid #f1f5f9' }}>
-                  <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
+                  <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
+                  {stageLabel && <div style={{ color: '#cbd5e1', fontSize: 10, marginBottom: 6, marginTop: 2 }}>{stageLabel}</div>}
+                  {!stageLabel && <div style={{ marginBottom: 6 }} />}
                   <div style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{marcas}</div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{lojas} lojas</div>
                 </div>
@@ -1038,13 +1065,13 @@ export default function CRMPage() {
                           <span style={{ fontWeight: 700, fontSize: 13, color: row.color }}>{row.label}</span>
                         </div>
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                          <PdvCard label="Total Marcas" marcas={totalM} lojas={totalL} color="#1e293b" />
-                          <PdvCard label="Topo do Funil" marcas={topoB.length} lojas={sumLojas(topoB)} />
-                          <PdvCard label="Meio do Funil" marcas={meioB.length} lojas={sumLojas(meioB)} />
-                          <PdvCard label="Avançadas" marcas={avancB.length} lojas={sumLojas(avancB)} />
-                          <PdvCard label="Fechadas" marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" />
+                          <PdvCard label="Total Marcas" stageLabel={null} marcas={totalM} lojas={totalL} color="#1e293b" />
+                          <PdvCard label="Topo do Funil" stageLabel={row.topoLabel} marcas={topoB.length} lojas={sumLojas(topoB)} />
+                          <PdvCard label="Meio do Funil" stageLabel={row.meioLabel} marcas={meioB.length} lojas={sumLojas(meioB)} />
+                          <PdvCard label="Avançadas" stageLabel={row.avancLabel} marcas={avancB.length} lojas={sumLojas(avancB)} />
+                          <PdvCard label="Fechadas" stageLabel={row.fechadasLabel} marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" />
                           {perdidasB !== null ? (
-                            <PdvCard label="Perdidas/Stand By" marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" />
+                            <PdvCard label="Perdidas/Stand By" stageLabel={row.perdidasLabel} marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" />
                           ) : (
                             <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, border: '1px solid #f1f5f9', opacity: 0.4 }}>
                               <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 6, fontWeight: 600 }}>Perdidas/Stand By</div>
