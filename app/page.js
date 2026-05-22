@@ -847,8 +847,7 @@ export default function CRMPage() {
           <button onClick={() => setFilterTag(p => !p)} style={{ padding: '6px 14px', borderRadius: 8, border: filterTag ? '2px solid #7c3aed' : '1px solid #e2e8f0', background: filterTag ? '#f3e8ff' : '#fff', color: filterTag ? '#7c3aed' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>AT</button>
           {activeProduct === 'saipos' && (
             <select value={filterTopDown} onChange={e => setFilterTopDown(e.target.value)} style={{ padding: '6px 12px', borderRadius: 8, border: filterTopDown ? '2px solid #b45309' : '1px solid #e2e8f0', background: filterTopDown ? '#fef3c7' : '#fff', color: filterTopDown ? '#b45309' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer', outline: 'none' }}>
-              <option value="" disabled hidden>Top Down / NTD</option>
-              <option value="">Todos</option>
+              <option value="">Top Down</option>
               <option value="Top Down">Top Down</option>
               <option value="Não Top Down">Não Top Down</option>
             </select>
@@ -952,41 +951,120 @@ export default function CRMPage() {
               <KPI icon={AlertCircle} label="Perdidos 3S" value={metrics.lost3s} sub={`${metrics.lostLojas} lojas`} color="#ef4444" />
               <KPI icon={AlertCircle} label="Stand By 3S" value={metrics.standby3s} sub={`${metrics.standbyLojas} lojas`} color="#f59e0b" />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div style={{ background: '#fff', borderRadius: 14, padding: 20, border: '1px solid #e2e8f0' }}>
-                <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Marcas Ativas por Produto</h4>
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={Object.entries(metrics.activeByProduct).map(([k, v]) => ({ name: PRODUCTS[k]?.name || k, count: v, fill: PRODUCTS[k]?.color || '#EA1D2C' }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                    <Tooltip />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {Object.keys(metrics.activeByProduct).map((k, i) => <Cell key={i} fill={PRODUCTS[k]?.color || '#EA1D2C'} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div style={{ background: '#fff', borderRadius: 14, padding: 20, border: '1px solid #e2e8f0' }}>
-                <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Top 10 Estados</h4>
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={Object.entries(metrics.byEstado).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, value]) => ({ name, value }))} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} />
-                    <YAxis dataKey="name" type="category" width={30} tick={{ fontSize: 11, fill: '#64748b' }} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#DA5D69" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            {/* PIPELINE PDVs POR PRODUTO */}
+            {(() => {
+              const getPdvBrands = (pk, stages, classFilter) => brands.filter(b => {
+                const st = b.pipelines?.[pk]?.stage;
+                if (!st || st === '0. Nao Iniciado' || st === '14. Desativado') return false;
+                if (classFilter && !classFilter.includes(b.classificacao)) return false;
+                return stages.includes(st);
+              });
+              const sumLojas = (list) => list.reduce((s, b) => s + (parseInt(b.qtd_lojas_fisicas) || 0), 0);
+
+              const pdvRows = [
+                {
+                  label: '3S P/M', color: '#EA1D2C', pk: '3s', classFilter: ['P','M'],
+                  topo: ['1. Iniciado','2. Primeiro Contato Marca','3. Apresentacao'],
+                  meio: ['4. Diagnostico','5. Demo/Showroom'],
+                  avanc: ['6. Negociacao','7. Piloto','8. Contrato enviado'],
+                  fechadas: ['9. Contrato assinado'],
+                  perdidas: ['10. Perdido','11. Stand by'],
+                },
+                {
+                  label: '3S G', color: '#EA1D2C', pk: '3s', classFilter: ['G'],
+                  topo: ['1. Iniciado','2. Primeiro Contato Marca','3. Apresentacao'],
+                  meio: ['4. Diagnostico','5. Demo/Showroom'],
+                  avanc: ['6. Negociacao','7. Piloto','8. Contrato enviado'],
+                  fechadas: ['9. Contrato assinado'],
+                  perdidas: ['10. Perdido','11. Stand by'],
+                },
+                {
+                  label: 'Saipos', color: '#3b82f6', pk: 'saipos', classFilter: null,
+                  topo: ['1. Tentativa de contato','2. Contato inicial','3. Apresentacao'],
+                  meio: ['4. Negociacao','5. Piloto'],
+                  avanc: ['6. Contrato enviado'],
+                  fechadas: ['7. Contrato assinado'],
+                  perdidas: ['8. Perdido','9. Stand by'],
+                },
+                {
+                  label: 'Totem', color: '#eab308', pk: 'totem', classFilter: null,
+                  topo: ['1. Contato inicial'],
+                  meio: ['2. Negociacao'],
+                  avanc: ['3. Contrato Enviado','4. Primeiro Contrato Assinado'],
+                  fechadas: ['5. Rollout Finalizado'],
+                  perdidas: ['6. Perdido'],
+                },
+                {
+                  label: 'Comer Fora', color: '#f59e0b', pk: 'comer_fora', classFilter: null,
+                  topo: ['Buscando Reuniao','Reuniao Agendada'],
+                  meio: ['Reuniao Realizada'],
+                  avanc: ['Em negociacao'],
+                  fechadas: ['Aceite'],
+                  perdidas: [],
+                },
+                {
+                  label: 'Emilia Vision', color: '#06b6d4', pk: 'emilia_vision', classFilter: null,
+                  topo: ['Buscando Reuniao','Reuniao Agendada'],
+                  meio: ['Reuniao Realizada'],
+                  avanc: ['Em negociacao'],
+                  fechadas: ['Aceite'],
+                  perdidas: [],
+                },
+              ];
+
+              const PdvCard = ({ label, marcas, lojas, color }) => (
+                <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, boxShadow: '0 1px 3px rgba(0,0,0,.05)', border: '1px solid #f1f5f9' }}>
+                  <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{marcas}</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{lojas} lojas</div>
+                </div>
+              );
+
+              return (
+                <div style={{ marginBottom: 20 }}>
+                  <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Pipeline PDVs</h4>
+                  {pdvRows.map((row) => {
+                    const topoB = getPdvBrands(row.pk, row.topo, row.classFilter);
+                    const meioB = getPdvBrands(row.pk, row.meio, row.classFilter);
+                    const avancB = getPdvBrands(row.pk, row.avanc, row.classFilter);
+                    const fechadasB = getPdvBrands(row.pk, row.fechadas, row.classFilter);
+                    const perdidasB = row.perdidas.length > 0 ? getPdvBrands(row.pk, row.perdidas, row.classFilter) : null;
+                    const totalM = topoB.length + meioB.length + avancB.length + fechadasB.length + (perdidasB?.length || 0);
+                    const totalL = sumLojas(topoB) + sumLojas(meioB) + sumLojas(avancB) + sumLojas(fechadasB) + (perdidasB ? sumLojas(perdidasB) : 0);
+                    return (
+                      <div key={row.label} style={{ marginBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: row.color, flexShrink: 0 }} />
+                          <span style={{ fontWeight: 700, fontSize: 13, color: row.color }}>{row.label}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          <PdvCard label="Total Marcas" marcas={totalM} lojas={totalL} color="#1e293b" />
+                          <PdvCard label="Topo do Funil" marcas={topoB.length} lojas={sumLojas(topoB)} />
+                          <PdvCard label="Meio do Funil" marcas={meioB.length} lojas={sumLojas(meioB)} />
+                          <PdvCard label="Avançadas" marcas={avancB.length} lojas={sumLojas(avancB)} />
+                          <PdvCard label="Fechadas" marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" />
+                          {perdidasB !== null ? (
+                            <PdvCard label="Perdidas/Stand By" marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" />
+                          ) : (
+                            <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, border: '1px solid #f1f5f9', opacity: 0.4 }}>
+                              <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 6, fontWeight: 600 }}>Perdidas/Stand By</div>
+                              <div style={{ fontSize: 20, fontWeight: 700, color: '#94a3b8' }}>—</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
             {/* PERDIDOS E STAND BY POR MOTIVO */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
-              {[{ title: 'Perdidos por Motivo', data: metrics.lostByReason, color: '#ef4444', total: metrics.lost3s, totalLojas: metrics.lostLojas },
-                { title: 'Stand By por Motivo', data: metrics.standbyByReason, color: '#f59e0b', total: metrics.standby3s, totalLojas: metrics.standbyLojas }
+              {[{ title: 'Perdidos por Motivo', badge: '3S', data: metrics.lostByReason, color: '#ef4444', total: metrics.lost3s, totalLojas: metrics.lostLojas },
+                { title: 'Stand By por Motivo', badge: '3S', data: metrics.standbyByReason, color: '#f59e0b', total: metrics.standby3s, totalLojas: metrics.standbyLojas }
               ].map(section => (
                 <div key={section.title} style={{ background: '#fff', borderRadius: 14, padding: 20, border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>{section.title}</h4>
+                  <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center' }}>{section.title}{section.badge && <span style={{ background: '#fef2f2', color: '#EA1D2C', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600, marginLeft: 8 }}>{section.badge}</span>}</h4>
                   {Object.keys(section.data).length === 0 ? (
                     <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 20 }}>Nenhum registro</p>
                   ) : (
