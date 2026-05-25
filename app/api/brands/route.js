@@ -23,7 +23,7 @@ export async function GET(request) {
   while (true) {
     let query = supabase
       .from('brands')
-      .select(`*, pipelines(id, product, stage, active, updated_at, responsavel, proximo_passo, data_ultimo_fup)`)
+      .select(`*, pipelines(id, product, stage, active, updated_at, responsavel, proximo_passo, data_ultimo_fup), comer_fora_details(*)`)
       .order('marca', { ascending: true })
       .range(from, from + 999);
 
@@ -59,7 +59,8 @@ export async function GET(request) {
     (brand.pipelines || []).forEach(p => {
       pipelinesObj[p.product] = { stage: p.stage, active: p.active, updated_at: p.updated_at, responsavel: p.responsavel, proximo_passo: p.proximo_passo, data_ultimo_fup: p.data_ultimo_fup };
     });
-    return { ...brand, pipelines: pipelinesObj };
+    const cfDetails = (brand.comer_fora_details || [])[0] || null;
+    return { ...brand, pipelines: pipelinesObj, comer_fora_details: cfDetails };
   });
 
   // Consolidate reactivated brands: same marca name -> merge into active entry
