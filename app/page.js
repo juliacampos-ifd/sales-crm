@@ -103,6 +103,8 @@ export default function CRMPage() {
     const be = brand.base_elegivel || '';
     setEditBaseElegivel(be ? be.split(',').map(s => s.trim()).filter(Boolean) : []);
     setEditFUP(brand.pipelines?.[activeProduct]?.proximo_passo || '');
+    setCfDetails(brand.comer_fora_details || {});
+    setCfChanged(false);
     setEditCulinaria(brand.culinaria || '');
     setEditCoordDelivery(brand.coordenador_delivery || '');
     setEditExecDelivery(brand.executivo_delivery || '');
@@ -854,6 +856,14 @@ export default function CRMPage() {
           )}
           <MultiFilter label="Base Elegivel" selected={filterBaseElegivel} onChange={setFilterBaseElegivel} options={["FY26","FY27","Organico 3S"]} filterId="base" />
           {activeProduct === 'totem' && <MultiFilter label="HAAS/SAAS" selected={filterHaas} onChange={setFilterHaas} options={["HAAS","SAAS"]} filterId="haas" />}
+          {activeProduct === 'comer_fora' && (<>
+            <MultiFilter label="Estrategia" selected={filterCFEstrategia} onChange={setFilterCFEstrategia} options={[...new Set(brands.filter(b=>b.comer_fora_details?.estrategia).map(b=>b.comer_fora_details.estrategia))].sort()} filterId="cf_estrategia" />
+            <MultiFilter label="Solucao" selected={filterCFSolucao} onChange={setFilterCFSolucao} options={[...new Set(brands.filter(b=>b.comer_fora_details?.solucao).map(b=>b.comer_fora_details.solucao))].sort()} filterId="cf_solucao" />
+            <MultiFilter label="Provider" selected={filterCFProvider} onChange={setFilterCFProvider} options={[...new Set(brands.filter(b=>b.comer_fora_details?.provider).map(b=>b.comer_fora_details.provider))].sort()} filterId="cf_provider" />
+            <MultiFilter label="Cidade" selected={filterCFCidade} onChange={setFilterCFCidade} options={[...new Set(brands.filter(b=>b.comer_fora_details?.cidade).map(b=>b.comer_fora_details.cidade))].sort()} filterId="cf_cidade" />
+            <MultiFilter label="Trade" selected={filterCFTrade} onChange={setFilterCFTrade} options={['Sim','Não']} filterId="cf_trade" />
+            <MultiFilter label="Prioridade" selected={filterCFPrioridade} onChange={setFilterCFPrioridade} options={['1','2','3']} filterId="cf_prioridade" />
+          </>)}
           {product?.closedStages && (
             <button onClick={() => setShowClosed(!showClosed)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: showClosed ? '#fef2f2' : '#fff', color: showClosed ? '#ef4444' : '#64748b', cursor: 'pointer' }}>
               {showClosed ? 'Ocultar Perdidos' : 'Mostrar Perdidos'}
@@ -1571,7 +1581,76 @@ export default function CRMPage() {
                   <span style={{ color: '#64748b' }}>Exec. Delivery</span>
                   <input value={editExecDelivery} onChange={e => { setEditExecDelivery(e.target.value); setInfoChanged(true); }} disabled={!canEdit} placeholder="—" style={{ width: 160, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none', opacity: canEdit ? 1 : 0.6 }} />
                 </div>
-                {/* Base Totem (origem: Hunting VS, Inbound VS, etc.) */}
+                {/* Comer Fora Details */}
+                {selectedBrand?.pipelines?.comer_fora && (
+                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, marginTop: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#9C050B', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Comer Fora</div>
+
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Estratégia</span>
+                      <select disabled={!canEdit} value={cfDetails.estrategia || ''} onChange={e => { setCfDetails(p => ({...p, estrategia: e.target.value})); setCfChanged(true); }}
+                        style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, background: '#fff', outline: 'none', opacity: canEdit ? 1 : 0.6 }}>
+                        <option value="">—</option>
+                        <option>Hunter</option><option>Hunter CRM Food</option><option>Saipos</option>
+                      </select>
+                    </div>
+
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Solução</span>
+                      <input disabled={!canEdit} value={cfDetails.solucao || ''} onChange={e => { setCfDetails(p => ({...p, solucao: e.target.value})); setCfChanged(true); }}
+                        placeholder="—" style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, outline: 'none', boxSizing: 'border-box', opacity: canEdit ? 1 : 0.6 }} />
+                    </div>
+
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Provider</span>
+                      <input disabled={!canEdit} value={cfDetails.provider || ''} onChange={e => { setCfDetails(p => ({...p, provider: e.target.value})); setCfChanged(true); }}
+                        placeholder="—" style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, outline: 'none', boxSizing: 'border-box', opacity: canEdit ? 1 : 0.6 }} />
+                    </div>
+
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Cidade</span>
+                      <input disabled={!canEdit} value={cfDetails.cidade || ''} onChange={e => { setCfDetails(p => ({...p, cidade: e.target.value})); setCfChanged(true); }}
+                        placeholder="—" style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, outline: 'none', boxSizing: 'border-box', opacity: canEdit ? 1 : 0.6 }} />
+                    </div>
+
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Feedback cliente</span>
+                      <textarea disabled={!canEdit} value={cfDetails.feedback_cliente || ''} onChange={e => { setCfDetails(p => ({...p, feedback_cliente: e.target.value})); setCfChanged(true); }}
+                        rows={2} placeholder="—" style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', opacity: canEdit ? 1 : 0.6 }} />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 12 }}>Trade</span>
+                      <button disabled={!canEdit} onClick={() => { if (canEdit) { setCfDetails(p => ({...p, trade: !p.trade})); setCfChanged(true); } }}
+                        style={{ padding: '4px 14px', borderRadius: 20, border: cfDetails.trade ? '2px solid #9C050B' : '1px solid #e2e8f0', background: cfDetails.trade ? '#fff0f0' : '#fff', color: cfDetails.trade ? '#9C050B' : '#64748b', fontSize: 12, fontWeight: 600, cursor: canEdit ? 'pointer' : 'default', opacity: canEdit ? 1 : 0.6 }}>
+                        {cfDetails.trade ? 'Sim' : 'Não'}
+                      </button>
+                    </div>
+
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Prioridade</span>
+                      <select disabled={!canEdit} value={cfDetails.prioridade || ''} onChange={e => { setCfDetails(p => ({...p, prioridade: e.target.value ? Number(e.target.value) : null})); setCfChanged(true); }}
+                        style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, background: '#fff', outline: 'none', opacity: canEdit ? 1 : 0.6 }}>
+                        <option value="">—</option>
+                        <option value="1">1 — Alta</option><option value="2">2 — Média</option><option value="3">3 — Baixa</option>
+                      </select>
+                    </div>
+
+                    {canEdit && cfChanged && (
+                      <button onClick={async () => {
+                        await apiFetch('/api/comer-fora', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ brand_id: selectedBrand.id, ...cfDetails }) });
+                        setCfChanged(false);
+                        const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
+                        const freshData = await freshRes.json();
+                        if (freshData.brands) { setBrands(freshData.brands); const updated = freshData.brands.find(b => b.id === selectedBrand.id); if (updated) { setSelectedBrand(updated); setCfDetails(updated.comer_fora_details || {}); } }
+                      }} style={{ width: '100%', padding: '8px', borderRadius: 8, background: '#9C050B', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: 4 }}>
+                        Salvar Comer Fora
+                      </button>
+                    )}
+                  </div>
+                )}
+                                {/* Base Totem (origem: Hunting VS, Inbound VS, etc.) */}
                 {selectedBrand?.pipelines?.totem && canEdit && (
                   <div style={{ marginBottom: 12 }}>
                     <span style={{ color: '#64748b', display: 'block', marginBottom: 6 }}>Base Totem (origem)</span>
