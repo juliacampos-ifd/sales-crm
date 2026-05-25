@@ -43,6 +43,14 @@ export default function CRMPage() {
   const [filterTopDown, setFilterTopDown] = useState('');
   const [filterBaseElegivel, setFilterBaseElegivel] = useState([]);
   const [filterHaas, setFilterHaas] = useState([]);
+  const [filterCFEstrategia, setFilterCFEstrategia] = useState([]);
+  const [filterCFSolucao, setFilterCFSolucao] = useState([]);
+  const [filterCFProvider, setFilterCFProvider] = useState([]);
+  const [filterCFCidade, setFilterCFCidade] = useState([]);
+  const [filterCFTrade, setFilterCFTrade] = useState([]);
+  const [filterCFPrioridade, setFilterCFPrioridade] = useState([]);
+  const [cfDetails, setCfDetails] = useState({});
+  const [cfChanged, setCfChanged] = useState(false);
   // Forecast
   const [forecastMetas, setForecastMetas] = useState([]);
   const [forecastEntries, setForecastEntries] = useState([]);
