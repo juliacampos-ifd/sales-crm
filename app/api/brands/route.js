@@ -59,7 +59,7 @@ export async function GET(request) {
     (brand.pipelines || []).forEach(p => {
       pipelinesObj[p.product] = { stage: p.stage, active: p.active, updated_at: p.updated_at, responsavel: p.responsavel, proximo_passo: p.proximo_passo, data_ultimo_fup: p.data_ultimo_fup };
     });
-    const cfDetails = (brand.comer_fora_details || [])[0] || null;
+    const cfDetails = Array.isArray(brand.comer_fora_details) ? (brand.comer_fora_details[0] || null) : (brand.comer_fora_details || null);
     return { ...brand, pipelines: pipelinesObj, comer_fora_details: cfDetails };
   });
 
