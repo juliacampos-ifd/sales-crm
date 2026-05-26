@@ -76,6 +76,69 @@ function emptyMetrics() {
   return obj;
 }
 
+// ---- WoW helpers ----
+function getWednesdays(year, month) {
+  // Returns the reference Wednesday and the previous Wednesday for WoW comparison
+  // month is 1-based
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayOfWeek = today.getDay(); // 0=Sun, 3=Wed
+
+  let refWed;
+  if (dayOfWeek === 3) {
+    // Today is Wednesday - use today
+    refWed = new Date(today);
+  } else {
+    // Find last Wednesday
+    const diff = (dayOfWeek + 7 - 3) % 7 || 7;
+    refWed = new Date(today);
+    refWed.setDate(today.getDate() - diff);
+  }
+
+  const prevWed = new Date(refWed);
+  prevWed.setDate(refWed.getDate() - 7);
+
+  // Only return WoW data if the reference Wednesday is in the selected month
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0, 23, 59, 59);
+
+  return { refWed, prevWed, monthStart, monthEnd };
+}
+
+function computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, cutoffDate, yearMonth) {
+  const DUPLA_KEYS = ['lidia_gabi', 'joao_diego', 'michel_emerson'];
+  const realized = { total: emptyMetrics() };
+  DUPLA_KEYS.forEach(k => { realized[k] = emptyMetrics(); });
+  const seen = new Set();
+
+  allHistRaw.forEach(entry => {
+    const metric = stageToMetric(entry.to_stage);
+    if (!metric) return;
+    const brand = brandLk[entry.brand_id];
+    if (!brand) return;
+    const marcaKey = (brand.marca || '').trim().toLowerCase();
+    const active = activeBrand[marcaKey];
+    if (!active) return;
+    if (!isPorM(active)) return;
+    const dt = new Date(entry.created_at);
+    const ym = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+    if (ym !== yearMonth) return;
+    if (dt > cutoffDate) return;
+    const dedupKey = marcaKey + '|' + ym + '|' + metric;
+    if (seen.has(dedupKey)) return;
+    seen.add(dedupKey);
+    const dupla = getDupla(active, pipeByBrand);
+    realized.total[metric]++;
+    realized[dupla][metric]++;
+    if (metric === 'contrato_assinado' && active.qtd_lojas_fisicas) {
+      realized.total.lojas += active.qtd_lojas_fisicas;
+      realized[dupla].lojas += active.qtd_lojas_fisicas;
+    }
+  });
+
+  return realized;
+}
+
 export async function GET(request) {
   const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -249,6 +312,50 @@ export async function GET(request) {
       forecast[ym].total.lojas += (e.lojas || 0);
     });
 
+    // ---- WoW computation ----
+    const { searchParams } = new URL(request.url);
+    const reqMonth = parseInt(searchParams.get('month')) || (new Date().getMonth() + 1);
+    const reqYear = parseInt(searchParams.get('year')) || new Date().getFullYear();
+    const curKey = `${reqYear}-${String(reqMonth).padStart(2, '0')}`;
+
+    const { refWed, prevWed, monthStart } = getWednesdays(reqYear, reqMonth);
+
+    let wow = null;
+    // Only compute WoW if refWed is within the selected month
+    if (refWed >= monthStart && refWed.getMonth() + 1 === reqMonth && refWed.getFullYear() === reqYear) {
+      const refEnd = new Date(refWed);
+      refEnd.setHours(23, 59, 59, 999);
+      const prevEnd = new Date(prevWed);
+      prevEnd.setHours(23, 59, 59, 999);
+
+      const refRealized = computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, refEnd, curKey);
+
+      // prevWed might be in a different month - if so, prevRealized is all zeros
+      const prevYm = prevWed.getFullYear() + '-' + String(prevWed.getMonth() + 1).padStart(2, '0');
+      let prevRealized;
+      if (prevYm === curKey) {
+        prevRealized = computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, prevEnd, curKey);
+      } else {
+        // Previous Wednesday was in another month — previous week's MTD for this month was 0
+        prevRealized = { total: emptyMetrics() };
+        DUPLA_KEYS.forEach(k => { prevRealized[k] = emptyMetrics(); });
+      }
+
+      // Compute deltas
+      wow = { total: {}, refDate: refWed.toISOString().slice(0, 10), prevDate: prevWed.toISOString().slice(0, 10) };
+      DUPLA_KEYS.forEach(k => { wow[k] = {}; });
+
+      const wowMetrics = ['primeiro_contato', 'apresentacao', 'negociacao', 'contrato_assinado', 'lojas'];
+      const allKeys = ['total', ...DUPLA_KEYS];
+      allKeys.forEach(dk => {
+        wowMetrics.forEach(m => {
+          wow[dk][m] = (refRealized[dk]?.[m] || 0) - (prevRealized[dk]?.[m] || 0);
+        });
+        // Also include fechadas (= contrato_assinado alias)
+        wow[dk]['fechadas'] = wow[dk]['contrato_assinado'];
+      });
+    }
+
     const res = NextResponse.json({
       metas,
       realized,
@@ -256,6 +363,7 @@ export async function GET(request) {
       forecast,
       brandLists,
       eligBrands,
+      wow,
       _ts: new Date().toISOString(),
     });
     res.headers.set('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0, s-maxage=0');
