@@ -159,7 +159,7 @@ export async function GET(request) {
       paginate(sb, 'pipelines', 'brand_id,stage,responsavel,updated_at', [['product', '3s']]),
       paginate(sb, 'pipeline_history', 'brand_id,to_stage,created_at,changed_by_name', [['product', '3s']]),
       sb.from('funnel_metas').select('*').order('year').order('month'),
-      sb.from('forecast_entries').select('*').eq('section', '3s_pm'),
+      sb.from('forecast_entries').select('*').eq('section', classFilter === 'g' ? '3s_g' : '3s_pm'),
     ]);
 
     const metas = metasResult.data || [];
