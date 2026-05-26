@@ -3,31 +3,53 @@ import { requireAuth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
-export const revalidate = 0;
 
-// Returns WoW (Week-over-Week) pipeline deltas for the dashboard
-// Compares pipeline_history entries: MTD until this Wednesday vs MTD until last Wednesday
-// For each product, counts unique brands that entered each stage group
+function stageToGroup3s(stage) {
+  const s = (stage || '').trim().toLowerCase();
+  if (s.startsWith('1.') || s.startsWith('2.') || s.startsWith('3.')) return 'topo';
+  if (s.startsWith('4.') || s.startsWith('5.')) return 'meio';
+  if (s.startsWith('6.') || s.startsWith('7.') || s.startsWith('8.')) return 'avanc';
+  if (s.startsWith('9.')) return 'fechadas';
+  if (s.startsWith('10.') || s.startsWith('11.')) return 'perdidas';
+  return null;
+}
 
-function getWednesdays() {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dayOfWeek = today.getDay();
+function stageToGroupSaipos(stage) {
+  const s = (stage || '').trim().toLowerCase();
+  if (s.startsWith('1.') || s.startsWith('2.') || s.startsWith('3.')) return 'topo';
+  if (s.startsWith('4.') || s.startsWith('5.')) return 'meio';
+  if (s.startsWith('6.')) return 'avanc';
+  if (s.startsWith('7.')) return 'fechadas';
+  if (s.startsWith('8.') || s.startsWith('9.')) return 'perdidas';
+  return null;
+}
 
-  let refWed;
-  if (dayOfWeek === 3) {
-    refWed = new Date(today);
-  } else {
-    const diff = (dayOfWeek + 7 - 3) % 7 || 7;
-    refWed = new Date(today);
-    refWed.setDate(today.getDate() - diff);
-  }
+function stageToGroupTotem(stage) {
+  const s = (stage || '').trim().toLowerCase();
+  if (s.startsWith('1.')) return 'topo';
+  if (s.startsWith('2.')) return 'meio';
+  if (s.startsWith('3.') || s.startsWith('4.')) return 'avanc';
+  if (s.startsWith('5.')) return 'fechadas';
+  if (s.startsWith('6.')) return 'perdidas';
+  return null;
+}
 
-  const prevWed = new Date(refWed);
-  prevWed.setDate(refWed.getDate() - 7);
+function stageToGroupCF(stage) {
+  const s = (stage || '').trim().toLowerCase();
+  if (s === 'buscando reuniao' || s === 'reuniao agendada') return 'topo';
+  if (s === 'reuniao realizada') return 'meio';
+  if (s === 'em negociacao') return 'avanc';
+  if (s === 'aceite') return 'fechadas';
+  if (s === 'perdido' || s === 'stand by') return 'perdidas';
+  return null;
+}
 
-  return { refWed, prevWed };
+function stageToGroup(product, stage) {
+  if (product === '3s') return stageToGroup3s(stage);
+  if (product === 'saipos') return stageToGroupSaipos(stage);
+  if (product === 'totem') return stageToGroupTotem(stage);
+  if (product === 'comer_fora' || product === 'emilia_vision' || product === 'get_in') return stageToGroupCF(stage);
+  return null;
 }
 
 async function paginate(sb, table, cols, filters) {
@@ -45,34 +67,23 @@ async function paginate(sb, table, cols, filters) {
   return all;
 }
 
-// Maps a stage to a dashboard group for each product
-function stageToGroup(product, stage) {
-  const s = (stage || '').trim();
-  if (product === '3s') {
-    if (['1. Iniciado','2. Primeiro Contato Marca','3. Apresentacao'].includes(s)) return 'topo';
-    if (['4. Diagnostico','5. Demo/Showroom'].includes(s)) return 'meio';
-    if (['6. Negociacao','7. Piloto','8. Contrato enviado'].includes(s)) return 'avanc';
-    if (s === '9. Contrato assinado') return 'fechadas';
-    if (['10. Perdido','11. Stand by'].includes(s)) return 'perdidas';
-  } else if (product === 'saipos') {
-    if (['1. Tentativa de contato','2. Contato inicial','3. Apresentacao'].includes(s)) return 'topo';
-    if (['4. Negociacao','5. Piloto'].includes(s)) return 'meio';
-    if (s === '6. Contrato enviado') return 'avanc';
-    if (s === '7. Contrato assinado') return 'fechadas';
-    if (['8. Perdido','9. Stand by'].includes(s)) return 'perdidas';
-  } else if (product === 'totem') {
-    if (s === '1. Contato inicial') return 'topo';
-    if (s === '2. Negociacao') return 'meio';
-    if (['3. Contrato Enviado','4. Primeiro Contrato Assinado'].includes(s)) return 'avanc';
-    if (s === '5. Rollout Finalizado') return 'fechadas';
-    if (s === '6. Perdido') return 'perdidas';
-  } else if (product === 'comer_fora' || product === 'emilia_vision') {
-    if (['Buscando Reuniao','Reuniao Agendada'].includes(s)) return 'topo';
-    if (s === 'Reuniao Realizada') return 'meio';
-    if (s === 'Em negociacao') return 'avanc';
-    if (s === 'Aceite') return 'fechadas';
+function getMondays() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // Reference Monday: today if Monday (day===1), else most recent past Monday
+  let refMon = new Date(today);
+  const dow = refMon.getDay();
+  if (dow !== 1) {
+    const diff = (dow + 7 - 1) % 7;
+    refMon.setDate(refMon.getDate() - diff);
   }
-  return null;
+
+  // Previous Monday = refMon - 7
+  const prevMon = new Date(refMon);
+  prevMon.setDate(prevMon.getDate() - 7);
+
+  return { refMon, prevMon };
 }
 
 export async function GET(request) {
@@ -81,125 +92,134 @@ export async function GET(request) {
 
   try {
     const sb = createServerClient();
-    const { refWed, prevWed } = getWednesdays();
-
-    const now = new Date();
-    const curMonth = now.getMonth();
-    const curYear = now.getFullYear();
-
-    // Only compute if refWed is in the current month
-    if (refWed.getMonth() !== curMonth || refWed.getFullYear() !== curYear) {
-      return NextResponse.json({ wow: null, reason: 'No Wednesday in current month yet' });
-    }
-
-    const monthStart = new Date(curYear, curMonth, 1);
-    const refEnd = new Date(refWed); refEnd.setHours(23, 59, 59, 999);
-    const prevEnd = new Date(prevWed); prevEnd.setHours(23, 59, 59, 999);
-    const prevInSameMonth = prevWed >= monthStart;
+    const { refMon, prevMon } = getMondays();
 
     const products = ['3s', 'saipos', 'totem', 'comer_fora', 'emilia_vision'];
     const groups = ['topo', 'meio', 'avanc', 'fechadas', 'perdidas'];
 
-    // Fetch all history for current month
-    const allHist = await paginate(sb, 'pipeline_history', 'brand_id,product,to_stage,created_at');
+    // Fetch all pipelines and brands
+    const [allPipes, allBrands] = await Promise.all([
+      paginate(sb, 'pipelines', 'brand_id,product,stage,updated_at'),
+      paginate(sb, 'brands', 'id,marca,classificacao,qtd_lojas_fisicas'),
+    ]);
 
-    // Fetch brands for dedup
-    const allBrands = await paginate(sb, 'brands', 'id,marca,classificacao');
     const brandLk = {};
     allBrands.forEach(b => { brandLk[b.id] = b; });
 
-    const ym = curYear + '-' + String(curMonth + 1).padStart(2, '0');
+    // Current snapshot: count brands per product per group
+    const currentCounts = {};
+    products.forEach(pk => {
+      currentCounts[pk] = {};
+      groups.forEach(g => { currentCounts[pk][g] = { marcas: 0, lojas: 0 }; });
+    });
 
-    function countByGroup(cutoff) {
+    // Deduplicate: keep latest pipeline per brand+product
+    const latestPipe = {};
+    allPipes.forEach(p => {
+      const key = p.brand_id + '|' + p.product;
+      const existing = latestPipe[key];
+      if (!existing || (p.updated_at && (!existing.updated_at || p.updated_at > existing.updated_at))) {
+        latestPipe[key] = p;
+      }
+    });
+
+    Object.values(latestPipe).forEach(p => {
+      const brand = brandLk[p.brand_id];
+      if (!brand) return;
+      const group = stageToGroup(p.product, p.stage);
+      if (!group || !currentCounts[p.product]) return;
+      currentCounts[p.product][group].marcas++;
+      currentCounts[p.product][group].lojas += (parseInt(brand.qtd_lojas_fisicas) || 0);
+    });
+
+    // 3s_pm and 3s_g splits
+    currentCounts['3s_pm'] = {};
+    currentCounts['3s_g'] = {};
+    groups.forEach(g => {
+      currentCounts['3s_pm'][g] = { marcas: 0, lojas: 0 };
+      currentCounts['3s_g'][g] = { marcas: 0, lojas: 0 };
+    });
+    Object.values(latestPipe).filter(p => p.product === '3s').forEach(p => {
+      const brand = brandLk[p.brand_id];
+      if (!brand) return;
+      const group = stageToGroup('3s', p.stage);
+      if (!group) return;
+      const cls = (brand.classificacao || '').trim().toUpperCase();
+      const key = (cls === 'P' || cls === 'M') ? '3s_pm' : cls === 'G' ? '3s_g' : null;
+      if (key) {
+        currentCounts[key][group].marcas++;
+        currentCounts[key][group].lojas += (parseInt(brand.qtd_lojas_fisicas) || 0);
+      }
+    });
+
+    // Fetch pipeline history for WoW
+    const allHist = await paginate(sb, 'pipeline_history', 'brand_id,product,to_stage,from_stage,created_at');
+
+    // Count movements between prevMon and refMon
+    const refEnd = new Date(refMon); refEnd.setHours(23, 59, 59, 999);
+    const prevEnd = new Date(prevMon); prevEnd.setHours(23, 59, 59, 999);
+    const monthStart = new Date(refMon.getFullYear(), refMon.getMonth(), 1);
+
+    // Compute cumulative brand counts that reached each group up to a cutoff date
+    function countBrandsUntil(cutoff) {
       const result = {};
-      products.forEach(pk => {
+      const allKeys = [...products, '3s_pm', '3s_g'];
+      allKeys.forEach(pk => {
         result[pk] = {};
         groups.forEach(g => { result[pk][g] = new Set(); });
       });
 
       allHist.forEach(entry => {
-        if (!entry.product || !entry.to_stage || !entry.created_at) return;
         const dt = new Date(entry.created_at);
-        const entryYm = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
-        if (entryYm !== ym) return;
         if (dt > cutoff) return;
+        // Only count movements in current month
+        if (dt.getFullYear() !== refMon.getFullYear() || dt.getMonth() !== refMon.getMonth()) return;
 
+        const pk = entry.product;
+        const group = stageToGroup(pk, entry.to_stage);
+        if (!group || !result[pk]) return;
         const brand = brandLk[entry.brand_id];
         if (!brand) return;
         const marcaKey = (brand.marca || '').trim().toLowerCase();
-        const group = stageToGroup(entry.product, entry.to_stage);
-        if (!group) return;
-        if (!result[entry.product]) return;
-        if (!result[entry.product][group]) return;
-        result[entry.product][group].add(marcaKey);
+        result[pk][group].add(marcaKey);
+
+        // 3s splits
+        if (pk === '3s') {
+          const cls = (brand.classificacao || '').trim().toUpperCase();
+          if (cls === 'P' || cls === 'M') result['3s_pm'][group].add(marcaKey);
+          else if (cls === 'G') result['3s_g'][group].add(marcaKey);
+        }
       });
 
       // Convert sets to counts
       const counts = {};
-      products.forEach(pk => {
+      allKeys.forEach(pk => {
         counts[pk] = {};
         groups.forEach(g => { counts[pk][g] = result[pk][g].size; });
       });
       return counts;
     }
 
-    const refCounts = countByGroup(refEnd);
-    const prevCounts = prevInSameMonth ? countByGroup(prevEnd) : null;
+    const refCounts = countBrandsUntil(refEnd);
+    const prevCounts = countBrandsUntil(prevEnd);
 
     // Compute deltas
-    const wow = { refDate: refWed.toISOString().slice(0, 10), prevDate: prevWed.toISOString().slice(0, 10) };
-    products.forEach(pk => {
+    const wow = {};
+    const allKeys = [...products, '3s_pm', '3s_g'];
+    allKeys.forEach(pk => {
       wow[pk] = {};
       groups.forEach(g => {
-        const ref = refCounts[pk]?.[g] || 0;
-        const prev = prevCounts ? (prevCounts[pk]?.[g] || 0) : 0;
-        wow[pk][g] = ref - prev;
+        wow[pk][g] = (refCounts[pk]?.[g] || 0) - (prevCounts[pk]?.[g] || 0);
       });
     });
 
-    // Also add 3s split by classification (P/M vs G)
-    function countByGroupAndClass(cutoff, classFilter) {
-      const result = {};
-      groups.forEach(g => { result[g] = new Set(); });
-
-      allHist.forEach(entry => {
-        if (entry.product !== '3s') return;
-        if (!entry.to_stage || !entry.created_at) return;
-        const dt = new Date(entry.created_at);
-        const entryYm = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
-        if (entryYm !== ym) return;
-        if (dt > cutoff) return;
-
-        const brand = brandLk[entry.brand_id];
-        if (!brand) return;
-        if (classFilter && !classFilter.includes((brand.classificacao || '').trim().toUpperCase())) return;
-        const marcaKey = (brand.marca || '').trim().toLowerCase();
-        const group = stageToGroup('3s', entry.to_stage);
-        if (!group) return;
-        result[group].add(marcaKey);
-      });
-
-      const counts = {};
-      groups.forEach(g => { counts[g] = result[g].size; });
-      return counts;
-    }
-
-    const refPM = countByGroupAndClass(refEnd, ['P', 'M']);
-    const prevPM = prevInSameMonth ? countByGroupAndClass(prevEnd, ['P', 'M']) : null;
-    const refG = countByGroupAndClass(refEnd, ['G']);
-    const prevG = prevInSameMonth ? countByGroupAndClass(prevEnd, ['G']) : null;
-
-    wow['3s_pm'] = {};
-    wow['3s_g'] = {};
-    groups.forEach(g => {
-      wow['3s_pm'][g] = (refPM[g] || 0) - (prevPM ? (prevPM[g] || 0) : 0);
-      wow['3s_g'][g] = (refG[g] || 0) - (prevG ? (prevG[g] || 0) : 0);
+    const res = NextResponse.json({
+      wow,
+      refDate: refMon.toISOString().slice(0, 10),
+      prevDate: prevMon.toISOString().slice(0, 10),
+      _ts: new Date().toISOString(),
     });
-
-    const res = NextResponse.json({ wow });
-    res.headers.set('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
-    res.headers.set('CDN-Cache-Control', 'no-store');
-    res.headers.set('Vercel-CDN-Cache-Control', 'no-store');
+    res.headers.set('Cache-Control', 'no-store');
     return res;
   } catch (error) {
     console.error('WoW API error:', error);
