@@ -25,12 +25,33 @@ const FUNNEL_ROWS = [
   { key:'fcst_lojas', label:'Forecast Lojas', isForecast:true, isBold:true },
 ];
 
+// WoW metrics that get a delta row
+const WOW_ROWS = [
+  { key: 'primeiro_contato', label: 'WoW Primeiro Contato' },
+  { key: 'apresentacao', label: 'WoW Apresentacao' },
+  { key: 'negociacao', label: 'WoW Negociacao' },
+  { key: 'fechadas', label: 'WoW Marcas Fechadas' },
+  { key: 'lojas', label: 'WoW Lojas Fechadas' },
+];
+
 function pctColor(pct) {
   if (!pct || pct === '—') return '#94a3b8';
   const n = parseInt(pct);
   if (n >= 100) return '#22c55e';
   if (n >= 70) return '#f59e0b';
   return '#ef4444';
+}
+
+function wowColor(val) {
+  if (val > 0) return '#22c55e';
+  if (val < 0) return '#ef4444';
+  return '#94a3b8';
+}
+
+function wowLabel(val) {
+  if (val > 0) return '+' + val;
+  if (val < 0) return String(val);
+  return '0';
 }
 
 export default function ScorecardPage() {
@@ -101,6 +122,10 @@ export default function ScorecardPage() {
   const gf = (dupla, ym, field) => {
     if (dupla === 'total') return DUPLAS_KEYS.reduce((s, d) => s + (data?.forecast?.[ym]?.[d]?.[field] || 0), 0);
     return data?.forecast?.[ym]?.[dupla]?.[field] || 0;
+  };
+  const getWow = (dupla, metric) => {
+    if (!data?.wow) return null;
+    return data.wow[dupla]?.[metric] ?? null;
   };
 
   const buildRows = (dupla) => {
@@ -239,6 +264,7 @@ export default function ScorecardPage() {
             <option value={2026}>2026</option><option value={2027}>2027</option>
           </select>
           <div style={{ background:'#fef2f2', borderRadius:8, padding:'6px 12px', fontSize:12, color:'#EA1D2C', fontWeight:600 }}>{mtdBD}/{totalBD} dias uteis</div>
+          {data?.wow && <div style={{ background:'#f0fdf4', borderRadius:8, padding:'6px 12px', fontSize:11, color:'#22c55e', fontWeight:600 }}>WoW: {data.wow.refDate}</div>}
         </div>
       </div>
 
@@ -311,6 +337,30 @@ export default function ScorecardPage() {
                           })}
                         </tr>
                       ))}
+                      {/* WoW rows */}
+                      {data?.wow && (
+                        <>
+                          <tr><td colSpan={1 + pastCols.length + (hasCur ? 7 : 0)} style={{ ...td, padding:'10px 10px 4px', borderBottom:'2px solid #e2e8f0' }}><span style={{ fontSize:11, fontWeight:700, color:'#8b5cf6', textTransform:'uppercase', letterSpacing:'0.05em' }}>WoW (Quarta vs Quarta)</span><span style={{ fontSize:10, color:'#94a3b8', marginLeft:8 }}>{data.wow.prevDate} vs {data.wow.refDate}</span></td></tr>
+                          {WOW_ROWS.map(wr => {
+                            const val = getWow(dupla, wr.key);
+                            return (
+                              <tr key={'wow_'+wr.key} style={{ background:'#faf5ff' }}>
+                                <td style={{ ...td, fontWeight:600, fontSize:11, color:'#8b5cf6', position:'sticky', left:0, background:'#faf5ff', zIndex:1 }}>{wr.label}</td>
+                                {pastCols.map(c => <td key={c.k} style={{ ...td, textAlign:'center', color:'#c0c5cc' }}>—</td>)}
+                                {hasCur && [
+                                  <td key="m" style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                                  <td key="f" style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                                  <td key="p" style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                                  <td key="r" style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                                  <td key="mm" style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                                  <td key="mr" style={{ ...td, textAlign:'center', fontWeight:700, fontSize:14, color: wowColor(val) }}>{val !== null ? wowLabel(val) : '—'}</td>,
+                                  <td key="mp" style={{ ...td, textAlign:'center', color:'#c0c5cc' }}></td>,
+                                ]}
+                              </tr>
+                            );
+                          })}
+                        </>
+                      )}
                     </tbody>
                   </table>
                 </div>
