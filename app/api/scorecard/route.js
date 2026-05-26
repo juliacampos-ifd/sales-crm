@@ -49,6 +49,12 @@ function isPorM(brand) {
   return c === 'P' || c === 'M';
 }
 
+function matchesClass(brand, classFilter) {
+  const c = (brand.classificacao || '').trim().toUpperCase();
+  if (classFilter === 'g') return c === 'G';
+  return c === 'P' || c === 'M'; // default: pm
+}
+
 async function paginate(sb, table, cols, filters) {
   let all = [], from = 0;
   while (true) {
@@ -76,41 +82,45 @@ function emptyMetrics() {
   return obj;
 }
 
-// ---- WoW helpers ----
-function getWednesdays(year, month) {
-  // Returns the reference Wednesday and the previous Wednesday for WoW comparison
-  // month is 1-based
+
+function getMondays(year, month) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dayOfWeek = today.getDay(); // 0=Sun, 3=Wed
+  const selMonth = month - 1; // 0-based
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === selMonth;
+  if (!isCurrentMonth) return null; // WoW only for current month
 
-  let refWed;
-  if (dayOfWeek === 3) {
-    // Today is Wednesday - use today
-    refWed = new Date(today);
-  } else {
-    // Find last Wednesday
-    const diff = (dayOfWeek + 7 - 3) % 7 || 7;
-    refWed = new Date(today);
-    refWed.setDate(today.getDate() - diff);
+  // Reference Monday: today if Monday (day===1), else most recent past Monday
+  let refMon = new Date(today);
+  const dow = refMon.getDay();
+  if (dow !== 1) {
+    const diff = (dow + 7 - 1) % 7;
+    refMon.setDate(refMon.getDate() - diff);
   }
+  // Must be in the selected month
+  if (refMon.getMonth() !== selMonth || refMon.getFullYear() !== year) return null;
 
-  const prevWed = new Date(refWed);
-  prevWed.setDate(refWed.getDate() - 7);
+  // Previous Monday = refMon - 7
+  const prevMon = new Date(refMon);
+  prevMon.setDate(prevMon.getDate() - 7);
+  // prevMon might be in previous month — that's OK (value = 0)
+  const prevInMonth = prevMon.getMonth() === selMonth && prevMon.getFullYear() === year;
 
-  // Only return WoW data if the reference Wednesday is in the selected month
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0, 23, 59, 59);
-
-  return { refWed, prevWed, monthStart, monthEnd };
+  return { refMon, prevMon, prevInMonth };
 }
 
-function computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, cutoffDate, yearMonth) {
+function computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, cutoffDate, year, month, classFilter) {
   const DUPLA_KEYS = ['lidia_gabi', 'joao_diego', 'michel_emerson'];
-  const realized = { total: emptyMetrics() };
-  DUPLA_KEYS.forEach(k => { realized[k] = emptyMetrics(); });
-  const seen = new Set();
+  const ym = year + '-' + String(month).padStart(2, '0');
+  const monthStart = new Date(year, month - 1, 1);
+  // cutoff = end of cutoffDate day
+  const cutoff = new Date(cutoffDate);
+  cutoff.setHours(23, 59, 59, 999);
 
+  const result = { total: {} };
+  DUPLA_KEYS.forEach(k => { result[k] = {}; });
+
+  const seen = new Set();
   allHistRaw.forEach(entry => {
     const metric = stageToMetric(entry.to_stage);
     if (!metric) return;
@@ -119,24 +129,21 @@ function computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand,
     const marcaKey = (brand.marca || '').trim().toLowerCase();
     const active = activeBrand[marcaKey];
     if (!active) return;
-    if (!isPorM(active)) return;
+    if (!matchesClass(active, classFilter)) return;
     const dt = new Date(entry.created_at);
-    const ym = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
-    if (ym !== yearMonth) return;
-    if (dt > cutoffDate) return;
-    const dedupKey = marcaKey + '|' + ym + '|' + metric;
+    if (dt < monthStart || dt > cutoff) return;
+    const dedupKey = marcaKey + '|' + metric;
     if (seen.has(dedupKey)) return;
     seen.add(dedupKey);
     const dupla = getDupla(active, pipeByBrand);
-    realized.total[metric]++;
-    realized[dupla][metric]++;
+    result.total[metric] = (result.total[metric] || 0) + 1;
+    result[dupla][metric] = (result[dupla][metric] || 0) + 1;
     if (metric === 'contrato_assinado' && active.qtd_lojas_fisicas) {
-      realized.total.lojas += active.qtd_lojas_fisicas;
-      realized[dupla].lojas += active.qtd_lojas_fisicas;
+      result.total.lojas = (result.total.lojas || 0) + active.qtd_lojas_fisicas;
+      result[dupla].lojas = (result[dupla].lojas || 0) + active.qtd_lojas_fisicas;
     }
   });
-
-  return realized;
+  return result;
 }
 
 export async function GET(request) {
@@ -145,6 +152,7 @@ export async function GET(request) {
   try {
     const sb = createServerClient();
     const DUPLA_KEYS = ['lidia_gabi', 'joao_diego', 'michel_emerson'];
+    const classFilter = new URL(request.url).searchParams.get('class') || 'pm';
 
     const [allBrands, allPipes, allHistRaw, metasResult, fcstResult] = await Promise.all([
       paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,qtd_lojas_fisicas,base_elegivel'),
@@ -209,7 +217,7 @@ export async function GET(request) {
     const eligSets = { total: new Set() };
     DUPLA_KEYS.forEach(k => { eligSets[k] = new Set(); });
     allBrands.forEach(b => {
-      if (!isPorM(b)) return;
+      if (!matchesClass(b, classFilter)) return;
       if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
       if ((pipeLk[b.id] || '').startsWith('13.')) return;
       const d = getDupla(b, pipeByBrand);
@@ -230,7 +238,7 @@ export async function GET(request) {
       const marcaKey = (brand.marca || '').trim().toLowerCase();
       const active = activeBrand[marcaKey];
       if (!active) return;
-      if (!isPorM(active)) return;
+      if (!matchesClass(active, classFilter)) return;
       const dt = new Date(entry.created_at);
       const ym = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
       const dedupKey = marcaKey + '|' + ym + '|' + metric;
@@ -259,7 +267,7 @@ export async function GET(request) {
       const marcaKey = (brand.marca || '').trim().toLowerCase();
       const active = activeBrand[marcaKey];
       if (!active) return;
-      if (!isPorM(active)) return;
+      if (!matchesClass(active, classFilter)) return;
       const dt = new Date(entry.created_at);
       const ym = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
       const dedupKey = marcaKey + '|' + ym + '|' + metric;
@@ -280,7 +288,7 @@ export async function GET(request) {
     const eligBrands = [];
     const seenElig = new Set();
     allBrands.forEach(b => {
-      if (!isPorM(b)) return;
+      if (!matchesClass(b, classFilter)) return;
       if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
       if ((pipeLk[b.id] || '').startsWith('13.')) return;
       const key = (b.marca || '').trim().toLowerCase();
@@ -312,47 +320,32 @@ export async function GET(request) {
       forecast[ym].total.lojas += (e.lojas || 0);
     });
 
-    // ---- WoW computation ----
-    const { searchParams } = new URL(request.url);
-    const reqMonth = parseInt(searchParams.get('month')) || (new Date().getMonth() + 1);
-    const reqYear = parseInt(searchParams.get('year')) || new Date().getFullYear();
-    const curKey = `${reqYear}-${String(reqMonth).padStart(2, '0')}`;
 
-    const { refWed, prevWed, monthStart } = getWednesdays(reqYear, reqMonth);
-
+    // ── WoW computation ──
     let wow = null;
-    // Only compute WoW if refWed is within the selected month
-    if (refWed >= monthStart && refWed.getMonth() + 1 === reqMonth && refWed.getFullYear() === reqYear) {
-      const refEnd = new Date(refWed);
-      refEnd.setHours(23, 59, 59, 999);
-      const prevEnd = new Date(prevWed);
-      prevEnd.setHours(23, 59, 59, 999);
+    const urlParams = new URL(request.url).searchParams;
+    const wowYear = parseInt(urlParams.get('year')) || new Date().getFullYear();
+    const wowMonth = parseInt(urlParams.get('month')) || (new Date().getMonth() + 1);
+    const monResult = getMondays(wowYear, wowMonth);
+    if (monResult) {
+      const { refMon, prevMon, prevInMonth } = monResult;
+      const refData = computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, refMon, wowYear, wowMonth, classFilter);
+      const prevData = prevInMonth
+        ? computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, prevMon, wowYear, wowMonth, classFilter)
+        : null;
 
-      const refRealized = computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, refEnd, curKey);
-
-      // prevWed might be in a different month - if so, prevRealized is all zeros
-      const prevYm = prevWed.getFullYear() + '-' + String(prevWed.getMonth() + 1).padStart(2, '0');
-      let prevRealized;
-      if (prevYm === curKey) {
-        prevRealized = computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, prevEnd, curKey);
-      } else {
-        // Previous Wednesday was in another month — previous week's MTD for this month was 0
-        prevRealized = { total: emptyMetrics() };
-        DUPLA_KEYS.forEach(k => { prevRealized[k] = emptyMetrics(); });
-      }
-
-      // Compute deltas
-      wow = { total: {}, refDate: refWed.toISOString().slice(0, 10), prevDate: prevWed.toISOString().slice(0, 10) };
-      DUPLA_KEYS.forEach(k => { wow[k] = {}; });
-
-      const wowMetrics = ['primeiro_contato', 'apresentacao', 'negociacao', 'contrato_assinado', 'lojas'];
-      const allKeys = ['total', ...DUPLA_KEYS];
-      allKeys.forEach(dk => {
-        wowMetrics.forEach(m => {
-          wow[dk][m] = (refRealized[dk]?.[m] || 0) - (prevRealized[dk]?.[m] || 0);
+      const WOW_METRICS = ['primeiro_contato', 'apresentacao', 'negociacao', 'contrato_assinado', 'lojas'];
+      const DUPLA_KEYS_WOW = ['total', 'lidia_gabi', 'joao_diego', 'michel_emerson'];
+      wow = { refDate: refMon.toISOString().slice(0, 10), prevDate: prevMon.toISOString().slice(0, 10) };
+      DUPLA_KEYS_WOW.forEach(dk => {
+        wow[dk] = {};
+        WOW_METRICS.forEach(m => {
+          const cur = refData[dk]?.[m] || 0;
+          const prev = prevData ? (prevData[dk]?.[m] || 0) : 0;
+          wow[dk][m] = cur - prev;
         });
-        // Also include fechadas (= contrato_assinado alias)
-        wow[dk]['fechadas'] = wow[dk]['contrato_assinado'];
+        // fechadas = contrato_assinado alias
+        wow[dk].fechadas = wow[dk].contrato_assinado;
       });
     }
 
@@ -364,6 +357,7 @@ export async function GET(request) {
       brandLists,
       eligBrands,
       wow,
+      classFilter,
       _ts: new Date().toISOString(),
     });
     res.headers.set('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0, s-maxage=0');
