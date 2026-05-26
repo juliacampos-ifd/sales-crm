@@ -79,6 +79,7 @@ export default function CRMPage() {
   const [scMonth, setScMonth] = useState(new Date().getMonth() + 1);
   const [scYear, setScYear] = useState(new Date().getFullYear());
   const [scDupla, setScDupla] = useState('total');
+  const [scClassFilter, setScClassFilter] = useState('pm');
   const [scModal, setScModal] = useState(null);
   const [scModalBrands, setScModalBrands] = useState([]);
   const [scModalLoading, setScModalLoading] = useState(false);
@@ -100,8 +101,6 @@ export default function CRMPage() {
   const [mergeSearch, setMergeSearch] = useState('');
   const [mergeTarget, setMergeTarget] = useState(null);
   const [mergeName, setMergeName] = useState('');
-  // ── WoW (Week over Week) ──
-  const [wowData, setWowData] = useState(null);
   // ── Open filter tracking ──
   const [openFilter, setOpenFilter] = useState(null);
   // ── Init edit fields when selecting a brand ──
@@ -190,9 +189,6 @@ export default function CRMPage() {
       apiFetch('/api/forecast', { cache: 'no-store' }).then(r => r.json()).then(d => {
         if (d.metas) setForecastMetas(d.metas);
         if (d.entries) setForecastEntries(d.entries);
-      }).catch(console.error);
-      apiFetch('/api/wow?_t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(d => {
-        if (d.wow) setWowData(d.wow);
       }).catch(console.error);
     }
   }, [user, loadBrands]);
@@ -650,14 +646,15 @@ export default function CRMPage() {
       }
       setForecastEntries(prev => prev.map(e => ({ ...e, _dirty: false })));
       // Reload scorecard so Forecast Marcas/Lojas lines update
-      try { const r2 = await apiFetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' }); const d2 = await r2.json(); setScData(d2); } catch (_) {}
+      try { const r2 = await apiFetch('/api/scorecard?_t=' + Date.now() + '&class=' + scClassFilter, { cache: 'no-store' }); const d2 = await r2.json(); setScData(d2); } catch (_) {}
     } catch (err) { console.error(err); }
     setSaving(false);
   };
 
-  const loadScorecard = async () => {
+  const loadScorecard = async (classOverride) => {
     try {
-      const res = await apiFetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' });
+      const cf = classOverride || scClassFilter;
+      const res = await apiFetch('/api/scorecard?_t=' + Date.now() + '&class=' + cf, { cache: 'no-store' });
       const d = await res.json();
       setScData(d);
     } catch (err) { console.error('Scorecard fetch error:', err); }
@@ -1061,15 +1058,12 @@ export default function CRMPage() {
                 },
               ];
 
-              const PdvCard = ({ label, stageLabel, marcas, lojas, color, wow }) => (
+              const PdvCard = ({ label, stageLabel, marcas, lojas, color }) => (
                 <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, boxShadow: '0 1px 3px rgba(0,0,0,.05)', border: '1px solid #f1f5f9' }}>
                   <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
                   {stageLabel && <div style={{ color: '#cbd5e1', fontSize: 10, marginBottom: 6, marginTop: 2 }}>{stageLabel}</div>}
                   {!stageLabel && <div style={{ marginBottom: 6 }} />}
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{marcas}</span>
-                    {wow !== undefined && wow !== null && wow !== 0 && <span style={{ fontSize: 11, fontWeight: 600, color: wow > 0 ? '#22c55e' : '#ef4444' }}>{wow > 0 ? '+' : ''}{wow} vs LW</span>}
-                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{marcas}</div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{lojas} lojas</div>
                 </div>
               );
@@ -1085,26 +1079,20 @@ export default function CRMPage() {
                     const perdidasB = row.perdidas.length > 0 ? getPdvBrands(row.pk, row.perdidas, row.classFilter) : null;
                     const totalM = topoB.length + meioB.length + avancB.length + fechadasB.length + (perdidasB?.length || 0);
                     const totalL = sumLojas(topoB) + sumLojas(meioB) + sumLojas(avancB) + sumLojas(fechadasB) + (perdidasB ? sumLojas(perdidasB) : 0);
-                    // WoW key mapping
-                    const wowKey = row.pk === '3s' ? (row.classFilter?.includes('P') ? '3s_pm' : '3s_g') : row.pk;
-                    const wk = wowData?.[wowKey];
-                    const wowTopo = wk?.topo; const wowMeio = wk?.meio; const wowAvanc = wk?.avanc; const wowFechadas = wk?.fechadas; const wowPerdidas = wk?.perdidas;
-                    const wowTotal = (wk ? (wk.topo||0)+(wk.meio||0)+(wk.avanc||0)+(wk.fechadas||0)+(wk.perdidas||0) : null);
                     return (
                       <div key={row.label} style={{ marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                           <div style={{ width: 10, height: 10, borderRadius: '50%', background: row.color, flexShrink: 0 }} />
                           <span style={{ fontWeight: 700, fontSize: 13, color: row.color }}>{row.label}</span>
-                          {wowData && <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>WoW: {wowData.prevDate} vs {wowData.refDate}</span>}
                         </div>
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                          <PdvCard label="Total Marcas" stageLabel={null} marcas={totalM} lojas={totalL} color="#1e293b" wow={wowTotal} />
-                          <PdvCard label="Topo do Funil" stageLabel={row.topoLabel} marcas={topoB.length} lojas={sumLojas(topoB)} wow={wowTopo} />
-                          <PdvCard label="Meio do Funil" stageLabel={row.meioLabel} marcas={meioB.length} lojas={sumLojas(meioB)} wow={wowMeio} />
-                          <PdvCard label="Avançadas" stageLabel={row.avancLabel} marcas={avancB.length} lojas={sumLojas(avancB)} wow={wowAvanc} />
-                          <PdvCard label="Fechadas" stageLabel={row.fechadasLabel} marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" wow={wowFechadas} />
+                          <PdvCard label="Total Marcas" stageLabel={null} marcas={totalM} lojas={totalL} color="#1e293b" />
+                          <PdvCard label="Topo do Funil" stageLabel={row.topoLabel} marcas={topoB.length} lojas={sumLojas(topoB)} />
+                          <PdvCard label="Meio do Funil" stageLabel={row.meioLabel} marcas={meioB.length} lojas={sumLojas(meioB)} />
+                          <PdvCard label="Avançadas" stageLabel={row.avancLabel} marcas={avancB.length} lojas={sumLojas(avancB)} />
+                          <PdvCard label="Fechadas" stageLabel={row.fechadasLabel} marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" />
                           {perdidasB !== null ? (
-                            <PdvCard label="Perdidas/Stand By" stageLabel={row.perdidasLabel} marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" wow={wowPerdidas} />
+                            <PdvCard label="Perdidas/Stand By" stageLabel={row.perdidasLabel} marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" />
                           ) : (
                             <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, border: '1px solid #f1f5f9', opacity: 0.4 }}>
                               <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 6, fontWeight: 600 }}>Perdidas/Stand By</div>
@@ -1307,6 +1295,18 @@ export default function CRMPage() {
             { key:'organico', label:'Organico' },
           ];
           const scPctColor = (p) => { if (!p || p === '—') return '#94a3b8'; const n = parseInt(p); return n >= 100 ? '#22c55e' : n >= 70 ? '#f59e0b' : '#ef4444'; };
+
+          // WoW helpers
+          const WOW_ROWS = [
+            { key:'primeiro_contato', label:'Primeiro Contato' },
+            { key:'apresentacao', label:'Apresentacao' },
+            { key:'negociacao', label:'Negociacao' },
+            { key:'contrato_assinado', label:'Contrato Assinado' },
+            { key:'lojas', label:'Lojas' },
+          ];
+          const wowColor = (v) => v > 0 ? '#22c55e' : v < 0 ? '#ef4444' : '#94a3b8';
+          const wowLabel = (v) => v > 0 ? '+'+v : v < 0 ? ''+v : '0';
+          const getWow = (dupla, metric) => scData?.wow?.[dupla]?.[metric] ?? null;
           const today = new Date();
           const scTotalBD = getMonthBusinessDays(scYear, scMonth - 1);
           const scMtdBD = scYear === today.getFullYear() && scMonth === today.getMonth() + 1 ? getMonthBusinessDaysMTD(scYear, scMonth - 1, today) : scTotalBD;
@@ -1452,7 +1452,11 @@ export default function CRMPage() {
               {/* Header */}
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:10}}>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <span style={{fontSize:12,color:'#94a3b8'}}>Marcas P e M | Produto: 3S Checkout</span>
+                  <div style={{display:'flex',borderRadius:8,overflow:'hidden',border:'1px solid #e2e8f0'}}>
+                    <button onClick={()=>{if(scClassFilter!=='pm'){setScClassFilter('pm');setScData(null);loadScorecard('pm');}}} style={{padding:'6px 14px',fontSize:12,fontWeight:600,border:'none',cursor:'pointer',background:scClassFilter==='pm'?'#EA1D2C':'#fff',color:scClassFilter==='pm'?'#fff':'#64748b'}}>P / M</button>
+                    <button onClick={()=>{if(scClassFilter!=='g'){setScClassFilter('g');setScData(null);loadScorecard('g');}}} style={{padding:'6px 14px',fontSize:12,fontWeight:600,border:'none',cursor:'pointer',borderLeft:'1px solid #e2e8f0',background:scClassFilter==='g'?'#EA1D2C':'#fff',color:scClassFilter==='g'?'#fff':'#64748b'}}>G</button>
+                  </div>
+                  <span style={{fontSize:12,color:'#94a3b8'}}>Marcas {scClassFilter==='g'?'G':'P e M'} | Produto: 3S Checkout</span>
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:10}}>
                   <button onClick={()=>{setScData(null);loadScorecard();}} style={{padding:'8px 16px',background:'linear-gradient(135deg,#EA1D2C,#DA5D69)',border:'none',borderRadius:8,fontSize:13,fontWeight:700,color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',gap:6,boxShadow:'0 2px 8px rgba(234,29,44,.2)'}}><TrendingUp size={14}/> Atualizar Dados</button>
@@ -1548,6 +1552,28 @@ export default function CRMPage() {
                               </tr>
                             ))}
                           </tbody>
+                          {scData?.wow && (
+                            <tfoot>
+                              <tr><td colSpan={scPastCols.length + (scHasCur ? 7 : 1)} style={{padding:'8px 10px',background:'#f5f0ff',borderTop:'2px solid #8b5cf6',fontSize:12,fontWeight:700,color:'#7c3aed'}}>WoW (Segunda vs Segunda) — ref: {scData.wow.refDate}</td></tr>
+                              {WOW_ROWS.map((wr,wi) => {
+                                const val = getWow(dupla, wr.key);
+                                if (val === null) return null;
+                                return (
+                                  <tr key={'wow-'+wi} style={{background:wi%2===0?'#faf8ff':'#f5f0ff'}}>
+                                    <td style={{...scTd,fontSize:12,color:'#6d28d9',fontWeight:500,position:'sticky',left:0,background:wi%2===0?'#faf8ff':'#f5f0ff',zIndex:1}}>{wr.label}</td>
+                                    {scPastCols.map(c=><td key={c.k} style={{...scTd,textAlign:'center',color:'#d4d4d8'}}>—</td>)}
+                                    {scHasCur && <>
+                                      <td style={{...scTd,textAlign:'center',color:'#d4d4d8'}}>—</td>
+                                      <td style={{...scTd,textAlign:'center',color:'#d4d4d8'}}>—</td>
+                                      <td style={{...scTd,textAlign:'center',color:'#d4d4d8'}}>—</td>
+                                      <td style={{...scTd,textAlign:'center',color:'#d4d4d8'}}>—</td>
+                                      <td colSpan={2} style={{...scTd,textAlign:'center',fontWeight:700,fontSize:16,color:wowColor(val),background:'#faf5ff'}}>{wowLabel(val)}</td>
+                                    </>}
+                                  </tr>
+                                );
+                              })}
+                            </tfoot>
+                          )}
                         </table>
                       </div>
                     )}
