@@ -100,6 +100,8 @@ export default function CRMPage() {
   const [mergeSearch, setMergeSearch] = useState('');
   const [mergeTarget, setMergeTarget] = useState(null);
   const [mergeName, setMergeName] = useState('');
+  // ── WoW (Week over Week) ──
+  const [wowData, setWowData] = useState(null);
   // ── Open filter tracking ──
   const [openFilter, setOpenFilter] = useState(null);
   // ── Init edit fields when selecting a brand ──
@@ -188,6 +190,9 @@ export default function CRMPage() {
       apiFetch('/api/forecast', { cache: 'no-store' }).then(r => r.json()).then(d => {
         if (d.metas) setForecastMetas(d.metas);
         if (d.entries) setForecastEntries(d.entries);
+      }).catch(console.error);
+      apiFetch('/api/wow?_t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(d => {
+        if (d.wow) setWowData(d.wow);
       }).catch(console.error);
     }
   }, [user, loadBrands]);
@@ -1056,12 +1061,15 @@ export default function CRMPage() {
                 },
               ];
 
-              const PdvCard = ({ label, stageLabel, marcas, lojas, color }) => (
+              const PdvCard = ({ label, stageLabel, marcas, lojas, color, wow }) => (
                 <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, boxShadow: '0 1px 3px rgba(0,0,0,.05)', border: '1px solid #f1f5f9' }}>
                   <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
                   {stageLabel && <div style={{ color: '#cbd5e1', fontSize: 10, marginBottom: 6, marginTop: 2 }}>{stageLabel}</div>}
                   {!stageLabel && <div style={{ marginBottom: 6 }} />}
-                  <div style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{marcas}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{marcas}</span>
+                    {wow !== undefined && wow !== null && wow !== 0 && <span style={{ fontSize: 11, fontWeight: 600, color: wow > 0 ? '#22c55e' : '#ef4444' }}>{wow > 0 ? '+' : ''}{wow} vs LW</span>}
+                  </div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{lojas} lojas</div>
                 </div>
               );
@@ -1077,20 +1085,26 @@ export default function CRMPage() {
                     const perdidasB = row.perdidas.length > 0 ? getPdvBrands(row.pk, row.perdidas, row.classFilter) : null;
                     const totalM = topoB.length + meioB.length + avancB.length + fechadasB.length + (perdidasB?.length || 0);
                     const totalL = sumLojas(topoB) + sumLojas(meioB) + sumLojas(avancB) + sumLojas(fechadasB) + (perdidasB ? sumLojas(perdidasB) : 0);
+                    // WoW key mapping
+                    const wowKey = row.pk === '3s' ? (row.classFilter?.includes('P') ? '3s_pm' : '3s_g') : row.pk;
+                    const wk = wowData?.[wowKey];
+                    const wowTopo = wk?.topo; const wowMeio = wk?.meio; const wowAvanc = wk?.avanc; const wowFechadas = wk?.fechadas; const wowPerdidas = wk?.perdidas;
+                    const wowTotal = (wk ? (wk.topo||0)+(wk.meio||0)+(wk.avanc||0)+(wk.fechadas||0)+(wk.perdidas||0) : null);
                     return (
                       <div key={row.label} style={{ marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                           <div style={{ width: 10, height: 10, borderRadius: '50%', background: row.color, flexShrink: 0 }} />
                           <span style={{ fontWeight: 700, fontSize: 13, color: row.color }}>{row.label}</span>
+                          {wowData && <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>WoW: {wowData.prevDate} vs {wowData.refDate}</span>}
                         </div>
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                          <PdvCard label="Total Marcas" stageLabel={null} marcas={totalM} lojas={totalL} color="#1e293b" />
-                          <PdvCard label="Topo do Funil" stageLabel={row.topoLabel} marcas={topoB.length} lojas={sumLojas(topoB)} />
-                          <PdvCard label="Meio do Funil" stageLabel={row.meioLabel} marcas={meioB.length} lojas={sumLojas(meioB)} />
-                          <PdvCard label="Avançadas" stageLabel={row.avancLabel} marcas={avancB.length} lojas={sumLojas(avancB)} />
-                          <PdvCard label="Fechadas" stageLabel={row.fechadasLabel} marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" />
+                          <PdvCard label="Total Marcas" stageLabel={null} marcas={totalM} lojas={totalL} color="#1e293b" wow={wowTotal} />
+                          <PdvCard label="Topo do Funil" stageLabel={row.topoLabel} marcas={topoB.length} lojas={sumLojas(topoB)} wow={wowTopo} />
+                          <PdvCard label="Meio do Funil" stageLabel={row.meioLabel} marcas={meioB.length} lojas={sumLojas(meioB)} wow={wowMeio} />
+                          <PdvCard label="Avançadas" stageLabel={row.avancLabel} marcas={avancB.length} lojas={sumLojas(avancB)} wow={wowAvanc} />
+                          <PdvCard label="Fechadas" stageLabel={row.fechadasLabel} marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" wow={wowFechadas} />
                           {perdidasB !== null ? (
-                            <PdvCard label="Perdidas/Stand By" stageLabel={row.perdidasLabel} marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" />
+                            <PdvCard label="Perdidas/Stand By" stageLabel={row.perdidasLabel} marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" wow={wowPerdidas} />
                           ) : (
                             <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, border: '1px solid #f1f5f9', opacity: 0.4 }}>
                               <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 6, fontWeight: 600 }}>Perdidas/Stand By</div>
