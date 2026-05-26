@@ -84,6 +84,8 @@ export default function CRMPage() {
   const [scModalBrands, setScModalBrands] = useState([]);
   const [scModalLoading, setScModalLoading] = useState(false);
   const [scStagesOpen, setScStagesOpen] = useState(false);
+  // ── DASHBOARD WoW ──
+  const [wowData, setWowData] = useState(null);
   // ── ATIVIDADE DO TIME (admin only) ──
   const [activityData, setActivityData] = useState(null);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -189,6 +191,9 @@ export default function CRMPage() {
       apiFetch('/api/forecast', { cache: 'no-store' }).then(r => r.json()).then(d => {
         if (d.metas) setForecastMetas(d.metas);
         if (d.entries) setForecastEntries(d.entries);
+      }).catch(console.error);
+      apiFetch('/api/wow?_t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(d => {
+        if (d.wow) setWowData(d.wow);
       }).catch(console.error);
     }
   }, [user, loadBrands]);
@@ -1058,12 +1063,15 @@ export default function CRMPage() {
                 },
               ];
 
-              const PdvCard = ({ label, stageLabel, marcas, lojas, color }) => (
+              const PdvCard = ({ label, stageLabel, marcas, lojas, color, wow }) => (
                 <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, boxShadow: '0 1px 3px rgba(0,0,0,.05)', border: '1px solid #f1f5f9' }}>
                   <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
                   {stageLabel && <div style={{ color: '#cbd5e1', fontSize: 10, marginBottom: 6, marginTop: 2 }}>{stageLabel}</div>}
                   {!stageLabel && <div style={{ marginBottom: 6 }} />}
-                  <div style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{marcas}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{marcas}</span>
+                    {wow !== undefined && wow !== null && <span style={{ fontSize: 11, fontWeight: 600, color: wow > 0 ? '#22c55e' : wow < 0 ? '#ef4444' : '#94a3b8' }}>{wow > 0 ? '+'+wow : wow} vs LW</span>}
+                  </div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{lojas} lojas</div>
                 </div>
               );
@@ -1079,6 +1087,8 @@ export default function CRMPage() {
                     const perdidasB = row.perdidas.length > 0 ? getPdvBrands(row.pk, row.perdidas, row.classFilter) : null;
                     const totalM = topoB.length + meioB.length + avancB.length + fechadasB.length + (perdidasB?.length || 0);
                     const totalL = sumLojas(topoB) + sumLojas(meioB) + sumLojas(avancB) + sumLojas(fechadasB) + (perdidasB ? sumLojas(perdidasB) : 0);
+                    const wowKey = row.pk === '3s' ? (row.classFilter?.includes('P') ? '3s_pm' : '3s_g') : row.pk;
+                    const wk = wowData?.[wowKey];
                     return (
                       <div key={row.label} style={{ marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -1087,12 +1097,12 @@ export default function CRMPage() {
                         </div>
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                           <PdvCard label="Total Marcas" stageLabel={null} marcas={totalM} lojas={totalL} color="#1e293b" />
-                          <PdvCard label="Topo do Funil" stageLabel={row.topoLabel} marcas={topoB.length} lojas={sumLojas(topoB)} />
-                          <PdvCard label="Meio do Funil" stageLabel={row.meioLabel} marcas={meioB.length} lojas={sumLojas(meioB)} />
-                          <PdvCard label="Avançadas" stageLabel={row.avancLabel} marcas={avancB.length} lojas={sumLojas(avancB)} />
-                          <PdvCard label="Fechadas" stageLabel={row.fechadasLabel} marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" />
+                          <PdvCard label="Topo do Funil" stageLabel={row.topoLabel} marcas={topoB.length} lojas={sumLojas(topoB)} wow={wk?.topo} />
+                          <PdvCard label="Meio do Funil" stageLabel={row.meioLabel} marcas={meioB.length} lojas={sumLojas(meioB)} wow={wk?.meio} />
+                          <PdvCard label="Avançadas" stageLabel={row.avancLabel} marcas={avancB.length} lojas={sumLojas(avancB)} wow={wk?.avanc} />
+                          <PdvCard label="Fechadas" stageLabel={row.fechadasLabel} marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" wow={wk?.fechadas} />
                           {perdidasB !== null ? (
-                            <PdvCard label="Perdidas/Stand By" stageLabel={row.perdidasLabel} marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" />
+                            <PdvCard label="Perdidas/Stand By" stageLabel={row.perdidasLabel} marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" wow={wk?.perdidas} />
                           ) : (
                             <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, border: '1px solid #f1f5f9', opacity: 0.4 }}>
                               <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 6, fontWeight: 600 }}>Perdidas/Stand By</div>
@@ -1276,8 +1286,6 @@ export default function CRMPage() {
             { key:'contrato_assinado', label:'CONTRATO ASSINADO', isBold:true },
             { key:'media_lojas', label:'Media de lojas por marca', isLive:true },
             { key:'lojas', label:'Lojas Fechadas', isBold:true },
-            { key:'fcst_marcas', label:'Forecast Marcas', isForecast:true },
-            { key:'fcst_lojas', label:'Forecast Lojas', isForecast:true, isBold:true },
           ];
           const SC_ALL_STAGES = [
             { key:'nao_iniciado', label:'Nao Iniciado' },
@@ -1312,6 +1320,7 @@ export default function CRMPage() {
           const scMtdBD = scYear === today.getFullYear() && scMonth === today.getMonth() + 1 ? getMonthBusinessDaysMTD(scYear, scMonth - 1, today) : scTotalBD;
           const scCurKey = scYear + '-' + String(scMonth).padStart(2,'0');
           const DK = ['lidia_gabi','joao_diego','michel_emerson'];
+          const isG = scClassFilter === 'g';
 
           // Get meta value
           const scGmS = (d,y,m,f) => {
@@ -1529,51 +1538,43 @@ export default function CRMPage() {
                             <tr>
                               <th style={{...scTh,textAlign:'left',position:'sticky',left:0,background:'#f8fafc',zIndex:2}}></th>
                               {scPastCols.map(c=><th key={c.k} style={{...scTh,background:'#980000',color:'#fff',fontSize:10}}>Mês</th>)}
-                              {scHasCur && <>
+                              {scHasCur && !isG && <>
                                 <th colSpan={3} style={{...scTh,background:'#980000',color:'#fff',fontSize:11,textAlign:'center'}}>Mês</th>
                                 <th colSpan={3} style={{...scTh,background:'#073763',color:'#fff',fontSize:11,textAlign:'center'}}>MTD</th>
                               </>}
+                              {scHasCur && isG && <>
+                                <th style={{...scTh,background:'#980000',color:'#fff',fontSize:11,textAlign:'center'}}>Fcst</th>
+                                <th style={{...scTh,background:'#073763',color:'#fff',fontSize:11,textAlign:'center'}}>MTD Real</th>
+                              </>}
+                              {scData?.wow && <th style={{...scTh,background:'#7c3aed',color:'#fff',fontSize:10}}>WoW</th>}
                             </tr>
                             <tr style={{background:'#f8fafc'}}>
                               <th style={{...scTh,width:250,textAlign:'left',position:'sticky',left:0,background:'#f8fafc',zIndex:2}}></th>
                               {scPastCols.map(c=><th key={c.k} style={{...scTh,fontSize:10}}>{MONTH_NAMES[c.m-1]} Real</th>)}
-                              {scHasCur && <><th style={{...scTh,background:'#fef2f2',fontSize:10}}>{MONTH_NAMES[scMonth-1]} Meta</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>% Atig</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Meta</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Real</th><th style={{...scTh,background:'#fef9c3',fontSize:10}}>MTD %</th></>}
+                              {scHasCur && !isG && <><th style={{...scTh,background:'#fef2f2',fontSize:10}}>{MONTH_NAMES[scMonth-1]} Meta</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>% Atig</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Meta</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Real</th><th style={{...scTh,background:'#fef9c3',fontSize:10}}>MTD %</th></>}
+                              {scHasCur && isG && <><th style={{...scTh,background:'#fef2f2',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Real</th></>}
+                              {scData?.wow && <th style={{...scTh,background:'#f5f0ff',fontSize:10}}>Seg vs Seg</th>}
                             </tr></thead>
                           <tbody>
-                            {rows.map((row,ri) => (
-                              <tr key={ri} style={{background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff'}}>
-                                <td style={{...scTd,fontWeight:row.isBold?700:400,fontSize:row.isPercent?11:12,color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#1e293b',position:'sticky',left:0,background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff',zIndex:1}}>{row.label}</td>
+                            {rows.map((row,ri) => {
+                              const wowVal = (row.key && !row.isPercent && row.key !== 'media_lojas' && row.key !== 'elegiveis') ? getWow(dupla, row.key) : null;
+                              return (
+                              <tr key={ri} style={{background:row.isBold?'#fffbfb':'#fff'}}>
+                                <td style={{...scTd,fontWeight:row.isBold?700:400,fontSize:row.isPercent?11:12,color:row.isPercent?'#94a3b8':'#1e293b',position:'sticky',left:0,background:row.isBold?'#fffbfb':'#fff',zIndex:1}}>{row.label}</td>
                                 {row.cells.map((cell,ci) => {
-                                  if (!cell.isCur) return <td key={ci} style={{...scTd,textAlign:'center',fontWeight:row.isBold?600:400,color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#475569'}}><ScVal v={cell.v} metric={row.key} ym={cell.ym} dupla={dupla} bold={row.isBold}/></td>;
-                                  if (cell.isFcstCell) return [<td key={ci+'m'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#0284c7',fontWeight:700}}>{cell.v}</td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
-                                  if (cell.isRate) return [<td key={ci+'m'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
+                                  if (!cell.isCur) return <td key={ci} style={{...scTd,textAlign:'center',fontWeight:row.isBold?600:400,color:row.isPercent?'#94a3b8':'#475569'}}><ScVal v={cell.v} metric={row.key} ym={cell.ym} dupla={dupla} bold={row.isBold}/></td>;
+                                  if (cell.isRate) {
+                                    if (isG) return [<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
+                                    return [<td key={ci+'m'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
+                                  }
+                                  if (isG) return [<td key={ci+'f'} style={{...scTd,textAlign:'center',fontWeight:600,background:'#fef2f208'}}>{cell.fcst}</td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',fontWeight:700,background:'#fefce808'}}><ScVal v={cell.mtdReal} metric={row.key} ym={cell.ym} dupla={dupla} bold color={clr}/></td>];
                                   return [<td key={ci+'m'} style={{...scTd,textAlign:'center',background:'#fef2f208'}}>{cell.meta}</td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',fontWeight:600,background:'#fef2f208'}}>{cell.fcst}</td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',fontWeight:600,color:scPctColor(cell.pctA),background:'#fef2f208'}}>{cell.pctA}</td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',background:'#fefce808'}}>{cell.mtdMeta}</td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',fontWeight:700,background:'#fefce808'}}><ScVal v={cell.mtdReal} metric={row.key} ym={cell.ym} dupla={dupla} bold color={clr}/></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',fontWeight:600,color:scPctColor(cell.mtdPct),background:'#fef9c308'}}>{cell.mtdPct}</td>];
                                 })}
+                                {scData?.wow && <td style={{...scTd,textAlign:'center',fontWeight:700,fontSize:14,color:wowVal!==null?(wowVal>0?'#22c55e':wowVal<0?'#ef4444':'#94a3b8'):'#d4d4d8',background:'#faf5ff'}}>{wowVal!==null?wowLabel(wowVal):'—'}</td>}
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
-                          {scData?.wow && (
-                            <tfoot>
-                              <tr><td colSpan={scPastCols.length + (scHasCur ? 7 : 1)} style={{padding:'8px 10px',background:'#f5f0ff',borderTop:'2px solid #8b5cf6',fontSize:12,fontWeight:700,color:'#7c3aed'}}>WoW (Segunda vs Segunda) — ref: {scData.wow.refDate}</td></tr>
-                              {WOW_ROWS.map((wr,wi) => {
-                                const val = getWow(dupla, wr.key);
-                                if (val === null) return null;
-                                return (
-                                  <tr key={'wow-'+wi} style={{background:wi%2===0?'#faf8ff':'#f5f0ff'}}>
-                                    <td style={{...scTd,fontSize:12,color:'#6d28d9',fontWeight:500,position:'sticky',left:0,background:wi%2===0?'#faf8ff':'#f5f0ff',zIndex:1}}>{wr.label}</td>
-                                    {scPastCols.map(c=><td key={c.k} style={{...scTd,textAlign:'center',color:'#d4d4d8'}}>—</td>)}
-                                    {scHasCur && <>
-                                      <td style={{...scTd,textAlign:'center',color:'#d4d4d8'}}>—</td>
-                                      <td style={{...scTd,textAlign:'center',color:'#d4d4d8'}}>—</td>
-                                      <td style={{...scTd,textAlign:'center',color:'#d4d4d8'}}>—</td>
-                                      <td style={{...scTd,textAlign:'center',color:'#d4d4d8'}}>—</td>
-                                      <td colSpan={2} style={{...scTd,textAlign:'center',fontWeight:700,fontSize:16,color:wowColor(val),background:'#faf5ff'}}>{wowLabel(val)}</td>
-                                    </>}
-                                  </tr>
-                                );
-                              })}
-                            </tfoot>
-                          )}
                         </table>
                       </div>
                     )}
