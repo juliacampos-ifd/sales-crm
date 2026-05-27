@@ -52,7 +52,7 @@ CREATE TABLE public.brands (
 CREATE TABLE public.pipelines (
   id SERIAL PRIMARY KEY,
   brand_id INTEGER REFERENCES public.brands(id) ON DELETE CASCADE,
-  product TEXT NOT NULL CHECK (product IN ('3s', 'saipos', 'comer_fora', 'get_in', 'emilia_vision')),
+  product TEXT NOT NULL CHECK (product IN ('3s', 'saipos', 'totem', 'comer_fora', 'get_in', 'emilia_vision', 'novos_produtos_3s')),
   stage TEXT NOT NULL,
   active BOOLEAN DEFAULT true,
   updated_at TIMESTAMPTZ DEFAULT now(),
