@@ -208,7 +208,7 @@ export async function PATCH(request) {
     }
     // Continue with brand-level updates for non-FUP fields
     const updates2 = nonFupUpdates;
-    const allowed2 = ['marca', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp', 'base_elegivel', 'culinaria', 'produto_totem', 'base_totem', 'coordenador_delivery', 'executivo_delivery', 'motivo_perda_standby', 'analise_teste_pdv', 'top_down'];
+    const allowed2 = ['marca', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp', 'base_elegivel', 'culinaria', 'produto_totem', 'base_totem', 'coordenador_delivery', 'executivo_delivery', 'motivo_perda_standby', 'analise_teste_pdv', 'top_down', 'emilia_vision_details'];
     const safeUpdates2 = {};
     allowed2.forEach(k => { if (updates2[k] !== undefined) safeUpdates2[k] = updates2[k]; });
     if (safeUpdates2.qtd_lojas_fisicas !== undefined) {
@@ -228,7 +228,7 @@ export async function PATCH(request) {
   const { data: current } = await supabase.from('brands').select('proximo_passo').eq('id', id).single();
 
   // Only allow safe fields to be updated
-  const allowed = ['marca', 'proximo_passo', 'data_ultimo_fup', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp', 'base_elegivel', 'culinaria', 'produto_totem', 'base_totem', 'coordenador_delivery', 'executivo_delivery', 'motivo_perda_standby', 'analise_teste_pdv', 'top_down'];
+  const allowed = ['marca', 'proximo_passo', 'data_ultimo_fup', 'classificacao', 'estado', 'qtd_lojas_fisicas', 'pdv_atual', 'marca_top_ka', 'marca_no_bp', 'base_elegivel', 'culinaria', 'produto_totem', 'base_totem', 'coordenador_delivery', 'executivo_delivery', 'motivo_perda_standby', 'analise_teste_pdv', 'top_down', 'emilia_vision_details'];
   const safeUpdates = {};
   allowed.forEach(k => { if (updates[k] !== undefined) safeUpdates[k] = updates[k]; });
 
