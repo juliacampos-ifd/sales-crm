@@ -51,6 +51,12 @@ export default function CRMPage() {
   const [filterCFPrioridade, setFilterCFPrioridade] = useState([]);
   const [cfDetails, setCfDetails] = useState({});
   const [cfChanged, setCfChanged] = useState(false);
+  const [evDetails, setEvDetails] = useState({});
+  const [evChanged, setEvChanged] = useState(false);
+  // Emilia Vision filters
+  const [filterEVSinergia, setFilterEVSinergia] = useState([]);
+  const [filterEVBaseAndres, setFilterEVBaseAndres] = useState('');
+  const [filterEVTipo, setFilterEVTipo] = useState([]);
   // Forecast
   const [forecastMetas, setForecastMetas] = useState([]);
   const [forecastEntries, setForecastEntries] = useState([]);
@@ -86,6 +92,7 @@ export default function CRMPage() {
   const [scStagesOpen, setScStagesOpen] = useState(false);
   // ── DASHBOARD WoW ──
   const [wowData, setWowData] = useState(null);
+  const [wowDates, setWowDates] = useState(null);
   // ── ATIVIDADE DO TIME (admin only) ──
   const [activityData, setActivityData] = useState(null);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -116,6 +123,8 @@ export default function CRMPage() {
     setEditFUP(brand.pipelines?.[activeProduct]?.proximo_passo || '');
     setCfDetails(brand.comer_fora_details || {});
     setCfChanged(false);
+    setEvDetails(brand.emilia_vision_details || {});
+    setEvChanged(false);
     setEditCulinaria(brand.culinaria || '');
     setEditCoordDelivery(brand.coordenador_delivery || '');
     setEditExecDelivery(brand.executivo_delivery || '');
@@ -148,6 +157,9 @@ export default function CRMPage() {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (data) {
       setProfile(data);
+      // Auto-select product for restricted team users
+      if (data.team === 'emilia_vision') setActiveProduct('emilia_vision');
+      if (data.team === 'comer_fora') setActiveProduct('comer_fora');
       if (data.role === 'admin') {
         try {
           const res = await apiFetch('/api/activity?_t=' + Date.now(), { cache: 'no-store' });
@@ -194,15 +206,22 @@ export default function CRMPage() {
       }).catch(console.error);
       apiFetch('/api/wow?_t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(d => {
         if (d.wow) setWowData(d.wow);
+        if (d.refDate && d.prevDate) setWowDates({ ref: d.refDate, prev: d.prevDate });
       }).catch(console.error);
     }
   }, [user, loadBrands]);
   // Viewer = read-only (vê tudo, não edita nada)
   const canEdit = profile?.role !== 'viewer';
+  // Restricted = viewer locked to a specific product
+  const isRestricted = profile?.team === 'emilia_vision' || profile?.team === 'comer_fora';
   // ── Role-based filtering ──
   const filtered = useMemo(() => {
     let d = brands;
-    if (profile?.role === 'executivo') {
+    if (profile?.team === 'emilia_vision') {
+      d = d.filter(b => b.pipelines?.emilia_vision);
+    } else if (profile?.team === 'comer_fora') {
+      d = d.filter(b => b.pipelines?.comer_fora);
+    } else if (profile?.role === 'executivo') {
       if (profile.team === 'saipos') {
         // Marcos/Lucas: veem todas as marcas que têm pipeline saipos ou totem
         d = d.filter(b => b.pipelines?.saipos || b.pipelines?.totem);
@@ -224,8 +243,12 @@ export default function CRMPage() {
     if (filterTopDown) d = d.filter(b => b.top_down === filterTopDown);
     if (filterBaseElegivel.length > 0) d = d.filter(b => { const be = (b.base_elegivel || "").split(",").map(s => s.trim()); return filterBaseElegivel.some(f => be.includes(f)); });
     if (filterHaas.length > 0) d = d.filter(b => { const pt = (b.produto_totem || "").split(",").map(s => s.trim()); return filterHaas.some(f => pt.includes(f)); });
+    if (filterEVSinergia.length > 0) d = d.filter(b => filterEVSinergia.includes(b.emilia_vision_details?.sinergia));
+    if (filterEVBaseAndres === 'sim') d = d.filter(b => b.emilia_vision_details?.base_andres === true);
+    if (filterEVBaseAndres === 'nao') d = d.filter(b => !b.emilia_vision_details?.base_andres);
+    if (filterEVTipo.length > 0) d = d.filter(b => filterEVTipo.includes(b.emilia_vision_details?.tipo || 'Hunting'));
     return d;
-  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct]);
+  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo]);
   // ── Loss/StandBy reasons ──
   const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
@@ -587,6 +610,7 @@ export default function CRMPage() {
     { key: '3s_g', label: '3S Checkout G', subtitle: 'Contrato assinado', color: '#b91c1c' },
     { key: 'saipos', label: 'Saipos', subtitle: 'Lojas enviando forms', color: '#2563eb' },
     { key: 'totem', label: 'Totem', subtitle: 'Novos totens', color: '#7c3aed' },
+    { key: 'comer_fora', label: 'Comer Fora', subtitle: 'Aceites', color: '#9C050B' },
   ];
   const FISCAL_MONTHS = [
     { year: 2026, month: 4 }, { year: 2026, month: 5 }, { year: 2026, month: 6 },
@@ -758,15 +782,15 @@ export default function CRMPage() {
         <div style={{ display: 'flex', gap: 4, background: '#f1f5f9', borderRadius: 10, padding: 3 }}>
           <NavBtn id="pipeline" icon={LayoutGrid} label="Pipeline" />
           <NavBtn id="contacts" icon={Users} label="Marcas" />
-          {canEdit && <a href="/input" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
+          {canEdit && !isRestricted && <a href="/input" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Plus size={16} /> Nova Marca
           </a>}
-          <a href="/rv" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
+          {!isRestricted && <a href="/rv" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Award size={16} /> RV
-          </a>
-          <NavBtn id="forecast" icon={Calendar} label="Forecast" />
-          <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
-          <NavBtn id="scorecard" icon={Target} label="Scorecard" />
+          </a>}
+          {!isRestricted && <NavBtn id="forecast" icon={Calendar} label="Forecast" />}
+          {!isRestricted && <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />}
+          {!isRestricted && <NavBtn id="scorecard" icon={Target} label="Scorecard" />}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {profile?.role === 'admin' && (
@@ -845,7 +869,11 @@ export default function CRMPage() {
       {/* PRODUCT TABS */}
       {(view === 'pipeline' || view === 'contacts') && (
         <div style={{ padding: '14px 28px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {Object.keys(PRODUCTS).map(pk => <ProductTab key={pk} pkey={pk} />)}
+          {Object.keys(PRODUCTS).filter(pk => {
+            if (profile?.team === 'emilia_vision') return pk === 'emilia_vision';
+            if (profile?.team === 'comer_fora') return pk === 'comer_fora';
+            return true;
+          }).map(pk => <ProductTab key={pk} pkey={pk} />)}
         </div>
       )}
       {/* FILTERS */}
@@ -878,6 +906,17 @@ export default function CRMPage() {
             <MultiFilter label="Cidade" selected={filterCFCidade} onChange={setFilterCFCidade} options={[...new Set(brands.filter(b=>b.comer_fora_details?.cidade).map(b=>b.comer_fora_details.cidade))].sort()} filterId="cf_cidade" />
             <MultiFilter label="Trade" selected={filterCFTrade} onChange={setFilterCFTrade} options={['Sim','Não']} filterId="cf_trade" />
             <MultiFilter label="Prioridade" selected={filterCFPrioridade} onChange={setFilterCFPrioridade} options={['1','2','3']} filterId="cf_prioridade" />
+          </>)}
+          {activeProduct === 'emilia_vision' && (<>
+            <MultiFilter label="Tipo" selected={filterEVTipo} onChange={setFilterEVTipo} options={['Hunting','Farming']} filterId="ev_tipo" />
+            <MultiFilter label="Sinergia" selected={filterEVSinergia} onChange={setFilterEVSinergia} options={['Emilia ajudou','3S ajudou','Sinergia']} filterId="ev_sinergia" />
+            {(() => { const cur = filterEVBaseAndres; return (
+              <select value={cur} onChange={e => setFilterEVBaseAndres(e.target.value)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 10, border: cur ? '1px solid #fa8072' : '1px solid #e2e8f0', background: cur ? '#fff5f5' : '#fff', color: cur ? '#fa8072' : '#64748b', cursor: 'pointer', fontWeight: 500 }}>
+                <option value="">Base Andres</option>
+                <option value="sim">Sim</option>
+                <option value="nao">Não</option>
+              </select>
+            ); })()}
           </>)}
           {product?.closedStages && (
             <button onClick={() => setShowClosed(!showClosed)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: showClosed ? '#fef2f2' : '#fff', color: showClosed ? '#ef4444' : '#64748b', cursor: 'pointer' }}>
@@ -922,6 +961,7 @@ export default function CRMPage() {
                           {b.culinaria && <span style={{ fontSize: 10, background: "#faf5ff", color: "#7c3aed", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.culinaria}</span>}
                           {activeProduct === 'totem' && b.produto_totem && <span style={{ fontSize: 10, background: "#fefce8", color: "#a16207", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.produto_totem}</span>}
                           {activeProduct === 'totem' && b.base_totem && <span style={{ fontSize: 10, background: "#f0f9ff", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 2 }}>{b.base_totem}</span>}
+                          {activeProduct === 'emilia_vision' && <span style={{ fontSize: 10, background: (b.emilia_vision_details?.tipo || 'Hunting') === 'Hunting' ? '#fef3c7' : '#d1fae5', color: (b.emilia_vision_details?.tipo || 'Hunting') === 'Hunting' ? '#92400e' : '#065f46', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.emilia_vision_details?.tipo || 'Hunting'}</span>}
                           {Object.entries(b.pipelines || {}).filter(([k, v]) => k !== activeProduct && v.stage).map(([k]) => (
                             <div key={k} title={PRODUCTS[k]?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: PRODUCTS[k]?.color, marginTop: 3 }} />
                           ))}
@@ -1078,7 +1118,10 @@ export default function CRMPage() {
 
               return (
                 <div style={{ marginBottom: 20 }}>
-                  <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Pipeline PDVs</h4>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '0 0 14px' }}>
+                    <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Pipeline PDVs</h4>
+                    {wowDates && <span style={{ fontSize: 11, color: '#94a3b8' }}>WoW: {wowDates.ref.slice(5).replace('-','/')} vs {wowDates.prev.slice(5).replace('-','/')}</span>}
+                  </div>
                   {pdvRows.map((row) => {
                     const topoB = getPdvBrands(row.pk, row.topo, row.classFilter);
                     const meioB = getPdvBrands(row.pk, row.meio, row.classFilter);
@@ -1546,6 +1589,7 @@ export default function CRMPage() {
                                 <th style={{...scTh,background:'#980000',color:'#fff',fontSize:11,textAlign:'center'}}>Fcst</th>
                                 <th style={{...scTh,background:'#073763',color:'#fff',fontSize:11,textAlign:'center'}}>MTD Real</th>
                               </>}
+                              {isG && <th style={{...scTh,background:'#065f46',color:'#fff',fontSize:10}}>Acumulado</th>}
                               {scData?.wow && <th style={{...scTh,background:'#7c3aed',color:'#fff',fontSize:10}}>WoW</th>}
                             </tr>
                             <tr style={{background:'#f8fafc'}}>
@@ -1553,6 +1597,7 @@ export default function CRMPage() {
                               {scPastCols.map(c=><th key={c.k} style={{...scTh,fontSize:10}}>{MONTH_NAMES[c.m-1]} Real</th>)}
                               {scHasCur && !isG && <><th style={{...scTh,background:'#fef2f2',fontSize:10}}>{MONTH_NAMES[scMonth-1]} Meta</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>% Atig</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Meta</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Real</th><th style={{...scTh,background:'#fef9c3',fontSize:10}}>MTD %</th></>}
                               {scHasCur && isG && <><th style={{...scTh,background:'#fef2f2',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Real</th></>}
+                              {isG && <th style={{...scTh,background:'#ecfdf5',fontSize:10}}>Total</th>}
                               {scData?.wow && <th style={{...scTh,background:'#f5f0ff',fontSize:10}}>Seg vs Seg</th>}
                             </tr></thead>
                           <tbody>
@@ -1570,6 +1615,11 @@ export default function CRMPage() {
                                   if (isG) return [<td key={ci+'f'} style={{...scTd,textAlign:'center',fontWeight:600,background:'#fef2f208'}}>{cell.fcst}</td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',fontWeight:700,background:'#fefce808'}}><ScVal v={cell.mtdReal} metric={row.key} ym={cell.ym} dupla={dupla} bold color={clr}/></td>];
                                   return [<td key={ci+'m'} style={{...scTd,textAlign:'center',background:'#fef2f208'}}>{cell.meta}</td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',fontWeight:600,background:'#fef2f208'}}>{cell.fcst}</td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',fontWeight:600,color:scPctColor(cell.pctA),background:'#fef2f208'}}>{cell.pctA}</td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',background:'#fefce808'}}>{cell.mtdMeta}</td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',fontWeight:700,background:'#fefce808'}}><ScVal v={cell.mtdReal} metric={row.key} ym={cell.ym} dupla={dupla} bold color={clr}/></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',fontWeight:600,color:scPctColor(cell.mtdPct),background:'#fef9c308'}}>{cell.mtdPct}</td>];
                                 })}
+                                {isG && (() => {
+                                  if (row.isPercent || row.key === 'media_lojas' || row.key === 'elegiveis') return <td style={{...scTd,textAlign:'center',color:'#d4d4d8',background:'#ecfdf508'}}>—</td>;
+                                  const accum = row.cells.reduce((s, c) => s + (c.isCur ? (c.mtdReal || 0) : (typeof c.v === 'number' ? c.v : 0)), 0);
+                                  return <td style={{...scTd,textAlign:'center',fontWeight:700,fontSize:14,color:'#065f46',background:'#ecfdf508'}}>{accum}</td>;
+                                })()}
                                 {scData?.wow && <td style={{...scTd,textAlign:'center',fontWeight:700,fontSize:14,color:wowVal!==null?(wowVal>0?'#22c55e':wowVal<0?'#ef4444':'#94a3b8'):'#d4d4d8',background:'#faf5ff'}}>{wowVal!==null?wowLabel(wowVal):'—'}</td>}
                               </tr>
                               );
@@ -1726,6 +1776,50 @@ export default function CRMPage() {
                   <div style={{ marginBottom: 12 }}>
                     <span style={{ color: '#64748b', display: 'block', marginBottom: 4, fontSize: 12 }}>Base Totem</span>
                     <span style={{ fontSize: 13, color: '#1e293b', fontWeight: 600 }}>{selectedBrand.base_totem}</span>
+                  </div>
+                )}
+                {/* Emilia Vision Details */}
+                {selectedBrand?.pipelines?.emilia_vision && (
+                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, marginTop: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#fa8072', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Emilia Vision</div>
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Tipo</span>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {['Hunting', 'Farming'].map(opt => (
+                          <button key={opt} disabled={!canEdit} onClick={() => { if (canEdit) { setEvDetails(p => ({...p, tipo: opt})); setEvChanged(true); } }}
+                            style={{ flex: 1, padding: '6px', borderRadius: 8, border: (evDetails.tipo || 'Hunting') === opt ? '2px solid ' + (opt === 'Hunting' ? '#92400e' : '#065f46') : '1px solid #e2e8f0', background: (evDetails.tipo || 'Hunting') === opt ? (opt === 'Hunting' ? '#fef3c7' : '#d1fae5') : '#fff', color: (evDetails.tipo || 'Hunting') === opt ? (opt === 'Hunting' ? '#92400e' : '#065f46') : '#64748b', fontSize: 12, fontWeight: 600, cursor: canEdit ? 'pointer' : 'default', opacity: canEdit ? 1 : 0.6 }}>
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Sinergia</span>
+                      <select disabled={!canEdit} value={evDetails.sinergia || ''} onChange={e => { setEvDetails(p => ({...p, sinergia: e.target.value})); setEvChanged(true); }}
+                        style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, background: '#fff', outline: 'none', opacity: canEdit ? 1 : 0.6 }}>
+                        <option value="">—</option>
+                        <option>Emilia ajudou</option><option>3S ajudou</option><option>Sinergia</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ color: '#64748b', fontSize: 12 }}>Base Andres</span>
+                      <button disabled={!canEdit} onClick={() => { if (canEdit) { setEvDetails(p => ({...p, base_andres: !p.base_andres})); setEvChanged(true); } }}
+                        style={{ padding: '4px 14px', borderRadius: 20, border: evDetails.base_andres ? '2px solid #fa8072' : '1px solid #e2e8f0', background: evDetails.base_andres ? '#fff5f5' : '#fff', color: evDetails.base_andres ? '#fa8072' : '#64748b', fontSize: 12, fontWeight: 600, cursor: canEdit ? 'pointer' : 'default', opacity: canEdit ? 1 : 0.6 }}>
+                        {evDetails.base_andres ? 'Sim' : 'Não'}
+                      </button>
+                    </div>
+                    {canEdit && evChanged && (
+                      <button onClick={async () => {
+                        await apiFetch('/api/brands', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ id: selectedBrand.id, emilia_vision_details: evDetails }) });
+                        setEvChanged(false);
+                        const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
+                        const freshData = await freshRes.json();
+                        if (freshData.brands) { setBrands(freshData.brands); const updated = freshData.brands.find(b => b.id === selectedBrand.id); if (updated) { setSelectedBrand(updated); setEvDetails(updated.emilia_vision_details || {}); } }
+                      }} style={{ width: '100%', padding: '8px', borderRadius: 8, background: '#fa8072', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: 4 }}>
+                        Salvar Emilia Vision
+                      </button>
+                    )}
                   </div>
                 )}
                 {/* HAAS/SAAS multi-select */}
