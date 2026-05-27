@@ -56,7 +56,7 @@ export async function GET(request) {
   // Transform pipelines array into object keyed by product
   const transformed = all.map(brand => {
     const pipelinesObj = {};
-    (brand.pipelines || []).forEach(p => {
+    (brand.pipelines || []).filter(p => p.stage !== '14. Desativado').forEach(p => {
       pipelinesObj[p.product] = { stage: p.stage, active: p.active, updated_at: p.updated_at, responsavel: p.responsavel, proximo_passo: p.proximo_passo, data_ultimo_fup: p.data_ultimo_fup };
     });
     const cfDetails = Array.isArray(brand.comer_fora_details) ? (brand.comer_fora_details[0] || null) : (brand.comer_fora_details || null);
