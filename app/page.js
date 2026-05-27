@@ -247,8 +247,15 @@ export default function CRMPage() {
     if (filterEVBaseAndres === 'sim') d = d.filter(b => b.emilia_vision_details?.base_andres === true);
     if (filterEVBaseAndres === 'nao') d = d.filter(b => !b.emilia_vision_details?.base_andres);
     if (filterEVTipo.length > 0) d = d.filter(b => filterEVTipo.includes(b.emilia_vision_details?.tipo || 'Hunting'));
+    // Comer Fora filters
+    if (filterCFEstrategia.length > 0) d = d.filter(b => filterCFEstrategia.includes(b.comer_fora_details?.estrategia));
+    if (filterCFSolucao.length > 0) d = d.filter(b => filterCFSolucao.includes(b.comer_fora_details?.solucao));
+    if (filterCFProvider.length > 0) d = d.filter(b => filterCFProvider.includes(b.comer_fora_details?.provider));
+    if (filterCFCidade.length > 0) d = d.filter(b => { const c = b.comer_fora_details?.cidade || ''; return filterCFCidade.some(f => c.includes(f)); });
+    if (filterCFTrade.length > 0) d = d.filter(b => { const t = b.comer_fora_details?.trade ? 'Sim' : 'Não'; return filterCFTrade.includes(t); });
+    if (filterCFPrioridade.length > 0) d = d.filter(b => filterCFPrioridade.includes(String(b.comer_fora_details?.prioridade)));
     return d;
-  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo]);
+  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo, filterCFEstrategia, filterCFSolucao, filterCFProvider, filterCFCidade, filterCFTrade, filterCFPrioridade]);
   // ── Loss/StandBy reasons ──
   const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
@@ -903,7 +910,7 @@ export default function CRMPage() {
             <MultiFilter label="Estrategia" selected={filterCFEstrategia} onChange={setFilterCFEstrategia} options={[...new Set(brands.filter(b=>b.comer_fora_details?.estrategia).map(b=>b.comer_fora_details.estrategia))].sort()} filterId="cf_estrategia" />
             <MultiFilter label="Solucao" selected={filterCFSolucao} onChange={setFilterCFSolucao} options={[...new Set(brands.filter(b=>b.comer_fora_details?.solucao).map(b=>b.comer_fora_details.solucao))].sort()} filterId="cf_solucao" />
             <MultiFilter label="Provider" selected={filterCFProvider} onChange={setFilterCFProvider} options={[...new Set(brands.filter(b=>b.comer_fora_details?.provider).map(b=>b.comer_fora_details.provider))].sort()} filterId="cf_provider" />
-            <MultiFilter label="Cidade" selected={filterCFCidade} onChange={setFilterCFCidade} options={[...new Set(brands.filter(b=>b.comer_fora_details?.cidade).map(b=>b.comer_fora_details.cidade))].sort()} filterId="cf_cidade" />
+            <MultiFilter label="Cidade" selected={filterCFCidade} onChange={setFilterCFCidade} options={[...new Set(brands.filter(b=>b.comer_fora_details?.cidade).flatMap(b=>(b.comer_fora_details.cidade||'').split(',').map(s=>s.trim()).filter(Boolean)))].sort()} filterId="cf_cidade" />
             <MultiFilter label="Trade" selected={filterCFTrade} onChange={setFilterCFTrade} options={['Sim','Não']} filterId="cf_trade" />
             <MultiFilter label="Prioridade" selected={filterCFPrioridade} onChange={setFilterCFPrioridade} options={['1','2','3']} filterId="cf_prioridade" />
           </>)}
