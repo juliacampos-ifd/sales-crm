@@ -788,8 +788,8 @@ export default function CRMPage() {
           {!isRestricted && <a href="/rv" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Award size={16} /> RV
           </a>}
-          {!isRestricted && <NavBtn id="forecast" icon={Calendar} label="Forecast" />}
-          {!isRestricted && <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />}
+          {(!isRestricted || profile?.team === 'comer_fora') && <NavBtn id="forecast" icon={Calendar} label="Forecast" />}
+          <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
           {!isRestricted && <NavBtn id="scorecard" icon={Target} label="Scorecard" />}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1402,7 +1402,7 @@ export default function CRMPage() {
                 const isCur = col.y===scYear && col.m===scMonth;
                 if (def.key==='elegiveis') {
                   if (isCur) row.cells.push({isCur:true,meta:elegMeta,fcst:eleg,pctA:elegMeta>0?Math.round((eleg/elegMeta)*100)+'%':'—',real:eleg,mtdMeta:eleg,mtdReal:eleg,mtdPct:'100%',ym:col.k});
-                  else row.cells.push({v:scGm(dupla,col.y,col.m,'elegiveis'),ym:col.k});
+                  else row.cells.push({v: isG ? eleg : scGm(dupla,col.y,col.m,'elegiveis'),ym:col.k});
                 }
                 else if (def.key==='media_lojas') {
                   const fch = isCur ? cmR.contrato_assinado : scGr(dupla,col.k,'contrato_assinado');
@@ -1429,7 +1429,7 @@ export default function CRMPage() {
                     if (def.den==='elegiveis') { num=cmR[def.num]; den=eleg; }
                     else { num=cmR[def.num]; den=cmR[def.den]; }
                   } else {
-                    if (def.den==='elegiveis') { num=scGr(dupla,col.k,def.num); den=scGm(dupla,col.y,col.m,'elegiveis'); }
+                    if (def.den==='elegiveis') { num=scGr(dupla,col.k,def.num); den=isG ? eleg : scGm(dupla,col.y,col.m,'elegiveis'); }
                     else { num=scGr(dupla,col.k,def.num); den=scGr(dupla,col.k,def.den); }
                   }
                   const pct=den>0?Math.round((num/den)*100)+'%':'0%';
