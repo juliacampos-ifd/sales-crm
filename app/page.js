@@ -53,6 +53,11 @@ export default function CRMPage() {
   const [cfChanged, setCfChanged] = useState(false);
   const [evDetails, setEvDetails] = useState({});
   const [evChanged, setEvChanged] = useState(false);
+  const [np3sDetails, setNp3sDetails] = useState({});
+  const [np3sChanged, setNp3sChanged] = useState(false);
+  // Novos Produtos 3S filters
+  const [filterNP3SAddon, setFilterNP3SAddon] = useState([]);
+  const [filterNP3SMensalidade, setFilterNP3SMensalidade] = useState([]);
   // Emilia Vision filters
   const [filterEVSinergia, setFilterEVSinergia] = useState([]);
   const [filterEVBaseAndres, setFilterEVBaseAndres] = useState('');
@@ -125,6 +130,8 @@ export default function CRMPage() {
     setCfChanged(false);
     setEvDetails(brand.emilia_vision_details || {});
     setEvChanged(false);
+    setNp3sDetails(brand.novos_produtos_3s_details || {});
+    setNp3sChanged(false);
     setEditCulinaria(brand.culinaria || '');
     setEditCoordDelivery(brand.coordenador_delivery || '');
     setEditExecDelivery(brand.executivo_delivery || '');
@@ -254,8 +261,11 @@ export default function CRMPage() {
     if (filterCFCidade.length > 0) d = d.filter(b => { const c = b.comer_fora_details?.cidade || ''; return filterCFCidade.some(f => c.includes(f)); });
     if (filterCFTrade.length > 0) d = d.filter(b => { const t = b.comer_fora_details?.trade ? 'Sim' : 'Não'; return filterCFTrade.includes(t); });
     if (filterCFPrioridade.length > 0) d = d.filter(b => filterCFPrioridade.includes(String(b.comer_fora_details?.prioridade)));
+    // Novos Produtos 3S filters
+    if (filterNP3SAddon.length > 0) d = d.filter(b => { const det = b.novos_produtos_3s_details || {}; return filterNP3SAddon.some(a => a === '3S Eats' ? det.eats : a === '3S Go' ? det.go : a === 'Pagamento na Mesa' ? det.pagamento_mesa : false); });
+    if (filterNP3SMensalidade.length > 0) d = d.filter(b => { const det = b.novos_produtos_3s_details || {}; return filterNP3SMensalidade.some(a => a === '3S Eats' ? det.eats_incluso : a === '3S Go' ? det.go_incluso : a === 'Pagamento na Mesa' ? det.pagamento_mesa_incluso : false); });
     return d;
-  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo, filterCFEstrategia, filterCFSolucao, filterCFProvider, filterCFCidade, filterCFTrade, filterCFPrioridade]);
+  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo, filterCFEstrategia, filterCFSolucao, filterCFProvider, filterCFCidade, filterCFTrade, filterCFPrioridade, filterNP3SAddon, filterNP3SMensalidade]);
   // ── Loss/StandBy reasons ──
   const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
@@ -291,6 +301,17 @@ export default function CRMPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: brandId, motivo_perda_standby: reason }),
           });
+        }
+        // Auto-ativar Novos Produtos 3S quando contrato assinado em 3S
+        if (productKey === '3s' && newStage === '9. Contrato assinado') {
+          const brand = brands.find(b => b.id === brandId);
+          if (brand && !brand.pipelines?.novos_produtos_3s) {
+            await apiFetch('/api/pipelines', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ brand_id: brandId, product: 'novos_produtos_3s', user_id: user?.id, user_name: profile?.name }),
+            });
+          }
         }
         const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
         const freshData = await freshRes.json();
@@ -925,6 +946,10 @@ export default function CRMPage() {
               </select>
             ); })()}
           </>)}
+          {activeProduct === 'novos_produtos_3s' && (<>
+            <MultiFilter label="Add-on" selected={filterNP3SAddon} onChange={setFilterNP3SAddon} options={['3S Eats','3S Go','Pagamento na Mesa']} filterId="np3s_addon" />
+            <MultiFilter label="Mensalidade" selected={filterNP3SMensalidade} onChange={setFilterNP3SMensalidade} options={['3S Eats','3S Go','Pagamento na Mesa']} filterId="np3s_mens" />
+          </>)}
           {product?.closedStages && (
             <button onClick={() => setShowClosed(!showClosed)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: showClosed ? '#fef2f2' : '#fff', color: showClosed ? '#ef4444' : '#64748b', cursor: 'pointer' }}>
               {showClosed ? 'Ocultar Perdidos' : 'Mostrar Perdidos'}
@@ -958,21 +983,38 @@ export default function CRMPage() {
                         onMouseEnter={e => { e.currentTarget.style.borderColor = product.color; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{b.marca}</div>
-                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || '—'} / ${b.responsavel_closer || '—'}` : '—')}</div>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
-                          {b.analise_teste_pdv && <span style={{ fontSize: 10, background: '#f3e8ff', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>AT</span>}
-                          {b.top_down === 'Top Down' && <span style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>TD</span>}
-                          {b.top_down === 'Não Top Down' && <span style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>NTD</span>}
-                          {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
-                          {b.culinaria && <span style={{ fontSize: 10, background: "#faf5ff", color: "#7c3aed", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.culinaria}</span>}
-                          {activeProduct === 'totem' && b.produto_totem && <span style={{ fontSize: 10, background: "#fefce8", color: "#a16207", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.produto_totem}</span>}
-                          {activeProduct === 'totem' && b.base_totem && <span style={{ fontSize: 10, background: "#f0f9ff", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 2 }}>{b.base_totem}</span>}
-                          {activeProduct === 'emilia_vision' && <span style={{ fontSize: 10, background: (b.emilia_vision_details?.tipo || 'Hunting') === 'Hunting' ? '#fef3c7' : '#d1fae5', color: (b.emilia_vision_details?.tipo || 'Hunting') === 'Hunting' ? '#92400e' : '#065f46', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.emilia_vision_details?.tipo || 'Hunting'}</span>}
-                          {Object.entries(b.pipelines || {}).filter(([k, v]) => k !== activeProduct && v.stage).map(([k]) => (
-                            <div key={k} title={PRODUCTS[k]?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: PRODUCTS[k]?.color, marginTop: 3 }} />
-                          ))}
-                        </div>
+                        {activeProduct === 'novos_produtos_3s' ? (
+                          <>
+                            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{b.qtd_lojas_fisicas || 0} lojas</div>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
+                              {b.novos_produtos_3s_details?.eats && <span style={{ fontSize: 10, background: '#ede9fe', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>Eats</span>}
+                              {b.novos_produtos_3s_details?.go && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>Go</span>}
+                              {b.novos_produtos_3s_details?.pagamento_mesa && <span style={{ fontSize: 10, background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>Pgto Mesa</span>}
+                              {Object.entries(b.pipelines || {}).filter(([k, v]) => k !== activeProduct && v.stage).map(([k]) => (
+                                <div key={k} title={PRODUCTS[k]?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: PRODUCTS[k]?.color, marginTop: 3 }} />
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || '—'} / ${b.responsavel_closer || '—'}` : '—')}</div>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
+                              {b.analise_teste_pdv && <span style={{ fontSize: 10, background: '#f3e8ff', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>AT</span>}
+                              {b.top_down === 'Top Down' && <span style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>TD</span>}
+                              {b.top_down === 'Não Top Down' && <span style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>NTD</span>}
+                              {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
+                              {b.culinaria && <span style={{ fontSize: 10, background: "#faf5ff", color: "#7c3aed", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.culinaria}</span>}
+                              {activeProduct === 'totem' && b.produto_totem && <span style={{ fontSize: 10, background: "#fefce8", color: "#a16207", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.produto_totem}</span>}
+                              {activeProduct === 'totem' && b.base_totem && <span style={{ fontSize: 10, background: "#f0f9ff", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 2 }}>{b.base_totem}</span>}
+                              {activeProduct === 'emilia_vision' && <span style={{ fontSize: 10, background: (b.emilia_vision_details?.tipo || 'Hunting') === 'Hunting' ? '#fef3c7' : '#d1fae5', color: (b.emilia_vision_details?.tipo || 'Hunting') === 'Hunting' ? '#92400e' : '#065f46', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.emilia_vision_details?.tipo || 'Hunting'}</span>}
+                              {Object.entries(b.pipelines || {}).filter(([k, v]) => k !== activeProduct && v.stage).map(([k]) => (
+                                <div key={k} title={PRODUCTS[k]?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: PRODUCTS[k]?.color, marginTop: 3 }} />
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1825,6 +1867,49 @@ export default function CRMPage() {
                         if (freshData.brands) { setBrands(freshData.brands); const updated = freshData.brands.find(b => b.id === selectedBrand.id); if (updated) { setSelectedBrand(updated); setEvDetails(updated.emilia_vision_details || {}); } }
                       }} style={{ width: '100%', padding: '8px', borderRadius: 8, background: '#fa8072', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: 4 }}>
                         Salvar Emilia Vision
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* Novos Produtos 3S Details */}
+                {selectedBrand?.pipelines?.novos_produtos_3s && (
+                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, marginTop: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#EA1D2C', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Novos Produtos 3S</div>
+                    <div style={{ marginBottom: 10 }}>
+                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 6 }}>Add-ons</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {[{key:'eats',label:'3S Eats',color:'#7c3aed'},{key:'go',label:'3S Go',color:'#2563eb'},{key:'pagamento_mesa',label:'Pagamento na Mesa',color:'#92400e'}].map(addon => (
+                          <div key={addon.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 8, background: np3sDetails[addon.key] ? '#f5f3ff' : '#f8fafc', border: np3sDetails[addon.key] ? `1px solid ${addon.color}30` : '1px solid #e2e8f0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <button disabled={!canEdit} onClick={() => { if (canEdit) { setNp3sDetails(p => ({...p, [addon.key]: !p[addon.key]})); setNp3sChanged(true); } }}
+                                style={{ width: 20, height: 20, borderRadius: 4, border: np3sDetails[addon.key] ? `2px solid ${addon.color}` : '1px solid #cbd5e1', background: np3sDetails[addon.key] ? addon.color : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: canEdit ? 'pointer' : 'default', opacity: canEdit ? 1 : 0.6 }}>
+                                {np3sDetails[addon.key] && <Check size={12} color="#fff" />}
+                              </button>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: np3sDetails[addon.key] ? addon.color : '#64748b' }}>{addon.label}</span>
+                            </div>
+                            {np3sDetails[addon.key] && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 11, color: '#94a3b8' }}>Mensalidade</span>
+                                <button disabled={!canEdit} onClick={() => { if (canEdit) { setNp3sDetails(p => ({...p, [addon.key+'_incluso']: !p[addon.key+'_incluso']})); setNp3sChanged(true); } }}
+                                  style={{ padding: '2px 10px', borderRadius: 12, border: np3sDetails[addon.key+'_incluso'] ? '2px solid #16a34a' : '1px solid #e2e8f0', background: np3sDetails[addon.key+'_incluso'] ? '#f0fdf4' : '#fff', color: np3sDetails[addon.key+'_incluso'] ? '#16a34a' : '#94a3b8', fontSize: 11, fontWeight: 600, cursor: canEdit ? 'pointer' : 'default', opacity: canEdit ? 1 : 0.6 }}>
+                                  {np3sDetails[addon.key+'_incluso'] ? 'Sim' : 'Não'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {canEdit && np3sChanged && (
+                      <button onClick={async () => {
+                        await apiFetch('/api/brands', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ id: selectedBrand.id, novos_produtos_3s_details: np3sDetails }) });
+                        setNp3sChanged(false);
+                        const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
+                        const freshData = await freshRes.json();
+                        if (freshData.brands) { setBrands(freshData.brands); const updated = freshData.brands.find(b => b.id === selectedBrand.id); if (updated) { setSelectedBrand(updated); setNp3sDetails(updated.novos_produtos_3s_details || {}); } }
+                      }} style={{ width: '100%', padding: '8px', borderRadius: 8, background: '#EA1D2C', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: 4 }}>
+                        Salvar Novos Produtos 3S
                       </button>
                     )}
                   </div>
