@@ -1766,18 +1766,7 @@ export default function CRMPage() {
             {/* INFO TAB */}
             {detailTab === 'info' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
-                  <span style={{ color: '#64748b' }}>Responsavel</span>
-                  <span style={{ fontWeight: 500, color: '#1e293b' }}>{selectedBrand.pipelines?.['3s']?.responsavel || `${selectedBrand.responsavel_bdr || '—'} / ${selectedBrand.responsavel_closer || '—'}`}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
-                  <span style={{ color: '#64748b' }}>Coord. Delivery</span>
-                  <input value={editCoordDelivery} onChange={e => { setEditCoordDelivery(e.target.value); setInfoChanged(true); }} disabled={!canEdit} placeholder="—" style={{ width: 160, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none', opacity: canEdit ? 1 : 0.6 }} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
-                  <span style={{ color: '#64748b' }}>Exec. Delivery</span>
-                  <input value={editExecDelivery} onChange={e => { setEditExecDelivery(e.target.value); setInfoChanged(true); }} disabled={!canEdit} placeholder="—" style={{ width: 160, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none', opacity: canEdit ? 1 : 0.6 }} />
-                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
                   <span style={{ color: '#64748b' }}>Time Carteira</span>
                   <select value={editTimeCarteira} onChange={e => { setEditTimeCarteira(e.target.value); setInfoChanged(true); }} disabled={!canEdit} style={{ width: 160, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none', opacity: canEdit ? 1 : 0.6 }}>
