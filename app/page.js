@@ -211,17 +211,47 @@ export default function CRMPage() {
       const q = search.toLowerCase();
       d = d.filter(b => (b.marca||'').toLowerCase().includes(q) || (b.responsavel_bdr||'').toLowerCase().includes(q) || (b.responsavel_closer||'').toLowerCase().includes(q));
     }
-    if (filterClass.length > 0) d = d.filter(b => filterClass.includes(b.classificacao));
-    if (filterEstado.length > 0) d = d.filter(b => filterEstado.includes(b.estado));
-    if (filterBDR.length > 0) d = d.filter(b => filterBDR.includes(b.responsavel_bdr) || filterBDR.includes(b.responsavel_closer));
-    if (filterTimeCarteira.length > 0) d = d.filter(b => filterTimeCarteira.includes(b.time_carteira));
-    if (filterPDV.length > 0) d = d.filter(b => filterPDV.includes(b.pdv_atual));
-    if (filterStage.length > 0) d = d.filter(b => filterStage.includes(b.pipelines?.[activeProduct]?.stage));
-    if (filterCulinaria.length > 0) d = d.filter(b => filterCulinaria.includes(b.culinaria));
+    if (filterClass.length > 0) d = d.filter(b => {
+      if (filterClass.includes('(Vazio)') && !b.classificacao) return true;
+      return filterClass.filter(v => v !== '(Vazio)').includes(b.classificacao);
+    });
+    if (filterEstado.length > 0) d = d.filter(b => {
+      if (filterEstado.includes('(Vazio)') && !b.estado) return true;
+      return filterEstado.filter(v => v !== '(Vazio)').includes(b.estado);
+    });
+    if (filterBDR.length > 0) d = d.filter(b => {
+      if (filterBDR.includes('(Vazio)') && !b.responsavel_bdr && !b.responsavel_closer) return true;
+      const bdrVals = filterBDR.filter(v => v !== '(Vazio)');
+      return bdrVals.includes(b.responsavel_bdr) || bdrVals.includes(b.responsavel_closer);
+    });
+    if (filterTimeCarteira.length > 0) d = d.filter(b => {
+      if (filterTimeCarteira.includes('(Vazio)') && !b.time_carteira) return true;
+      return filterTimeCarteira.filter(v => v !== '(Vazio)').includes(b.time_carteira);
+    });
+    if (filterPDV.length > 0) d = d.filter(b => {
+      if (filterPDV.includes('(Vazio)') && !b.pdv_atual) return true;
+      return filterPDV.filter(v => v !== '(Vazio)').includes(b.pdv_atual);
+    });
+    if (filterStage.length > 0) d = d.filter(b => {
+      if (filterStage.includes('(Vazio)') && !b.pipelines?.[activeProduct]?.stage) return true;
+      return filterStage.filter(v => v !== '(Vazio)').includes(b.pipelines?.[activeProduct]?.stage);
+    });
+    if (filterCulinaria.length > 0) d = d.filter(b => {
+      if (filterCulinaria.includes('(Vazio)') && !b.culinaria) return true;
+      return filterCulinaria.filter(v => v !== '(Vazio)').includes(b.culinaria);
+    });
     if (filterTag) d = d.filter(b => b.analise_teste_pdv === true);
     if (filterTopDown) d = d.filter(b => b.top_down === filterTopDown);
-    if (filterBaseElegivel.length > 0) d = d.filter(b => { const be = (b.base_elegivel || "").split(",").map(s => s.trim()); return filterBaseElegivel.some(f => be.includes(f)); });
-    if (filterHaas.length > 0) d = d.filter(b => { const pt = (b.produto_totem || "").split(",").map(s => s.trim()); return filterHaas.some(f => pt.includes(f)); });
+    if (filterBaseElegivel.length > 0) d = d.filter(b => {
+      if (filterBaseElegivel.includes('(Vazio)') && !b.base_elegivel) return true;
+      const be = (b.base_elegivel || "").split(",").map(s => s.trim());
+      return filterBaseElegivel.filter(v => v !== '(Vazio)').some(f => be.includes(f));
+    });
+    if (filterHaas.length > 0) d = d.filter(b => {
+      if (filterHaas.includes('(Vazio)') && !b.produto_totem) return true;
+      const pt = (b.produto_totem || "").split(",").map(s => s.trim());
+      return filterHaas.filter(v => v !== '(Vazio)').some(f => pt.includes(f));
+    });
     return d;
   }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterTimeCarteira, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct]);
   // ── Loss/StandBy reasons ──
@@ -721,8 +751,21 @@ export default function CRMPage() {
                 </div>
               </div>
               {options.map(o => (
-                <button key={o} onClick={() => toggle(o)} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 10px', border: 'none', background: selected.includes(o) ? '#fef2f2' : 'transparent', borderRadius: 6, fontSize: 12, color: '#1e293b', cursor: 'pointer', textAlign: 'left' }}>
-                  <div style={{ width: 14, height: 14, borderRadius: 3, border: selected.includes(o) ? '2px solid #EA1D2C' : '1px solid #cbd5e1', background: selected.includes(o) ? '#EA1D2C' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <button key={o} onClick={() => toggle(o)} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                  padding: '6px 10px', border: 'none',
+                  background: selected.includes(o) ? '#fef2f2' : 'transparent',
+                  borderRadius: 6, fontSize: 12,
+                  color: o === '(Vazio)' ? '#94a3b8' : '#1e293b',
+                  cursor: 'pointer', textAlign: 'left',
+                  fontStyle: o === '(Vazio)' ? 'italic' : 'normal',
+                  borderTop: o === '(Vazio)' ? '1px solid #f1f5f9' : 'none',
+                  marginTop: o === '(Vazio)' ? 4 : 0,
+                }}>
+                  <div style={{ width: 14, height: 14, borderRadius: 3,
+                    border: selected.includes(o) ? '2px solid #EA1D2C' : (o === '(Vazio)' ? '1px dashed #cbd5e1' : '1px solid #cbd5e1'),
+                    background: selected.includes(o) ? '#EA1D2C' : '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     {selected.includes(o) && <Check size={10} color="#fff" />}
                   </div>
                   {o}
@@ -853,13 +896,13 @@ export default function CRMPage() {
             <Search size={14} color="#94a3b8" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar marca..." style={{ border: 'none', outline: 'none', flex: 1, fontSize: 13, color: '#1e293b' }} />
           </div>
-          <MultiFilter label="Classificacao" selected={filterClass} onChange={setFilterClass} options={['P','M','G']} filterId="class" />
-          <MultiFilter label="Estado" selected={filterEstado} onChange={setFilterEstado} options={estados.filter(e => e !== 'Todos')} filterId="estado" />
-          {profile?.role !== 'executivo' && <MultiFilter label="Responsavel" selected={filterBDR} onChange={setFilterBDR} options={bdrs} filterId="bdr" />}
-          <MultiFilter label="Time Carteira" selected={filterTimeCarteira} onChange={setFilterTimeCarteira} options={['KA', 'CE', 'Não encarteirado']} filterId="timeCarteira" />
-          {pdvs.length > 0 && <MultiFilter label="PDV" selected={filterPDV} onChange={setFilterPDV} options={pdvs} filterId="pdv" />}
-          <MultiFilter label="Etapa" selected={filterStage} onChange={setFilterStage} options={PRODUCTS[activeProduct]?.stages || []} filterId="stage" />
-          {brands.some(b => b.culinaria) && <MultiFilter label="Culinaria" selected={filterCulinaria} onChange={setFilterCulinaria} options={[...new Set(brands.map(b => b.culinaria).filter(Boolean))].sort()} filterId="culinaria" />}
+          <MultiFilter label="Classificacao" selected={filterClass} onChange={setFilterClass} options={['P','M','G','(Vazio)']} filterId="class" />
+          <MultiFilter label="Estado" selected={filterEstado} onChange={setFilterEstado} options={[...estados.filter(e => e !== 'Todos'), '(Vazio)']} filterId="estado" />
+          {profile?.role !== 'executivo' && <MultiFilter label="Responsavel" selected={filterBDR} onChange={setFilterBDR} options={[...bdrs, '(Vazio)']} filterId="bdr" />}
+          <MultiFilter label="Time Carteira" selected={filterTimeCarteira} onChange={setFilterTimeCarteira} options={['KA', 'CE', 'Não encarteirado', '(Vazio)']} filterId="timeCarteira" />
+          {pdvs.length > 0 && <MultiFilter label="PDV" selected={filterPDV} onChange={setFilterPDV} options={[...pdvs, '(Vazio)']} filterId="pdv" />}
+          <MultiFilter label="Etapa" selected={filterStage} onChange={setFilterStage} options={[...(PRODUCTS[activeProduct]?.stages || []), '(Vazio)']} filterId="stage" />
+          {brands.some(b => b.culinaria) && <MultiFilter label="Culinaria" selected={filterCulinaria} onChange={setFilterCulinaria} options={[...[...new Set(brands.map(b => b.culinaria).filter(Boolean))].sort(), '(Vazio)']} filterId="culinaria" />}
           <button onClick={() => setFilterTag(p => !p)} style={{ padding: '6px 14px', borderRadius: 8, border: filterTag ? '2px solid #7c3aed' : '1px solid #e2e8f0', background: filterTag ? '#f3e8ff' : '#fff', color: filterTag ? '#7c3aed' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>AT</button>
           {activeProduct === 'saipos' && (
             <select value={filterTopDown} onChange={e => setFilterTopDown(e.target.value)} style={{ padding: '6px 12px', borderRadius: 8, border: filterTopDown ? '2px solid #b45309' : '1px solid #e2e8f0', background: filterTopDown ? '#fef3c7' : '#fff', color: filterTopDown ? '#b45309' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer', outline: 'none' }}>
@@ -868,8 +911,8 @@ export default function CRMPage() {
               <option value="Não Top Down">Não Top Down</option>
             </select>
           )}
-          <MultiFilter label="Base Elegivel" selected={filterBaseElegivel} onChange={setFilterBaseElegivel} options={["FY26","FY27","Organico 3S"]} filterId="base" />
-          {activeProduct === 'totem' && <MultiFilter label="HAAS/SAAS" selected={filterHaas} onChange={setFilterHaas} options={["HAAS","SAAS"]} filterId="haas" />}
+          <MultiFilter label="Base Elegivel" selected={filterBaseElegivel} onChange={setFilterBaseElegivel} options={["FY26","FY27","Organico 3S","(Vazio)"]} filterId="base" />
+          {activeProduct === 'totem' && <MultiFilter label="HAAS/SAAS" selected={filterHaas} onChange={setFilterHaas} options={["HAAS","SAAS","(Vazio)"]} filterId="haas" />}
           {activeProduct === 'comer_fora' && (<>
             <MultiFilter label="Estrategia" selected={filterCFEstrategia} onChange={setFilterCFEstrategia} options={[...new Set(brands.filter(b=>b.comer_fora_details?.estrategia).map(b=>b.comer_fora_details.estrategia))].sort()} filterId="cf_estrategia" />
             <MultiFilter label="Solucao" selected={filterCFSolucao} onChange={setFilterCFSolucao} options={[...new Set(brands.filter(b=>b.comer_fora_details?.solucao).map(b=>b.comer_fora_details.solucao))].sort()} filterId="cf_solucao" />
