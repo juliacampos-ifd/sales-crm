@@ -36,6 +36,7 @@ export default function CRMPage() {
   const [filterClass, setFilterClass] = useState([]);
   const [filterEstado, setFilterEstado] = useState([]);
   const [filterBDR, setFilterBDR] = useState([]);
+  const [filterTimeCarteira, setFilterTimeCarteira] = useState([]);
   const [filterPDV, setFilterPDV] = useState([]);
   const [filterStage, setFilterStage] = useState([]);
   const [filterCulinaria, setFilterCulinaria] = useState([]);
@@ -51,17 +52,6 @@ export default function CRMPage() {
   const [filterCFPrioridade, setFilterCFPrioridade] = useState([]);
   const [cfDetails, setCfDetails] = useState({});
   const [cfChanged, setCfChanged] = useState(false);
-  const [evDetails, setEvDetails] = useState({});
-  const [evChanged, setEvChanged] = useState(false);
-  const [np3sDetails, setNp3sDetails] = useState({});
-  const [np3sChanged, setNp3sChanged] = useState(false);
-  // Novos Produtos 3S filters
-  const [filterNP3SAddon, setFilterNP3SAddon] = useState([]);
-  const [filterNP3SMensalidade, setFilterNP3SMensalidade] = useState([]);
-  // Emilia Vision filters
-  const [filterEVSinergia, setFilterEVSinergia] = useState([]);
-  const [filterEVBaseAndres, setFilterEVBaseAndres] = useState('');
-  const [filterEVTipo, setFilterEVTipo] = useState([]);
   // Forecast
   const [forecastMetas, setForecastMetas] = useState([]);
   const [forecastEntries, setForecastEntries] = useState([]);
@@ -90,14 +80,10 @@ export default function CRMPage() {
   const [scMonth, setScMonth] = useState(new Date().getMonth() + 1);
   const [scYear, setScYear] = useState(new Date().getFullYear());
   const [scDupla, setScDupla] = useState('total');
-  const [scClassFilter, setScClassFilter] = useState('pm');
   const [scModal, setScModal] = useState(null);
   const [scModalBrands, setScModalBrands] = useState([]);
   const [scModalLoading, setScModalLoading] = useState(false);
   const [scStagesOpen, setScStagesOpen] = useState(false);
-  // ── DASHBOARD WoW ──
-  const [wowData, setWowData] = useState(null);
-  const [wowDates, setWowDates] = useState(null);
   // ── ATIVIDADE DO TIME (admin only) ──
   const [activityData, setActivityData] = useState(null);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -105,6 +91,7 @@ export default function CRMPage() {
   // ── DELIVERY EDIT ──
   const [editCoordDelivery, setEditCoordDelivery] = useState('');
   const [editExecDelivery, setEditExecDelivery] = useState('');
+  const [editTimeCarteira, setEditTimeCarteira] = useState('');
   // ── MOTIVO PERDA/STAND BY MODAL ──
   const [lossModal, setLossModal] = useState(null);
   const [lossReason, setLossReason] = useState('');
@@ -128,13 +115,10 @@ export default function CRMPage() {
     setEditFUP(brand.pipelines?.[activeProduct]?.proximo_passo || '');
     setCfDetails(brand.comer_fora_details || {});
     setCfChanged(false);
-    setEvDetails(brand.emilia_vision_details || {});
-    setEvChanged(false);
-    setNp3sDetails(brand.novos_produtos_3s_details || {});
-    setNp3sChanged(false);
     setEditCulinaria(brand.culinaria || '');
     setEditCoordDelivery(brand.coordenador_delivery || '');
     setEditExecDelivery(brand.executivo_delivery || '');
+    setEditTimeCarteira(brand.time_carteira || '');
     setInfoChanged(false);
     setPipelinesChanged(false);
     setPendingResp({});
@@ -164,9 +148,6 @@ export default function CRMPage() {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (data) {
       setProfile(data);
-      // Auto-select product for restricted team users
-      if (data.team === 'emilia_vision') setActiveProduct('emilia_vision');
-      if (data.team === 'comer_fora') setActiveProduct('comer_fora');
       if (data.role === 'admin') {
         try {
           const res = await apiFetch('/api/activity?_t=' + Date.now(), { cache: 'no-store' });
@@ -211,27 +192,17 @@ export default function CRMPage() {
         if (d.metas) setForecastMetas(d.metas);
         if (d.entries) setForecastEntries(d.entries);
       }).catch(console.error);
-      apiFetch('/api/wow?_t=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(d => {
-        if (d.wow) setWowData(d.wow);
-        if (d.refDate && d.prevDate) setWowDates({ ref: d.refDate, prev: d.prevDate });
-      }).catch(console.error);
     }
   }, [user, loadBrands]);
   // Viewer = read-only (vê tudo, não edita nada)
   const canEdit = profile?.role !== 'viewer';
-  // Restricted = viewer locked to a specific product
-  const isRestricted = profile?.team === 'emilia_vision' || profile?.team === 'comer_fora';
   // ── Role-based filtering ──
   const filtered = useMemo(() => {
     let d = brands;
-    if (profile?.team === 'emilia_vision') {
-      d = d.filter(b => b.pipelines?.emilia_vision);
-    } else if (profile?.team === 'comer_fora') {
-      d = d.filter(b => b.pipelines?.comer_fora);
-    } else if (profile?.role === 'executivo') {
+    if (profile?.role === 'executivo') {
       if (profile.team === 'saipos') {
         // Marcos/Lucas: veem todas as marcas que têm pipeline saipos ou totem
-        d = d.filter(b => b.pipelines?.saipos || b.pipelines?.totem || b.pipelines?.comer_fora);
+        d = d.filter(b => b.pipelines?.saipos || b.pipelines?.totem);
       } else {
         d = d.filter(b => b.responsavel_bdr === profile.name || b.responsavel_closer === profile.name || Object.values(b.pipelines || {}).some(p => p.responsavel && p.responsavel.includes(profile.name)));
       }
@@ -243,6 +214,7 @@ export default function CRMPage() {
     if (filterClass.length > 0) d = d.filter(b => filterClass.includes(b.classificacao));
     if (filterEstado.length > 0) d = d.filter(b => filterEstado.includes(b.estado));
     if (filterBDR.length > 0) d = d.filter(b => filterBDR.includes(b.responsavel_bdr) || filterBDR.includes(b.responsavel_closer));
+    if (filterTimeCarteira.length > 0) d = d.filter(b => filterTimeCarteira.includes(b.time_carteira));
     if (filterPDV.length > 0) d = d.filter(b => filterPDV.includes(b.pdv_atual));
     if (filterStage.length > 0) d = d.filter(b => filterStage.includes(b.pipelines?.[activeProduct]?.stage));
     if (filterCulinaria.length > 0) d = d.filter(b => filterCulinaria.includes(b.culinaria));
@@ -250,22 +222,8 @@ export default function CRMPage() {
     if (filterTopDown) d = d.filter(b => b.top_down === filterTopDown);
     if (filterBaseElegivel.length > 0) d = d.filter(b => { const be = (b.base_elegivel || "").split(",").map(s => s.trim()); return filterBaseElegivel.some(f => be.includes(f)); });
     if (filterHaas.length > 0) d = d.filter(b => { const pt = (b.produto_totem || "").split(",").map(s => s.trim()); return filterHaas.some(f => pt.includes(f)); });
-    if (filterEVSinergia.length > 0) d = d.filter(b => filterEVSinergia.includes(b.emilia_vision_details?.sinergia));
-    if (filterEVBaseAndres === 'sim') d = d.filter(b => b.emilia_vision_details?.base_andres === true);
-    if (filterEVBaseAndres === 'nao') d = d.filter(b => !b.emilia_vision_details?.base_andres);
-    if (filterEVTipo.length > 0) d = d.filter(b => filterEVTipo.includes(b.emilia_vision_details?.tipo || 'Hunting'));
-    // Comer Fora filters
-    if (filterCFEstrategia.length > 0) d = d.filter(b => filterCFEstrategia.includes(b.comer_fora_details?.estrategia));
-    if (filterCFSolucao.length > 0) d = d.filter(b => filterCFSolucao.includes(b.comer_fora_details?.solucao));
-    if (filterCFProvider.length > 0) d = d.filter(b => filterCFProvider.includes(b.comer_fora_details?.provider));
-    if (filterCFCidade.length > 0) d = d.filter(b => { const c = b.comer_fora_details?.cidade || ''; return filterCFCidade.some(f => c.includes(f)); });
-    if (filterCFTrade.length > 0) d = d.filter(b => { const t = b.comer_fora_details?.trade ? 'Sim' : 'Não'; return filterCFTrade.includes(t); });
-    if (filterCFPrioridade.length > 0) d = d.filter(b => filterCFPrioridade.includes(String(b.comer_fora_details?.prioridade)));
-    // Novos Produtos 3S filters
-    if (filterNP3SAddon.length > 0) d = d.filter(b => { const det = b.novos_produtos_3s_details || {}; return filterNP3SAddon.some(a => a === '3S Eats' ? det.eats : a === '3S Go' ? det.go : a === 'Pagamento na Mesa' ? det.pagamento_mesa : false); });
-    if (filterNP3SMensalidade.length > 0) d = d.filter(b => { const det = b.novos_produtos_3s_details || {}; return filterNP3SMensalidade.some(a => a === '3S Eats' ? det.eats_incluso : a === '3S Go' ? det.go_incluso : a === 'Pagamento na Mesa' ? det.pagamento_mesa_incluso : false); });
     return d;
-  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo, filterCFEstrategia, filterCFSolucao, filterCFProvider, filterCFCidade, filterCFTrade, filterCFPrioridade, filterNP3SAddon, filterNP3SMensalidade]);
+  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterTimeCarteira, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct]);
   // ── Loss/StandBy reasons ──
   const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
@@ -301,17 +259,6 @@ export default function CRMPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: brandId, motivo_perda_standby: reason }),
           });
-        }
-        // Auto-ativar Novos Produtos 3S quando contrato assinado em 3S
-        if (productKey === '3s' && newStage === '9. Contrato assinado') {
-          const brand = brands.find(b => b.id === brandId);
-          if (brand && !brand.pipelines?.novos_produtos_3s) {
-            await apiFetch('/api/pipelines', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ brand_id: brandId, product: 'novos_produtos_3s', user_id: user?.id, user_name: profile?.name }),
-            });
-          }
         }
         const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
         const freshData = await freshRes.json();
@@ -451,6 +398,7 @@ export default function CRMPage() {
       if (editCulinaria !== (selectedBrand.culinaria || '' )) updates.culinaria = editCulinaria;
       if (editCoordDelivery !== (selectedBrand.coordenador_delivery || '')) updates.coordenador_delivery = editCoordDelivery;
       if (editExecDelivery !== (selectedBrand.executivo_delivery || '')) updates.executivo_delivery = editExecDelivery;
+      if (editTimeCarteira !== (selectedBrand.time_carteira || '')) updates.time_carteira = editTimeCarteira;
       if (Object.keys(updates).length > 0) {
         await apiFetch('/api/brands', {
           method: 'PATCH',
@@ -638,7 +586,6 @@ export default function CRMPage() {
     { key: '3s_g', label: '3S Checkout G', subtitle: 'Contrato assinado', color: '#b91c1c' },
     { key: 'saipos', label: 'Saipos', subtitle: 'Lojas enviando forms', color: '#2563eb' },
     { key: 'totem', label: 'Totem', subtitle: 'Novos totens', color: '#7c3aed' },
-    { key: 'comer_fora', label: 'Comer Fora', subtitle: 'Aceites', color: '#9C050B' },
   ];
   const FISCAL_MONTHS = [
     { year: 2026, month: 4 }, { year: 2026, month: 5 }, { year: 2026, month: 6 },
@@ -703,15 +650,14 @@ export default function CRMPage() {
       }
       setForecastEntries(prev => prev.map(e => ({ ...e, _dirty: false })));
       // Reload scorecard so Forecast Marcas/Lojas lines update
-      try { const r2 = await apiFetch('/api/scorecard?_t=' + Date.now() + '&class=' + scClassFilter, { cache: 'no-store' }); const d2 = await r2.json(); setScData(d2); } catch (_) {}
+      try { const r2 = await apiFetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' }); const d2 = await r2.json(); setScData(d2); } catch (_) {}
     } catch (err) { console.error(err); }
     setSaving(false);
   };
 
-  const loadScorecard = async (classOverride) => {
+  const loadScorecard = async () => {
     try {
-      const cf = classOverride || scClassFilter;
-      const res = await apiFetch('/api/scorecard?_t=' + Date.now() + '&class=' + cf, { cache: 'no-store' });
+      const res = await apiFetch('/api/scorecard?_t=' + Date.now(), { cache: 'no-store' });
       const d = await res.json();
       setScData(d);
     } catch (err) { console.error('Scorecard fetch error:', err); }
@@ -810,15 +756,15 @@ export default function CRMPage() {
         <div style={{ display: 'flex', gap: 4, background: '#f1f5f9', borderRadius: 10, padding: 3 }}>
           <NavBtn id="pipeline" icon={LayoutGrid} label="Pipeline" />
           <NavBtn id="contacts" icon={Users} label="Marcas" />
-          {canEdit && !isRestricted && <a href="/input" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
+          {canEdit && <a href="/input" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Plus size={16} /> Nova Marca
           </a>}
-          {!isRestricted && <a href="/rv" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
+          <a href="/rv" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Award size={16} /> RV
-          </a>}
-          {(!isRestricted || profile?.team === 'comer_fora') && <NavBtn id="forecast" icon={Calendar} label="Forecast" />}
+          </a>
+          <NavBtn id="forecast" icon={Calendar} label="Forecast" />
           <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
-          {!isRestricted && <NavBtn id="scorecard" icon={Target} label="Scorecard" />}
+          <NavBtn id="scorecard" icon={Target} label="Scorecard" />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {profile?.role === 'admin' && (
@@ -897,11 +843,7 @@ export default function CRMPage() {
       {/* PRODUCT TABS */}
       {(view === 'pipeline' || view === 'contacts') && (
         <div style={{ padding: '14px 28px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {Object.keys(PRODUCTS).filter(pk => {
-            if (profile?.team === 'emilia_vision') return pk === 'emilia_vision';
-            if (profile?.team === 'comer_fora') return pk === 'comer_fora';
-            return true;
-          }).map(pk => <ProductTab key={pk} pkey={pk} />)}
+          {Object.keys(PRODUCTS).map(pk => <ProductTab key={pk} pkey={pk} />)}
         </div>
       )}
       {/* FILTERS */}
@@ -914,6 +856,7 @@ export default function CRMPage() {
           <MultiFilter label="Classificacao" selected={filterClass} onChange={setFilterClass} options={['P','M','G']} filterId="class" />
           <MultiFilter label="Estado" selected={filterEstado} onChange={setFilterEstado} options={estados.filter(e => e !== 'Todos')} filterId="estado" />
           {profile?.role !== 'executivo' && <MultiFilter label="Responsavel" selected={filterBDR} onChange={setFilterBDR} options={bdrs} filterId="bdr" />}
+          <MultiFilter label="Time Carteira" selected={filterTimeCarteira} onChange={setFilterTimeCarteira} options={['KA', 'CE', 'Não encarteirado']} filterId="timeCarteira" />
           {pdvs.length > 0 && <MultiFilter label="PDV" selected={filterPDV} onChange={setFilterPDV} options={pdvs} filterId="pdv" />}
           <MultiFilter label="Etapa" selected={filterStage} onChange={setFilterStage} options={PRODUCTS[activeProduct]?.stages || []} filterId="stage" />
           {brands.some(b => b.culinaria) && <MultiFilter label="Culinaria" selected={filterCulinaria} onChange={setFilterCulinaria} options={[...new Set(brands.map(b => b.culinaria).filter(Boolean))].sort()} filterId="culinaria" />}
@@ -931,24 +874,9 @@ export default function CRMPage() {
             <MultiFilter label="Estrategia" selected={filterCFEstrategia} onChange={setFilterCFEstrategia} options={[...new Set(brands.filter(b=>b.comer_fora_details?.estrategia).map(b=>b.comer_fora_details.estrategia))].sort()} filterId="cf_estrategia" />
             <MultiFilter label="Solucao" selected={filterCFSolucao} onChange={setFilterCFSolucao} options={[...new Set(brands.filter(b=>b.comer_fora_details?.solucao).map(b=>b.comer_fora_details.solucao))].sort()} filterId="cf_solucao" />
             <MultiFilter label="Provider" selected={filterCFProvider} onChange={setFilterCFProvider} options={[...new Set(brands.filter(b=>b.comer_fora_details?.provider).map(b=>b.comer_fora_details.provider))].sort()} filterId="cf_provider" />
-            <MultiFilter label="Cidade" selected={filterCFCidade} onChange={setFilterCFCidade} options={[...new Set(brands.filter(b=>b.comer_fora_details?.cidade).flatMap(b=>(b.comer_fora_details.cidade||'').split(',').map(s=>s.trim()).filter(Boolean)))].sort()} filterId="cf_cidade" />
+            <MultiFilter label="Cidade" selected={filterCFCidade} onChange={setFilterCFCidade} options={[...new Set(brands.filter(b=>b.comer_fora_details?.cidade).map(b=>b.comer_fora_details.cidade))].sort()} filterId="cf_cidade" />
             <MultiFilter label="Trade" selected={filterCFTrade} onChange={setFilterCFTrade} options={['Sim','Não']} filterId="cf_trade" />
             <MultiFilter label="Prioridade" selected={filterCFPrioridade} onChange={setFilterCFPrioridade} options={['1','2','3']} filterId="cf_prioridade" />
-          </>)}
-          {activeProduct === 'emilia_vision' && (<>
-            <MultiFilter label="Tipo" selected={filterEVTipo} onChange={setFilterEVTipo} options={['Hunting','Farming']} filterId="ev_tipo" />
-            <MultiFilter label="Sinergia" selected={filterEVSinergia} onChange={setFilterEVSinergia} options={['Emilia ajudou','3S ajudou','Sinergia']} filterId="ev_sinergia" />
-            {(() => { const cur = filterEVBaseAndres; return (
-              <select value={cur} onChange={e => setFilterEVBaseAndres(e.target.value)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 10, border: cur ? '1px solid #fa8072' : '1px solid #e2e8f0', background: cur ? '#fff5f5' : '#fff', color: cur ? '#fa8072' : '#64748b', cursor: 'pointer', fontWeight: 500 }}>
-                <option value="">Base Andres</option>
-                <option value="sim">Sim</option>
-                <option value="nao">Não</option>
-              </select>
-            ); })()}
-          </>)}
-          {activeProduct === 'novos_produtos_3s' && (<>
-            <MultiFilter label="Add-on" selected={filterNP3SAddon} onChange={setFilterNP3SAddon} options={['3S Eats','3S Go','Pagamento na Mesa']} filterId="np3s_addon" />
-            <MultiFilter label="Mensalidade" selected={filterNP3SMensalidade} onChange={setFilterNP3SMensalidade} options={['3S Eats','3S Go','Pagamento na Mesa']} filterId="np3s_mens" />
           </>)}
           {product?.closedStages && (
             <button onClick={() => setShowClosed(!showClosed)} style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: showClosed ? '#fef2f2' : '#fff', color: showClosed ? '#ef4444' : '#64748b', cursor: 'pointer' }}>
@@ -983,38 +911,20 @@ export default function CRMPage() {
                         onMouseEnter={e => { e.currentTarget.style.borderColor = product.color; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{b.marca}</div>
-                        {activeProduct === 'novos_produtos_3s' ? (
-                          <>
-                            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{b.qtd_lojas_fisicas || 0} lojas</div>
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
-                              {b.novos_produtos_3s_details?.eats && <span style={{ fontSize: 10, background: '#ede9fe', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>Eats</span>}
-                              {b.novos_produtos_3s_details?.go && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>Go</span>}
-                              {b.novos_produtos_3s_details?.pagamento_mesa && <span style={{ fontSize: 10, background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>Pgto Mesa</span>}
-                              {Object.entries(b.pipelines || {}).filter(([k, v]) => k !== activeProduct && v.stage).map(([k]) => (
-                                <div key={k} title={PRODUCTS[k]?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: PRODUCTS[k]?.color, marginTop: 3 }} />
-                              ))}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || '—'} / ${b.responsavel_closer || '—'}` : '—')}</div>
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
-                              {b.analise_teste_pdv && <span style={{ fontSize: 10, background: '#f3e8ff', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>AT</span>}
-                              {b.top_down === 'Top Down' && <span style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>TD</span>}
-                              {b.top_down === 'Não Top Down' && <span style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>NTD</span>}
-                              {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
-                              {b.culinaria && <span style={{ fontSize: 10, background: "#faf5ff", color: "#7c3aed", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.culinaria}</span>}
-                              {activeProduct === 'totem' && b.produto_totem && <span style={{ fontSize: 10, background: "#fefce8", color: "#a16207", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.produto_totem}</span>}
-                              {activeProduct === 'totem' && b.base_totem && <span style={{ fontSize: 10, background: "#f0f9ff", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 2 }}>{b.base_totem}</span>}
-                              {activeProduct === 'emilia_vision' && <span style={{ fontSize: 10, background: (b.emilia_vision_details?.tipo || 'Hunting') === 'Hunting' ? '#fef3c7' : '#d1fae5', color: (b.emilia_vision_details?.tipo || 'Hunting') === 'Hunting' ? '#92400e' : '#065f46', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.emilia_vision_details?.tipo || 'Hunting'}</span>}
-                              {Object.entries(b.pipelines || {}).filter(([k, v]) => k !== activeProduct && v.stage).map(([k]) => (
-                                <div key={k} title={PRODUCTS[k]?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: PRODUCTS[k]?.color, marginTop: 3 }} />
-                              ))}
-                            </div>
-                          </>
-                        )}
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || '—'} / ${b.responsavel_closer || '—'}` : '—')}</div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
+                          {b.analise_teste_pdv && <span style={{ fontSize: 10, background: '#f3e8ff', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>AT</span>}
+                          {b.top_down === 'Top Down' && <span style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>TD</span>}
+                          {b.top_down === 'Não Top Down' && <span style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>NTD</span>}
+                          {b.estado && <span style={{ fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.estado}</span>}
+                          {b.culinaria && <span style={{ fontSize: 10, background: "#faf5ff", color: "#7c3aed", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.culinaria}</span>}
+                          {activeProduct === 'totem' && b.produto_totem && <span style={{ fontSize: 10, background: "#fefce8", color: "#a16207", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>{b.produto_totem}</span>}
+                          {activeProduct === 'totem' && b.base_totem && <span style={{ fontSize: 10, background: "#f0f9ff", color: "#0369a1", padding: "1px 6px", borderRadius: 4, fontWeight: 600, marginLeft: 2 }}>{b.base_totem}</span>}
+                          {Object.entries(b.pipelines || {}).filter(([k, v]) => k !== activeProduct && v.stage).map(([k]) => (
+                            <div key={k} title={PRODUCTS[k]?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: PRODUCTS[k]?.color, marginTop: 3 }} />
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1152,25 +1062,19 @@ export default function CRMPage() {
                 },
               ];
 
-              const PdvCard = ({ label, stageLabel, marcas, lojas, color, wow }) => (
+              const PdvCard = ({ label, stageLabel, marcas, lojas, color }) => (
                 <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, boxShadow: '0 1px 3px rgba(0,0,0,.05)', border: '1px solid #f1f5f9' }}>
                   <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
                   {stageLabel && <div style={{ color: '#cbd5e1', fontSize: 10, marginBottom: 6, marginTop: 2 }}>{stageLabel}</div>}
                   {!stageLabel && <div style={{ marginBottom: 6 }} />}
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{marcas}</span>
-                    {wow !== undefined && wow !== null && <span style={{ fontSize: 11, fontWeight: 600, color: wow > 0 ? '#22c55e' : wow < 0 ? '#ef4444' : '#94a3b8' }}>{wow > 0 ? '+'+wow : wow} vs LW</span>}
-                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: color || '#1e293b' }}>{marcas}</div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{lojas} lojas</div>
                 </div>
               );
 
               return (
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '0 0 14px' }}>
-                    <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Pipeline PDVs</h4>
-                    {wowDates && <span style={{ fontSize: 11, color: '#94a3b8' }}>WoW: {wowDates.ref.slice(5).replace('-','/')} vs {wowDates.prev.slice(5).replace('-','/')}</span>}
-                  </div>
+                  <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Pipeline PDVs</h4>
                   {pdvRows.map((row) => {
                     const topoB = getPdvBrands(row.pk, row.topo, row.classFilter);
                     const meioB = getPdvBrands(row.pk, row.meio, row.classFilter);
@@ -1179,8 +1083,6 @@ export default function CRMPage() {
                     const perdidasB = row.perdidas.length > 0 ? getPdvBrands(row.pk, row.perdidas, row.classFilter) : null;
                     const totalM = topoB.length + meioB.length + avancB.length + fechadasB.length + (perdidasB?.length || 0);
                     const totalL = sumLojas(topoB) + sumLojas(meioB) + sumLojas(avancB) + sumLojas(fechadasB) + (perdidasB ? sumLojas(perdidasB) : 0);
-                    const wowKey = row.pk === '3s' ? (row.classFilter?.includes('P') ? '3s_pm' : '3s_g') : row.pk;
-                    const wk = wowData?.[wowKey];
                     return (
                       <div key={row.label} style={{ marginBottom: 16 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -1189,12 +1091,12 @@ export default function CRMPage() {
                         </div>
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                           <PdvCard label="Total Marcas" stageLabel={null} marcas={totalM} lojas={totalL} color="#1e293b" />
-                          <PdvCard label="Topo do Funil" stageLabel={row.topoLabel} marcas={topoB.length} lojas={sumLojas(topoB)} wow={wk?.topo} />
-                          <PdvCard label="Meio do Funil" stageLabel={row.meioLabel} marcas={meioB.length} lojas={sumLojas(meioB)} wow={wk?.meio} />
-                          <PdvCard label="Avançadas" stageLabel={row.avancLabel} marcas={avancB.length} lojas={sumLojas(avancB)} wow={wk?.avanc} />
-                          <PdvCard label="Fechadas" stageLabel={row.fechadasLabel} marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" wow={wk?.fechadas} />
+                          <PdvCard label="Topo do Funil" stageLabel={row.topoLabel} marcas={topoB.length} lojas={sumLojas(topoB)} />
+                          <PdvCard label="Meio do Funil" stageLabel={row.meioLabel} marcas={meioB.length} lojas={sumLojas(meioB)} />
+                          <PdvCard label="Avançadas" stageLabel={row.avancLabel} marcas={avancB.length} lojas={sumLojas(avancB)} />
+                          <PdvCard label="Fechadas" stageLabel={row.fechadasLabel} marcas={fechadasB.length} lojas={sumLojas(fechadasB)} color="#22c55e" />
                           {perdidasB !== null ? (
-                            <PdvCard label="Perdidas/Stand By" stageLabel={row.perdidasLabel} marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" wow={wk?.perdidas} />
+                            <PdvCard label="Perdidas/Stand By" stageLabel={row.perdidasLabel} marcas={perdidasB.length} lojas={sumLojas(perdidasB)} color="#ef4444" />
                           ) : (
                             <div style={{ background: '#fff', borderRadius: 14, padding: '14px 18px', flex: 1, minWidth: 120, border: '1px solid #f1f5f9', opacity: 0.4 }}>
                               <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 6, fontWeight: 600 }}>Perdidas/Stand By</div>
@@ -1378,6 +1280,8 @@ export default function CRMPage() {
             { key:'contrato_assinado', label:'CONTRATO ASSINADO', isBold:true },
             { key:'media_lojas', label:'Media de lojas por marca', isLive:true },
             { key:'lojas', label:'Lojas Fechadas', isBold:true },
+            { key:'fcst_marcas', label:'Forecast Marcas', isForecast:true },
+            { key:'fcst_lojas', label:'Forecast Lojas', isForecast:true, isBold:true },
           ];
           const SC_ALL_STAGES = [
             { key:'nao_iniciado', label:'Nao Iniciado' },
@@ -1395,24 +1299,11 @@ export default function CRMPage() {
             { key:'organico', label:'Organico' },
           ];
           const scPctColor = (p) => { if (!p || p === '—') return '#94a3b8'; const n = parseInt(p); return n >= 100 ? '#22c55e' : n >= 70 ? '#f59e0b' : '#ef4444'; };
-
-          // WoW helpers
-          const WOW_ROWS = [
-            { key:'primeiro_contato', label:'Primeiro Contato' },
-            { key:'apresentacao', label:'Apresentacao' },
-            { key:'negociacao', label:'Negociacao' },
-            { key:'contrato_assinado', label:'Contrato Assinado' },
-            { key:'lojas', label:'Lojas' },
-          ];
-          const wowColor = (v) => v > 0 ? '#22c55e' : v < 0 ? '#ef4444' : '#94a3b8';
-          const wowLabel = (v) => v > 0 ? '+'+v : v < 0 ? ''+v : '0';
-          const getWow = (dupla, metric) => scData?.wow?.[dupla]?.[metric] ?? null;
           const today = new Date();
           const scTotalBD = getMonthBusinessDays(scYear, scMonth - 1);
           const scMtdBD = scYear === today.getFullYear() && scMonth === today.getMonth() + 1 ? getMonthBusinessDaysMTD(scYear, scMonth - 1, today) : scTotalBD;
           const scCurKey = scYear + '-' + String(scMonth).padStart(2,'0');
           const DK = ['lidia_gabi','joao_diego','michel_emerson'];
-          const isG = scClassFilter === 'g';
 
           // Get meta value
           const scGmS = (d,y,m,f) => {
@@ -1451,7 +1342,7 @@ export default function CRMPage() {
                 const isCur = col.y===scYear && col.m===scMonth;
                 if (def.key==='elegiveis') {
                   if (isCur) row.cells.push({isCur:true,meta:elegMeta,fcst:eleg,pctA:elegMeta>0?Math.round((eleg/elegMeta)*100)+'%':'—',real:eleg,mtdMeta:eleg,mtdReal:eleg,mtdPct:'100%',ym:col.k});
-                  else row.cells.push({v: isG ? eleg : scGm(dupla,col.y,col.m,'elegiveis'),ym:col.k});
+                  else row.cells.push({v:scGm(dupla,col.y,col.m,'elegiveis'),ym:col.k});
                 }
                 else if (def.key==='media_lojas') {
                   const fch = isCur ? cmR.contrato_assinado : scGr(dupla,col.k,'contrato_assinado');
@@ -1478,7 +1369,7 @@ export default function CRMPage() {
                     if (def.den==='elegiveis') { num=cmR[def.num]; den=eleg; }
                     else { num=cmR[def.num]; den=cmR[def.den]; }
                   } else {
-                    if (def.den==='elegiveis') { num=scGr(dupla,col.k,def.num); den=isG ? eleg : scGm(dupla,col.y,col.m,'elegiveis'); }
+                    if (def.den==='elegiveis') { num=scGr(dupla,col.k,def.num); den=scGm(dupla,col.y,col.m,'elegiveis'); }
                     else { num=scGr(dupla,col.k,def.num); den=scGr(dupla,col.k,def.den); }
                   }
                   const pct=den>0?Math.round((num/den)*100)+'%':'0%';
@@ -1553,11 +1444,7 @@ export default function CRMPage() {
               {/* Header */}
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:10}}>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <div style={{display:'flex',borderRadius:8,overflow:'hidden',border:'1px solid #e2e8f0'}}>
-                    <button onClick={()=>{if(scClassFilter!=='pm'){setScClassFilter('pm');setScData(null);loadScorecard('pm');}}} style={{padding:'6px 14px',fontSize:12,fontWeight:600,border:'none',cursor:'pointer',background:scClassFilter==='pm'?'#EA1D2C':'#fff',color:scClassFilter==='pm'?'#fff':'#64748b'}}>P / M</button>
-                    <button onClick={()=>{if(scClassFilter!=='g'){setScClassFilter('g');setScData(null);loadScorecard('g');}}} style={{padding:'6px 14px',fontSize:12,fontWeight:600,border:'none',cursor:'pointer',borderLeft:'1px solid #e2e8f0',background:scClassFilter==='g'?'#EA1D2C':'#fff',color:scClassFilter==='g'?'#fff':'#64748b'}}>G</button>
-                  </div>
-                  <span style={{fontSize:12,color:'#94a3b8'}}>Marcas {scClassFilter==='g'?'G':'P e M'} | Produto: 3S Checkout</span>
+                  <span style={{fontSize:12,color:'#94a3b8'}}>Marcas P e M | Produto: 3S Checkout</span>
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:10}}>
                   <button onClick={()=>{setScData(null);loadScorecard();}} style={{padding:'8px 16px',background:'linear-gradient(135deg,#EA1D2C,#DA5D69)',border:'none',borderRadius:8,fontSize:13,fontWeight:700,color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',gap:6,boxShadow:'0 2px 8px rgba(234,29,44,.2)'}}><TrendingUp size={14}/> Atualizar Dados</button>
@@ -1630,49 +1517,28 @@ export default function CRMPage() {
                             <tr>
                               <th style={{...scTh,textAlign:'left',position:'sticky',left:0,background:'#f8fafc',zIndex:2}}></th>
                               {scPastCols.map(c=><th key={c.k} style={{...scTh,background:'#980000',color:'#fff',fontSize:10}}>Mês</th>)}
-                              {scHasCur && !isG && <>
+                              {scHasCur && <>
                                 <th colSpan={3} style={{...scTh,background:'#980000',color:'#fff',fontSize:11,textAlign:'center'}}>Mês</th>
                                 <th colSpan={3} style={{...scTh,background:'#073763',color:'#fff',fontSize:11,textAlign:'center'}}>MTD</th>
                               </>}
-                              {scHasCur && isG && <>
-                                <th style={{...scTh,background:'#980000',color:'#fff',fontSize:11,textAlign:'center'}}>Fcst</th>
-                                <th style={{...scTh,background:'#073763',color:'#fff',fontSize:11,textAlign:'center'}}>MTD Real</th>
-                              </>}
-                              {isG && <th style={{...scTh,background:'#065f46',color:'#fff',fontSize:10}}>Acumulado</th>}
-                              {scData?.wow && <th style={{...scTh,background:'#7c3aed',color:'#fff',fontSize:10}}>WoW</th>}
                             </tr>
                             <tr style={{background:'#f8fafc'}}>
                               <th style={{...scTh,width:250,textAlign:'left',position:'sticky',left:0,background:'#f8fafc',zIndex:2}}></th>
                               {scPastCols.map(c=><th key={c.k} style={{...scTh,fontSize:10}}>{MONTH_NAMES[c.m-1]} Real</th>)}
-                              {scHasCur && !isG && <><th style={{...scTh,background:'#fef2f2',fontSize:10}}>{MONTH_NAMES[scMonth-1]} Meta</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>% Atig</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Meta</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Real</th><th style={{...scTh,background:'#fef9c3',fontSize:10}}>MTD %</th></>}
-                              {scHasCur && isG && <><th style={{...scTh,background:'#fef2f2',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Real</th></>}
-                              {isG && <th style={{...scTh,background:'#ecfdf5',fontSize:10}}>Total</th>}
-                              {scData?.wow && <th style={{...scTh,background:'#f5f0ff',fontSize:10}}>Seg vs Seg</th>}
+                              {scHasCur && <><th style={{...scTh,background:'#fef2f2',fontSize:10}}>{MONTH_NAMES[scMonth-1]} Meta</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>Fcst</th><th style={{...scTh,background:'#fef2f2',fontSize:10}}>% Atig</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Meta</th><th style={{...scTh,background:'#fefce8',fontSize:10}}>MTD Real</th><th style={{...scTh,background:'#fef9c3',fontSize:10}}>MTD %</th></>}
                             </tr></thead>
                           <tbody>
-                            {rows.map((row,ri) => {
-                              const wowVal = (row.key && !row.isPercent && row.key !== 'media_lojas' && row.key !== 'elegiveis') ? getWow(dupla, row.key) : null;
-                              return (
-                              <tr key={ri} style={{background:row.isBold?'#fffbfb':'#fff'}}>
-                                <td style={{...scTd,fontWeight:row.isBold?700:400,fontSize:row.isPercent?11:12,color:row.isPercent?'#94a3b8':'#1e293b',position:'sticky',left:0,background:row.isBold?'#fffbfb':'#fff',zIndex:1}}>{row.label}</td>
+                            {rows.map((row,ri) => (
+                              <tr key={ri} style={{background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff'}}>
+                                <td style={{...scTd,fontWeight:row.isBold?700:400,fontSize:row.isPercent?11:12,color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#1e293b',position:'sticky',left:0,background:row.isForecast?'#f0f9ff':row.isBold?'#fffbfb':'#fff',zIndex:1}}>{row.label}</td>
                                 {row.cells.map((cell,ci) => {
-                                  if (!cell.isCur) return <td key={ci} style={{...scTd,textAlign:'center',fontWeight:row.isBold?600:400,color:row.isPercent?'#94a3b8':'#475569'}}><ScVal v={cell.v} metric={row.key} ym={cell.ym} dupla={dupla} bold={row.isBold}/></td>;
-                                  if (cell.isRate) {
-                                    if (isG) return [<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
-                                    return [<td key={ci+'m'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
-                                  }
-                                  if (isG) return [<td key={ci+'f'} style={{...scTd,textAlign:'center',fontWeight:600,background:'#fef2f208'}}>{cell.fcst}</td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',fontWeight:700,background:'#fefce808'}}><ScVal v={cell.mtdReal} metric={row.key} ym={cell.ym} dupla={dupla} bold color={clr}/></td>];
+                                  if (!cell.isCur) return <td key={ci} style={{...scTd,textAlign:'center',fontWeight:row.isBold?600:400,color:row.isForecast?'#0284c7':row.isPercent?'#94a3b8':'#475569'}}><ScVal v={cell.v} metric={row.key} ym={cell.ym} dupla={dupla} bold={row.isBold}/></td>;
+                                  if (cell.isFcstCell) return [<td key={ci+'m'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#0284c7',fontWeight:700}}>{cell.v}</td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
+                                  if (cell.isRate) return [<td key={ci+'m'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',color:'#c0c5cc'}}></td>];
                                   return [<td key={ci+'m'} style={{...scTd,textAlign:'center',background:'#fef2f208'}}>{cell.meta}</td>,<td key={ci+'f'} style={{...scTd,textAlign:'center',fontWeight:600,background:'#fef2f208'}}>{cell.fcst}</td>,<td key={ci+'p'} style={{...scTd,textAlign:'center',fontWeight:600,color:scPctColor(cell.pctA),background:'#fef2f208'}}>{cell.pctA}</td>,<td key={ci+'mm'} style={{...scTd,textAlign:'center',background:'#fefce808'}}>{cell.mtdMeta}</td>,<td key={ci+'mr'} style={{...scTd,textAlign:'center',fontWeight:700,background:'#fefce808'}}><ScVal v={cell.mtdReal} metric={row.key} ym={cell.ym} dupla={dupla} bold color={clr}/></td>,<td key={ci+'mp'} style={{...scTd,textAlign:'center',fontWeight:600,color:scPctColor(cell.mtdPct),background:'#fef9c308'}}>{cell.mtdPct}</td>];
                                 })}
-                                {isG && (() => {
-                                  if (row.isPercent || row.key === 'media_lojas' || row.key === 'elegiveis') return <td style={{...scTd,textAlign:'center',color:'#d4d4d8',background:'#ecfdf508'}}>—</td>;
-                                  const accum = row.cells.reduce((s, c) => s + (c.isCur ? (c.mtdReal || 0) : (typeof c.v === 'number' ? c.v : 0)), 0);
-                                  return <td style={{...scTd,textAlign:'center',fontWeight:700,fontSize:14,color:'#065f46',background:'#ecfdf508'}}>{accum}</td>;
-                                })()}
-                                {scData?.wow && <td style={{...scTd,textAlign:'center',fontWeight:700,fontSize:14,color:wowVal!==null?(wowVal>0?'#22c55e':wowVal<0?'#ef4444':'#94a3b8'):'#d4d4d8',background:'#faf5ff'}}>{wowVal!==null?wowLabel(wowVal):'—'}</td>}
                               </tr>
-                              );
-                            })}
+                            ))}
                           </tbody>
                         </table>
                       </div>
@@ -1717,17 +1583,13 @@ export default function CRMPage() {
             {/* INFO TAB */}
             {detailTab === 'info' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
-                  <span style={{ color: '#64748b' }}>Responsavel</span>
-                  <span style={{ fontWeight: 500, color: '#1e293b' }}>{selectedBrand.pipelines?.['3s']?.responsavel || `${selectedBrand.responsavel_bdr || '—'} / ${selectedBrand.responsavel_closer || '—'}`}</span>
-                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
-                  <span style={{ color: '#64748b' }}>Coord. Delivery</span>
-                  <input value={editCoordDelivery} onChange={e => { setEditCoordDelivery(e.target.value); setInfoChanged(true); }} disabled={!canEdit} placeholder="—" style={{ width: 160, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none', opacity: canEdit ? 1 : 0.6 }} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
-                  <span style={{ color: '#64748b' }}>Exec. Delivery</span>
-                  <input value={editExecDelivery} onChange={e => { setEditExecDelivery(e.target.value); setInfoChanged(true); }} disabled={!canEdit} placeholder="—" style={{ width: 160, padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none', opacity: canEdit ? 1 : 0.6 }} />
+                  <span style={{ color: '#64748b' }}>Time Carteira</span>
+                  <select value={editTimeCarteira} onChange={e => { setEditTimeCarteira(e.target.value); setInfoChanged(true); }} disabled={!canEdit}
+                    style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'right', outline: 'none', opacity: canEdit ? 1 : 0.6, background: '#fff' }}>
+                    <option value="">—</option>
+                    <option>KA</option><option>CE</option><option>Não encarteirado</option>
+                  </select>
                 </div>
                 {/* Comer Fora Details */}
                 {selectedBrand?.pipelines?.comer_fora && (
@@ -1825,93 +1687,6 @@ export default function CRMPage() {
                   <div style={{ marginBottom: 12 }}>
                     <span style={{ color: '#64748b', display: 'block', marginBottom: 4, fontSize: 12 }}>Base Totem</span>
                     <span style={{ fontSize: 13, color: '#1e293b', fontWeight: 600 }}>{selectedBrand.base_totem}</span>
-                  </div>
-                )}
-                {/* Emilia Vision Details */}
-                {selectedBrand?.pipelines?.emilia_vision && (
-                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, marginTop: 4 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#fa8072', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Emilia Vision</div>
-                    <div style={{ marginBottom: 8 }}>
-                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Tipo</span>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {['Hunting', 'Farming'].map(opt => (
-                          <button key={opt} disabled={!canEdit} onClick={() => { if (canEdit) { setEvDetails(p => ({...p, tipo: opt})); setEvChanged(true); } }}
-                            style={{ flex: 1, padding: '6px', borderRadius: 8, border: (evDetails.tipo || 'Hunting') === opt ? '2px solid ' + (opt === 'Hunting' ? '#92400e' : '#065f46') : '1px solid #e2e8f0', background: (evDetails.tipo || 'Hunting') === opt ? (opt === 'Hunting' ? '#fef3c7' : '#d1fae5') : '#fff', color: (evDetails.tipo || 'Hunting') === opt ? (opt === 'Hunting' ? '#92400e' : '#065f46') : '#64748b', fontSize: 12, fontWeight: 600, cursor: canEdit ? 'pointer' : 'default', opacity: canEdit ? 1 : 0.6 }}>
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{ marginBottom: 8 }}>
-                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Sinergia</span>
-                      <select disabled={!canEdit} value={evDetails.sinergia || ''} onChange={e => { setEvDetails(p => ({...p, sinergia: e.target.value})); setEvChanged(true); }}
-                        style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, background: '#fff', outline: 'none', opacity: canEdit ? 1 : 0.6 }}>
-                        <option value="">—</option>
-                        <option>Emilia ajudou</option><option>3S ajudou</option><option>Sinergia</option>
-                      </select>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <span style={{ color: '#64748b', fontSize: 12 }}>Base Andres</span>
-                      <button disabled={!canEdit} onClick={() => { if (canEdit) { setEvDetails(p => ({...p, base_andres: !p.base_andres})); setEvChanged(true); } }}
-                        style={{ padding: '4px 14px', borderRadius: 20, border: evDetails.base_andres ? '2px solid #fa8072' : '1px solid #e2e8f0', background: evDetails.base_andres ? '#fff5f5' : '#fff', color: evDetails.base_andres ? '#fa8072' : '#64748b', fontSize: 12, fontWeight: 600, cursor: canEdit ? 'pointer' : 'default', opacity: canEdit ? 1 : 0.6 }}>
-                        {evDetails.base_andres ? 'Sim' : 'Não'}
-                      </button>
-                    </div>
-                    {canEdit && evChanged && (
-                      <button onClick={async () => {
-                        await apiFetch('/api/brands', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ id: selectedBrand.id, emilia_vision_details: evDetails }) });
-                        setEvChanged(false);
-                        const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
-                        const freshData = await freshRes.json();
-                        if (freshData.brands) { setBrands(freshData.brands); const updated = freshData.brands.find(b => b.id === selectedBrand.id); if (updated) { setSelectedBrand(updated); setEvDetails(updated.emilia_vision_details || {}); } }
-                      }} style={{ width: '100%', padding: '8px', borderRadius: 8, background: '#fa8072', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: 4 }}>
-                        Salvar Emilia Vision
-                      </button>
-                    )}
-                  </div>
-                )}
-                {/* Novos Produtos 3S Details */}
-                {selectedBrand?.pipelines?.novos_produtos_3s && (
-                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, marginTop: 4 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#EA1D2C', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Novos Produtos 3S</div>
-                    <div style={{ marginBottom: 10 }}>
-                      <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 6 }}>Add-ons</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {[{key:'eats',label:'3S Eats',color:'#7c3aed'},{key:'go',label:'3S Go',color:'#2563eb'},{key:'pagamento_mesa',label:'Pagamento na Mesa',color:'#92400e'}].map(addon => (
-                          <div key={addon.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 8, background: np3sDetails[addon.key] ? '#f5f3ff' : '#f8fafc', border: np3sDetails[addon.key] ? `1px solid ${addon.color}30` : '1px solid #e2e8f0' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <button disabled={!canEdit} onClick={() => { if (canEdit) { setNp3sDetails(p => ({...p, [addon.key]: !p[addon.key]})); setNp3sChanged(true); } }}
-                                style={{ width: 20, height: 20, borderRadius: 4, border: np3sDetails[addon.key] ? `2px solid ${addon.color}` : '1px solid #cbd5e1', background: np3sDetails[addon.key] ? addon.color : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: canEdit ? 'pointer' : 'default', opacity: canEdit ? 1 : 0.6 }}>
-                                {np3sDetails[addon.key] && <Check size={12} color="#fff" />}
-                              </button>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: np3sDetails[addon.key] ? addon.color : '#64748b' }}>{addon.label}</span>
-                            </div>
-                            {np3sDetails[addon.key] && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 11, color: '#94a3b8' }}>Mensalidade</span>
-                                <button disabled={!canEdit} onClick={() => { if (canEdit) { setNp3sDetails(p => ({...p, [addon.key+'_incluso']: !p[addon.key+'_incluso']})); setNp3sChanged(true); } }}
-                                  style={{ padding: '2px 10px', borderRadius: 12, border: np3sDetails[addon.key+'_incluso'] ? '2px solid #16a34a' : '1px solid #e2e8f0', background: np3sDetails[addon.key+'_incluso'] ? '#f0fdf4' : '#fff', color: np3sDetails[addon.key+'_incluso'] ? '#16a34a' : '#94a3b8', fontSize: 11, fontWeight: 600, cursor: canEdit ? 'pointer' : 'default', opacity: canEdit ? 1 : 0.6 }}>
-                                  {np3sDetails[addon.key+'_incluso'] ? 'Sim' : 'Não'}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    {canEdit && np3sChanged && (
-                      <button onClick={async () => {
-                        await apiFetch('/api/brands', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ id: selectedBrand.id, novos_produtos_3s_details: np3sDetails }) });
-                        setNp3sChanged(false);
-                        const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
-                        const freshData = await freshRes.json();
-                        if (freshData.brands) { setBrands(freshData.brands); const updated = freshData.brands.find(b => b.id === selectedBrand.id); if (updated) { setSelectedBrand(updated); setNp3sDetails(updated.novos_produtos_3s_details || {}); } }
-                      }} style={{ width: '100%', padding: '8px', borderRadius: 8, background: '#EA1D2C', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: 4 }}>
-                        Salvar Novos Produtos 3S
-                      </button>
-                    )}
                   </div>
                 )}
                 {/* HAAS/SAAS multi-select */}
