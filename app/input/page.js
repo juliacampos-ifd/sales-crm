@@ -25,12 +25,13 @@ const SelectField = ({ label, value, onChange, options, placeholder }) => (
 );
 
 const UF = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
+const TIME_CARTEIRA_OPTIONS = ['KA', 'CE', 'Não encarteirado'];
 
 export default function InputPage() {
   const [marca, setMarca] = useState('');
   const [qtdLojas, setQtdLojas] = useState('');
-  const [topKa, setTopKa] = useState('');
-  const [noBP, setNoBP] = useState('');
+  const [timeCarteira, setTimeCarteira] = useState('');
+  const [executivoIndicacaoDelivery, setExecutivoIndicacaoDelivery] = useState('');
   const [pdv, setPdv] = useState('');
   const [classificacao, setClassificacao] = useState('');
   const [estado, setEstado] = useState('');
@@ -49,6 +50,7 @@ export default function InputPage() {
   const handleSubmit = async () => {
     if (!marca.trim()) { setError('Nome da marca e obrigatorio'); return; }
     if (activeProducts.length === 0) { setError('Selecione pelo menos um produto'); return; }
+    if (!timeCarteira) { setError('Time Carteira é obrigatório'); return; }
     setSaving(true);
     setError('');
     setSuccess('');
@@ -75,8 +77,8 @@ export default function InputPage() {
           qtd_lojas_fisicas: parseInt(qtdLojas) || 0,
           estado: estado || null,
           pdv_atual: pdv || null,
-          marca_top_ka: topKa || null,
-          marca_no_bp: noBP || null,
+          time_carteira: timeCarteira || null,
+          executivo_indicacao_delivery: executivoIndicacaoDelivery || null,
           base_elegivel: 'FY27',
           products: activeProducts,
         }),
@@ -99,7 +101,7 @@ export default function InputPage() {
       }
 
       setSuccess(`Marca "${marca}" adicionada com sucesso!`);
-      setMarca(''); setQtdLojas(''); setTopKa(''); setNoBP(''); setPdv('');
+      setMarca(''); setQtdLojas(''); setTimeCarteira(''); setExecutivoIndicacaoDelivery(''); setPdv('');
       setClassificacao(''); setEstado(''); setActiveProducts(['3s']); setResponsaveis({});
     } catch (err) {
       setError('Erro ao adicionar marca');
@@ -152,8 +154,8 @@ export default function InputPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <SelectField label="Marca TOP KA" value={topKa} onChange={setTopKa} options={['Sim', 'Nao']} placeholder="Selecione..." />
-            <SelectField label="Marca no BP" value={noBP} onChange={setNoBP} options={['Sim', 'Nao']} placeholder="Selecione..." />
+            <SelectField label="Time Carteira *" value={timeCarteira} onChange={setTimeCarteira} options={TIME_CARTEIRA_OPTIONS} placeholder="Selecione..." />
+            <Field label="Executivo indicação delivery" value={executivoIndicacaoDelivery} onChange={setExecutivoIndicacaoDelivery} placeholder="Nome do executivo" />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
