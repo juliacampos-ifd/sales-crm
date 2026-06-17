@@ -316,13 +316,15 @@ export default function CRMPage() {
   const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
   const changeStage = async (brandId, productKey, newStage) => {
-    // Detectar transição para "Reunião realizada" no Comer Fora
-    if (productKey === 'comer_fora' && (newStage.includes('Reunião realizada') || newStage.includes('reuniao realizada'))) {
+    // Detectar transição para "Reuniao Realizada" no Comer Fora (sem acento, como está no banco)
+    const normalizeStage = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (productKey === 'comer_fora' && normalizeStage(newStage) === 'reuniao realizada') {
       const brand = brands.find(b => b.id === brandId);
       const currentStage = brand?.pipelines?.comer_fora?.stage || '';
+      const normCurrent = normalizeStage(currentStage);
       
-      // Se vem de stage que contém "Reunião ag" ou "Buscando"
-      if (currentStage.includes('Reunião ag') || currentStage.includes('reuniao ag') || currentStage.includes('Buscando')) {
+      // Se vem de "Reuniao Agendada" ou "Buscando Reuniao"
+      if (normCurrent.includes('reuniao agendada') || normCurrent.includes('buscando')) {
         setCfQualifModal({ brandId, productKey, newStage });
         const existing = brand?.comer_fora_details || {};
         setCfQualifData({
