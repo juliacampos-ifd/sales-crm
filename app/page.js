@@ -2262,6 +2262,7 @@ export default function CRMPage() {
             </div>
           </div>
         </div>
+      )}
 
       {/* Popup de qualificação Comer Fora */}
       {cfQualifModal && (
@@ -2395,7 +2396,6 @@ export default function CRMPage() {
             </div>
           </div>
         </div>
-      )}
       )}
     </div>
   );
