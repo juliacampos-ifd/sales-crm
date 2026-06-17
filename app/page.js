@@ -51,6 +51,18 @@ export default function CRMPage() {
   const [filterCFTrade, setFilterCFTrade] = useState([]);
   const [filterCFPrioridade, setFilterCFPrioridade] = useState([]);
   const [cfDetails, setCfDetails] = useState({});
+  const [cfQualifModal, setCfQualifModal] = useState(null);
+  const [cfQualifData, setCfQualifData] = useState({
+    possui_fidelizacao: false,
+    mecanica_fidelizacao: '',
+    experiencia_salao: [],
+    objetivos: [],
+    mecanicas_interesse: [],
+    mecanica_outro_detalhe: '',
+    solicitou_dados: false,
+    dados_solicitados: '',
+    uso_dados: ''
+  });
   const [cfChanged, setCfChanged] = useState(false);
   const [evDetails, setEvDetails] = useState({});
   const [evChanged, setEvChanged] = useState(false);
@@ -304,6 +316,30 @@ export default function CRMPage() {
   const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
   const changeStage = async (brandId, productKey, newStage) => {
+    // Detectar transição para "Reunião realizada" no Comer Fora
+    if (productKey === 'comer_fora' && (newStage.includes('Reunião realizada') || newStage.includes('reuniao realizada'))) {
+      const brand = brands.find(b => b.id === brandId);
+      const currentStage = brand?.pipelines?.comer_fora?.stage || '';
+      
+      // Se vem de stage que contém "Reunião ag" ou "Buscando"
+      if (currentStage.includes('Reunião ag') || currentStage.includes('reuniao ag') || currentStage.includes('Buscando')) {
+        setCfQualifModal({ brandId, productKey, newStage });
+        const existing = brand?.comer_fora_details || {};
+        setCfQualifData({
+          possui_fidelizacao: existing.possui_fidelizacao || false,
+          mecanica_fidelizacao: existing.mecanica_fidelizacao || '',
+          experiencia_salao: existing.experiencia_salao || [],
+          objetivos: existing.objetivos || [],
+          mecanicas_interesse: existing.mecanicas_interesse || [],
+          mecanica_outro_detalhe: existing.mecanica_outro_detalhe || '',
+          solicitou_dados: existing.solicitou_dados || false,
+          dados_solicitados: existing.dados_solicitados || '',
+          uso_dados: existing.uso_dados || ''
+        });
+        return;
+      }
+    }
+    
     const isLossOrStandby = newStage.startsWith('10.') || newStage.startsWith('11.');
     if (isLossOrStandby) {
       setLossModal({ brandId, productKey, newStage });
@@ -317,6 +353,23 @@ export default function CRMPage() {
     const { brandId, productKey, newStage } = lossModal;
     setLossModal(null);
     await executeStageChange(brandId, productKey, newStage, lossReason);
+  };
+  const confirmCfQualif = async () => {
+    if (!cfQualifModal) return;
+    const { brandId, productKey, newStage } = cfQualifModal;
+    setSaving(true);
+    try {
+      await apiFetch('/api/comer-fora', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_id: brandId, ...cfQualifData })
+      });
+    } catch (err) {
+      console.error('Error saving CF qualif:', err);
+    }
+    setCfQualifModal(null);
+    await executeStageChange(brandId, productKey, newStage, null);
+    setSaving(false);
   };
   const executeStageChange = async (brandId, productKey, newStage, reason) => {
     setSaving(true);
@@ -1831,6 +1884,43 @@ export default function CRMPage() {
                       </select>
                     </div>
 
+                  {/* Qualificação da Reunião */}
+                  {cfDetails.possui_fidelizacao !== undefined && (
+                    <div style={{ marginTop: 24, padding: 16, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                      <h4 style={{ margin: 0, marginBottom: 12, fontSize: 13, fontWeight: 700, color: '#334155' }}>Qualificação da Reunião</h4>
+                      
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                        <strong>Possui fidelização:</strong> {cfDetails.possui_fidelizacao ? 'Sim' : 'Não'}
+                        {cfDetails.mecanica_fidelizacao && <div style={{ marginLeft: 12, marginTop: 4, fontStyle: 'italic' }}>{cfDetails.mecanica_fidelizacao}</div>}
+                      </div>
+                      
+                      {cfDetails.experiencia_salao?.length > 0 && (
+                        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                          <strong>Experiência no salão:</strong> {cfDetails.experiencia_salao.join(', ')}
+                        </div>
+                      )}
+                      
+                      {cfDetails.objetivos?.length > 0 && (
+                        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                          <strong>Objetivos:</strong> {cfDetails.objetivos.join(', ')}
+                        </div>
+                      )}
+                      
+                      {cfDetails.mecanicas_interesse?.length > 0 && (
+                        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                          <strong>Mecânicas de interesse:</strong> {cfDetails.mecanicas_interesse.join(', ')}
+                          {cfDetails.mecanica_outro_detalhe && <div style={{ marginLeft: 12, marginTop: 4, fontStyle: 'italic' }}>{cfDetails.mecanica_outro_detalhe}</div>}
+                        </div>
+                      )}
+                      
+                      <div style={{ fontSize: 12, color: '#64748b' }}>
+                        <strong>Solicitou dados:</strong> {cfDetails.solicitou_dados ? 'Sim' : 'Não'}
+                        {cfDetails.dados_solicitados && <div style={{ marginLeft: 12, marginTop: 4 }}><strong>Dados:</strong> {cfDetails.dados_solicitados}</div>}
+                        {cfDetails.uso_dados && <div style={{ marginLeft: 12, marginTop: 4 }}><strong>Uso:</strong> {cfDetails.uso_dados}</div>}
+                      </div>
+                    </div>
+                  )}
+
                     {canEdit && cfChanged && (
                       <button onClick={async () => {
                         await apiFetch('/api/comer-fora', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -2172,6 +2262,140 @@ export default function CRMPage() {
             </div>
           </div>
         </div>
+
+      {/* Popup de qualificação Comer Fora */}
+      {cfQualifModal && (
+        <div onClick={() => setCfQualifModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: '32px', maxWidth: 650, width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ margin: 0, marginBottom: 24, fontSize: 20, fontWeight: 700, color: '#1e293b' }}>Qualificação da Reunião - Comer Fora</h2>
+            
+            {/* Pergunta 1: Fidelização */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
+                1. Atualmente a marca já possui algum programa de fidelização?
+              </label>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
+                <button onClick={() => setCfQualifData(p => ({ ...p, possui_fidelizacao: true }))} 
+                  style={{ flex: 1, padding: '8px 16px', border: cfQualifData.possui_fidelizacao ? '2px solid #9C050B' : '1px solid #cbd5e1', background: cfQualifData.possui_fidelizacao ? '#fff0f0' : '#fff', color: cfQualifData.possui_fidelizacao ? '#9C050B' : '#64748b', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  Sim
+                </button>
+                <button onClick={() => setCfQualifData(p => ({ ...p, possui_fidelizacao: false, mecanica_fidelizacao: '' }))} 
+                  style={{ flex: 1, padding: '8px 16px', border: !cfQualifData.possui_fidelizacao ? '2px solid #9C050B' : '1px solid #cbd5e1', background: !cfQualifData.possui_fidelizacao ? '#fff0f0' : '#fff', color: !cfQualifData.possui_fidelizacao ? '#9C050B' : '#64748b', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  Não
+                </button>
+              </div>
+              {cfQualifData.possui_fidelizacao && (
+                <textarea placeholder="Como funciona? Qual mecânica utiliza?" value={cfQualifData.mecanica_fidelizacao} onChange={e => setCfQualifData(p => ({ ...p, mecanica_fidelizacao: e.target.value }))} 
+                  style={{ width: '100%', minHeight: 80, padding: 12, border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, resize: 'vertical', fontFamily: 'inherit' }} />
+              )}
+            </div>
+
+            {/* Pergunta 2: Experiência no salão */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
+                2. Como é a experiência no salão? (pode selecionar múltiplas)
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { val: 'totem', label: 'Auto-atendimento no totem' },
+                  { val: 'tablet', label: 'Tablet na mesa' },
+                  { val: 'garcom_mesa', label: 'Pedido com garçom na mesa' },
+                  { val: 'caixa', label: 'Pedido no caixa com atendente' }
+                ].map(opt => (
+                  <label key={opt.val} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: 8, borderRadius: 6, background: cfQualifData.experiencia_salao.includes(opt.val) ? '#f0fdf4' : 'transparent' }}>
+                    <input type="checkbox" checked={cfQualifData.experiencia_salao.includes(opt.val)} onChange={e => {
+                      setCfQualifData(p => ({ ...p, experiencia_salao: e.target.checked ? [...p.experiencia_salao, opt.val] : p.experiencia_salao.filter(x => x !== opt.val) }));
+                    }} style={{ width: 16, height: 16 }} />
+                    <span style={{ fontSize: 13, color: '#334155' }}>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Pergunta 3: Objetivos */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
+                3. Qual o principal objetivo do parceiro em relação ao Comer Fora? (pode selecionar múltiplas)
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { val: 'aquisicao', label: 'Aquisição' },
+                  { val: 'identificacao', label: 'Identificação' },
+                  { val: 'recorrencia', label: 'Recorrência' },
+                  { val: 'avaliacao', label: 'Avaliação' }
+                ].map(opt => (
+                  <label key={opt.val} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: 8, borderRadius: 6, background: cfQualifData.objetivos.includes(opt.val) ? '#f0fdf4' : 'transparent' }}>
+                    <input type="checkbox" checked={cfQualifData.objetivos.includes(opt.val)} onChange={e => {
+                      setCfQualifData(p => ({ ...p, objetivos: e.target.checked ? [...p.objetivos, opt.val] : p.objetivos.filter(x => x !== opt.val) }));
+                    }} style={{ width: 16, height: 16 }} />
+                    <span style={{ fontSize: 13, color: '#334155' }}>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Pergunta 4: Mecânicas */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
+                4. Quais as principais mecânicas que o parceiro se interessou? (pode selecionar múltiplas)
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { val: 'cupom_valor', label: 'Cupom de valor' },
+                  { val: 'cashback', label: 'Cashback' },
+                  { val: 'dois_por_um', label: '2x1' },
+                  { val: 'desconto_item', label: 'Desconto em item' },
+                  { val: 'compre_ganhe', label: 'Compre e ganhe' },
+                  { val: 'outro', label: 'Outro' }
+                ].map(opt => (
+                  <label key={opt.val} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: 8, borderRadius: 6, background: cfQualifData.mecanicas_interesse.includes(opt.val) ? '#f0fdf4' : 'transparent' }}>
+                    <input type="checkbox" checked={cfQualifData.mecanicas_interesse.includes(opt.val)} onChange={e => {
+                      setCfQualifData(p => ({ ...p, mecanicas_interesse: e.target.checked ? [...p.mecanicas_interesse, opt.val] : p.mecanicas_interesse.filter(x => x !== opt.val) }));
+                    }} style={{ width: 16, height: 16 }} />
+                    <span style={{ fontSize: 13, color: '#334155' }}>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+              {cfQualifData.mecanicas_interesse.includes('outro') && (
+                <textarea placeholder="Detalhe a mecânica..." value={cfQualifData.mecanica_outro_detalhe} onChange={e => setCfQualifData(p => ({ ...p, mecanica_outro_detalhe: e.target.value }))} 
+                  style={{ width: '100%', minHeight: 60, padding: 12, border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, resize: 'vertical', fontFamily: 'inherit', marginTop: 8 }} />
+              )}
+            </div>
+
+            {/* Pergunta 5: Dados */}
+            <div style={{ marginBottom: 32 }}>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
+                5. Parceiro solicitou acesso aos dados?
+              </label>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
+                <button onClick={() => setCfQualifData(p => ({ ...p, solicitou_dados: true }))} 
+                  style={{ flex: 1, padding: '8px 16px', border: cfQualifData.solicitou_dados ? '2px solid #9C050B' : '1px solid #cbd5e1', background: cfQualifData.solicitou_dados ? '#fff0f0' : '#fff', color: cfQualifData.solicitou_dados ? '#9C050B' : '#64748b', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  Sim
+                </button>
+                <button onClick={() => setCfQualifData(p => ({ ...p, solicitou_dados: false, dados_solicitados: '', uso_dados: '' }))} 
+                  style={{ flex: 1, padding: '8px 16px', border: !cfQualifData.solicitou_dados ? '2px solid #9C050B' : '1px solid #cbd5e1', background: !cfQualifData.solicitou_dados ? '#fff0f0' : '#fff', color: !cfQualifData.solicitou_dados ? '#9C050B' : '#64748b', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  Não
+                </button>
+              </div>
+              {cfQualifData.solicitou_dados && (<>
+                <textarea placeholder="Quais dados foram solicitados?" value={cfQualifData.dados_solicitados} onChange={e => setCfQualifData(p => ({ ...p, dados_solicitados: e.target.value }))} 
+                  style={{ width: '100%', minHeight: 60, padding: 12, border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, resize: 'vertical', fontFamily: 'inherit', marginBottom: 8 }} />
+                <textarea placeholder="Como pretende usar esses dados?" value={cfQualifData.uso_dados} onChange={e => setCfQualifData(p => ({ ...p, uso_dados: e.target.value }))} 
+                  style={{ width: '100%', minHeight: 60, padding: 12, border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, resize: 'vertical', fontFamily: 'inherit' }} />
+              </>)}
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setCfQualifModal(null)} style={{ padding: '10px 20px', border: '1px solid #cbd5e1', background: '#fff', color: '#64748b', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={confirmCfQualif} disabled={saving} style={{ padding: '10px 20px', border: 'none', background: '#9C050B', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                {saving ? 'Salvando...' : 'Salvar e Continuar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       )}
     </div>
   );
