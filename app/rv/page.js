@@ -65,7 +65,7 @@ export default function RVPage() {
             <p style={{ color: '#64748b', fontSize: 14, textAlign: 'center', marginBottom: 40 }}>Escolha o que deseja acessar</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
               {/* Card Forms */}
-              <button onClick={() => handleCard('forms')} style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 16, padding: 32, cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.2s' }}
+              <a href={FORMS_URL} target="_blank" rel="noopener noreferrer" style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 16, padding: 32, cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.2s', textDecoration: 'none', display: 'block' }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = '#EA1D2C'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}>
                 <div style={{ width: 48, height: 48, background: '#fef2f2', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
@@ -73,7 +73,10 @@ export default function RVPage() {
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>Formulário RV</div>
                 <div style={{ fontSize: 13, color: '#64748b', lineHeight: 1.5 }}>Preencha o formulário de registro de evidências para sua remuneração variável.</div>
-              </button>
+                <div style={{ marginTop: 12, fontSize: 12, color: '#EA1D2C', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                  <ExternalLink size={12} /> Abre em nova aba
+                </div>
+              </a>
 
               {/* Card Dashboard */}
               <button onClick={() => handleCard('dashboard')} style={{ background: '#fff', border: '2px solid #e2e8f0', borderRadius: 16, padding: 32, cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.2s' }}
