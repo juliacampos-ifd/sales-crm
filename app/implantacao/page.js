@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { ArrowLeft, Package, ExternalLink } from 'lucide-react';
 
 // Após publicar o Apps Script do dashboard, cole a URL aqui:
-const DASH_URL = 'COLE_AQUI_A_URL_DO_DASHBOARD_IMPLANTACAO';
+const DASH_URL = 'https://script.google.com/a/macros/ifood.com.br/s/AKfycbxFKSeRcz-noPEYQxW75VAWAcTp2F93h5KnyZgT9UJTjs3YvuiKGtGRsH6DmeUhwRn-RA/exec';
 
 export default function ImplantacaoPage() {
   const [loading, setLoading] = useState(true);
