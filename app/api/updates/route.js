@@ -27,8 +27,9 @@ export async function GET(request) {
     query = query.eq('product', product);
   }
 
-  // Exclude FUP-only entries (notes = 'Atualizacao de FUP')
+  // Exclude system/automated entries
   query = query.neq('notes', 'Atualizacao de FUP');
+  query = query.neq('changed_by_name', 'Sistema');
 
   const { data, error } = await query;
 
