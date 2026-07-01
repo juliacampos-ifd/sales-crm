@@ -1482,8 +1482,8 @@ export default function CRMPage() {
       {/* SCORECARD */}
         {view === 'scorecard' && (() => {
           if (!scData) { return <div style={{ textAlign:'center', padding:40 }}><p style={{ color:'#94a3b8' }}>Carregando scorecard...</p></div>; }
-          const SC_DUPLA_LABELS = { total:'FUNIL DE VENDA', lidia_gabi:'Lidia e Gabi', joao_diego:'Joao e Diego', michel_emerson:'Michel e Emerson' };
-          const SC_DUPLA_COLORS = { total:'#EA1D2C', lidia_gabi:'#DA5D69', joao_diego:'#9C050B', michel_emerson:'#A02331' };
+          const SC_DUPLA_LABELS = { total:'FUNIL DE VENDA', lidia_gabi:'Lidia e Gabi', marcos_joao:'Marcos e Joao', michel_emerson:'Michel e Emerson' };
+          const SC_DUPLA_COLORS = { total:'#EA1D2C', lidia_gabi:'#DA5D69', marcos_joao:'#9C050B', michel_emerson:'#A02331' };
           const SC_METRIC_LABELS = {
             elegiveis:'Marcas Elegiveis',
             nao_iniciado:'Nao Iniciado', iniciado:'Iniciado',
@@ -1539,7 +1539,7 @@ export default function CRMPage() {
           const scTotalBD = getMonthBusinessDays(scYear, scMonth - 1);
           const scMtdBD = scYear === today.getFullYear() && scMonth === today.getMonth() + 1 ? getMonthBusinessDaysMTD(scYear, scMonth - 1, today) : scTotalBD;
           const scCurKey = scYear + '-' + String(scMonth).padStart(2,'0');
-          const DK = ['lidia_gabi','joao_diego','michel_emerson'];
+          const DK = ['lidia_gabi','marcos_joao','michel_emerson'];
           const isG = scClassFilter === 'g';
 
           // Get meta value
@@ -1714,7 +1714,7 @@ export default function CRMPage() {
                       <th style={{...scTh,textAlign:'left',width:180}}>Stage</th>
                       <th style={scTh}>Total</th>
                       <th style={scTh}>Lidia e Gabi</th>
-                      <th style={scTh}>Joao e Diego</th>
+                      <th style={scTh}>Marcos e Joao</th>
                       <th style={scTh}>Michel e Emerson</th>
                     </tr></thead>
                     <tbody>
@@ -1727,7 +1727,7 @@ export default function CRMPage() {
                             <td style={{...scTd,fontWeight:isBold?700:400,color:'#1e293b'}}>{stg.label}</td>
                             <td style={{...scTd,textAlign:'center',fontWeight:isBold?700:400}}><ScVal v={tot} metric={stg.key} ym={scCurKey} dupla="total" bold={isBold}/></td>
                             <td style={{...scTd,textAlign:'center'}}><ScVal v={getV('lidia_gabi')} metric={stg.key} ym={scCurKey} dupla="lidia_gabi"/></td>
-                            <td style={{...scTd,textAlign:'center'}}><ScVal v={getV('joao_diego')} metric={stg.key} ym={scCurKey} dupla="joao_diego"/></td>
+                            <td style={{...scTd,textAlign:'center'}}><ScVal v={getV('marcos_joao')} metric={stg.key} ym={scCurKey} dupla="marcos_joao"/></td>
                             <td style={{...scTd,textAlign:'center'}}><ScVal v={getV('michel_emerson')} metric={stg.key} ym={scCurKey} dupla="michel_emerson"/></td>
                           </tr>
                         );
@@ -1737,7 +1737,7 @@ export default function CRMPage() {
                 </div>}
               </div>
               {/* Funnel tables per dupla */}
-              {['total','lidia_gabi','joao_diego','michel_emerson'].map(dupla => {
+              {['total','lidia_gabi','marcos_joao','michel_emerson'].map(dupla => {
                 const rows = scBuildRows(dupla);
                 const open = scDupla === dupla;
                 const clr = SC_DUPLA_COLORS[dupla];
