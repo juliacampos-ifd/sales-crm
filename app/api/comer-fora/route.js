@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-const ALLOWED = ['estrategia','solucao','provider','cidade','feedback_cliente','trade','prioridade',
+const ALLOWED = ['estrategia','solucao','provider','cidade','feedback_cliente','trade','prioridade','prioridade_mes',
   'passagem_bastao','onda_comercial','previsao_1a_reuniao','realizacao_1a_reuniao','aceite_formal',
-  'possui_fidelizacao', 'mecanica_fidelizacao', 'experiencia_salao', 'objetivos', 
+  'possui_fidelizacao', 'mecanica_fidelizacao', 'experiencia_salao', 'objetivos',
   'mecanicas_interesse', 'mecanica_outro_detalhe', 'solicitou_dados', 'dados_solicitados', 'uso_dados'];
 
 // GET /api/comer-fora?brand_id=X
