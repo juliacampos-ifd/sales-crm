@@ -27,9 +27,10 @@ export async function GET(request) {
     query = query.eq('product', product);
   }
 
-  // Exclude system/automated entries
-  query = query.neq('notes', 'Atualizacao de FUP');
-  query = query.neq('changed_by_name', 'Sistema');
+  // Exclude system-generated entries (imports, seeds, migrations)
+  query = query.not('changed_by_name', 'in', '("Sistema","Import CSV","Seed Totem","Seed Saipos","CSV")');
+  query = query.not('changed_by_name', 'is', 'null');
+  query = query.neq('changed_by_name', '');
 
   const { data, error } = await query;
 
