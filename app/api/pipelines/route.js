@@ -11,7 +11,7 @@ export async function PATCH(request) {
   const supabase = createServerClient();
   const body = await request.json();
 
-  const { brand_id, product, new_stage, responsavel, user_id, user_name, notes } = body;
+  const { brand_id, product, new_stage, responsavel, user_id, user_name, notes, pdv_ofertado } = body;
 
   if (!brand_id || !product) {
     return NextResponse.json({ error: 'brand_id and product are required' }, { status: 400 });
@@ -20,7 +20,7 @@ export async function PATCH(request) {
   // Get current state
   const { data: current } = await supabase
     .from('pipelines')
-    .select('stage, responsavel')
+    .select('stage, responsavel, pdv_ofertado')
     .eq('brand_id', brand_id)
     .eq('product', product)
     .single();
@@ -35,6 +35,7 @@ export async function PATCH(request) {
     update.stage = current.stage;
   }
   if (responsavel !== undefined) update.responsavel = responsavel;
+  if (pdv_ofertado !== undefined) update.pdv_ofertado = pdv_ofertado;
 
   // Upsert pipeline
   const { data: pipeline, error } = await supabase
@@ -69,13 +70,16 @@ export async function POST(request) {
   const supabase = createServerClient();
   const body = await request.json();
 
-  const { brand_id, product, initial_stage, responsavel, user_id, user_name } = body;
+  const { brand_id, product, initial_stage, responsavel, user_id, user_name, pdv_ofertado } = body;
 
   const stage = initial_stage || '0. Nao Iniciado';
 
+  const insertObj = { brand_id, product, stage, active: true, updated_by: user_id, responsavel: responsavel || null };
+  if (pdv_ofertado) insertObj.pdv_ofertado = pdv_ofertado;
+
   const { data, error } = await supabase
     .from('pipelines')
-    .insert({ brand_id, product, stage, active: true, updated_by: user_id, responsavel: responsavel || null })
+    .insert(insertObj)
     .select()
     .single();
 
