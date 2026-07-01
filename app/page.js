@@ -1969,7 +1969,7 @@ export default function CRMPage() {
 
                     <div style={{ marginBottom: 8 }}>
                       <span style={{ color: '#64748b', fontSize: 12, display: 'block', marginBottom: 4 }}>Prioridade</span>
-                      <select disabled={!canEdit} value={cfDetails.prioridade || ''} onChange={e => { setCfDetails(p => ({...p, prioridade: e.target.value ? Number(e.target.value) : null})); setCfChanged(true); }}
+                      <select disabled={!canEdit} value={cfDetails.prioridade != null ? String(cfDetails.prioridade) : ''} onChange={e => { setCfDetails(p => ({...p, prioridade: e.target.value || null})); setCfChanged(true); }}
                         style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, background: '#fff', outline: 'none', opacity: canEdit ? 1 : 0.6 }}>
                         <option value="">—</option>
                         <option value="1">1 — Alta</option><option value="2">2 — Média</option><option value="3">3 — Baixa</option>
