@@ -44,6 +44,7 @@ export default function CRMPage() {
   const [filterTopDown, setFilterTopDown] = useState('');
   const [filterBaseElegivel, setFilterBaseElegivel] = useState([]);
   const [filterHaas, setFilterHaas] = useState([]);
+  const [filterExecDelivery, setFilterExecDelivery] = useState([]);
   const [filterCFEstrategia, setFilterCFEstrategia] = useState([]);
   const [filterCFSolucao, setFilterCFSolucao] = useState([]);
   const [filterCFProvider, setFilterCFProvider] = useState([]);
@@ -129,6 +130,12 @@ export default function CRMPage() {
   const [mergeSearch, setMergeSearch] = useState('');
   const [mergeTarget, setMergeTarget] = useState(null);
   const [mergeName, setMergeName] = useState('');
+  // ── MARCAS G: PDV Ofertado filter ──
+  const [filterPdvOfertado, setFilterPdvOfertado] = useState([]);
+  // ── ÚLTIMAS ATUALIZAÇÕES ──
+  const [updatesData, setUpdatesData] = useState([]);
+  const [updatesProduct, setUpdatesProduct] = useState('todos');
+  const [updatesLoading, setUpdatesLoading] = useState(false);
   // ── Open filter tracking ──
   const [openFilter, setOpenFilter] = useState(null);
   // ── Init edit fields when selecting a brand ──
@@ -251,6 +258,12 @@ export default function CRMPage() {
         d = d.filter(b => b.responsavel_bdr === profile.name || b.responsavel_closer === profile.name || Object.values(b.pipelines || {}).some(p => p.responsavel && p.responsavel.includes(profile.name)));
       }
     }
+    // Marcas G: 3S e Saipos mostram só P/M; marcas_g mostra só G
+    if (activeProduct === '3s' || activeProduct === 'saipos') {
+      d = d.filter(b => b.classificacao !== 'G');
+    } else if (activeProduct === 'marcas_g') {
+      d = d.filter(b => b.classificacao === 'G' && b.pipelines?.marcas_g);
+    }
     if (search) {
       const q = search.toLowerCase();
       d = d.filter(b => (b.marca||'').toLowerCase().includes(q) || (b.responsavel_bdr||'').toLowerCase().includes(q) || (b.responsavel_closer||'').toLowerCase().includes(q));
@@ -296,6 +309,10 @@ export default function CRMPage() {
       const pt = (b.produto_totem || "").split(",").map(s => s.trim());
       return filterHaas.filter(v => v !== '(Vazio)').some(f => pt.includes(f));
     });
+    if (filterExecDelivery.length > 0) d = d.filter(b => {
+      if (filterExecDelivery.includes('(Vazio)') && !b.executivo_delivery) return true;
+      return filterExecDelivery.filter(v => v !== '(Vazio)').includes(b.executivo_delivery);
+    });
     if (filterEVSinergia.length > 0) d = d.filter(b => filterEVSinergia.includes(b.emilia_vision_details?.sinergia));
     if (filterEVBaseAndres === 'sim') d = d.filter(b => b.emilia_vision_details?.base_andres === true);
     if (filterEVBaseAndres === 'nao') d = d.filter(b => !b.emilia_vision_details?.base_andres);
@@ -310,8 +327,10 @@ export default function CRMPage() {
     // Novos Produtos 3S filters
     if (filterNP3SAddon.length > 0) d = d.filter(b => { const det = b.novos_produtos_3s_details || {}; return filterNP3SAddon.some(a => a === '3S Eats' ? det.eats : a === '3S Go' ? det.go : a === 'Pagamento na Mesa' ? det.pagamento_mesa : false); });
     if (filterNP3SMensalidade.length > 0) d = d.filter(b => { const det = b.novos_produtos_3s_details || {}; return filterNP3SMensalidade.some(a => a === '3S Eats' ? det.eats_incluso : a === '3S Go' ? det.go_incluso : a === 'Pagamento na Mesa' ? det.pagamento_mesa_incluso : false); });
+    // Marcas G: filtro por PDV ofertado
+    if (filterPdvOfertado.length > 0) d = d.filter(b => filterPdvOfertado.includes(b.pipelines?.marcas_g?.pdv_ofertado));
     return d;
-  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterTimeCarteira, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo, filterCFEstrategia, filterCFSolucao, filterCFProvider, filterCFCidade, filterCFTrade, filterCFPrioridade, filterNP3SAddon, filterNP3SMensalidade]);
+  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterTimeCarteira, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo, filterCFEstrategia, filterCFSolucao, filterCFProvider, filterCFCidade, filterCFTrade, filterCFPrioridade, filterNP3SAddon, filterNP3SMensalidade, filterExecDelivery, filterPdvOfertado]);
   // ── Loss/StandBy reasons ──
   const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
@@ -425,14 +444,21 @@ export default function CRMPage() {
     }
   };
   // ── Enable product ──
-  const enableProduct = async (brandId, productKey) => {
+  const enableProduct = async (brandId, productKey, pdvOfertado) => {
+    // Para marcas_g, exigir seleção de PDV
+    if (productKey === 'marcas_g' && !pdvOfertado) {
+      const choice = prompt('Selecione o PDV ofertado:\n1 - 3S Checkout\n2 - Saipos');
+      if (choice === '1') pdvOfertado = '3S Checkout';
+      else if (choice === '2') pdvOfertado = 'Saipos';
+      else return; // Cancelou
+    }
     setSaving(true);
-    setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { stage: '0. Nao Iniciado', active: true, responsavel: '' } } } : prev);
+    setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { stage: '0. Nao Iniciado', active: true, responsavel: '', pdv_ofertado: pdvOfertado || null } } } : prev);
     if (!testMode) {
       await apiFetch('/api/pipelines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand_id: brandId, product: productKey, user_id: user?.id, user_name: profile?.name }),
+        body: JSON.stringify({ brand_id: brandId, product: productKey, user_id: user?.id, user_name: profile?.name, pdv_ofertado: pdvOfertado || null }),
       });
       const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
       const freshData = await freshRes.json();
@@ -489,6 +515,17 @@ export default function CRMPage() {
       setBrandHistory(prev => prev.filter(h => h.id !== histId));
       await loadScorecard();
     } catch (err) { console.error('Error deleting history:', err); }
+  };
+  // ── Últimas Atualizações ──
+  const loadUpdates = async (productFilter) => {
+    setUpdatesLoading(true);
+    try {
+      const p = productFilter || updatesProduct;
+      const res = await apiFetch(`/api/updates?product=${p}&limit=100`);
+      const data = await res.json();
+      if (data.updates) setUpdatesData(data.updates);
+    } catch (err) { console.error('Error loading updates:', err); }
+    setUpdatesLoading(false);
   };
   // ── Save info changes (button click) — respects testMode ──
   // ── Admin: Rename brand ──
@@ -726,9 +763,11 @@ export default function CRMPage() {
   const FORECAST_SECTIONS = [
     { key: '3s_pm', label: '3S Checkout P/M', subtitle: 'Contrato assinado', color: '#EA1D2C' },
     { key: '3s_g', label: '3S Checkout G', subtitle: 'Contrato assinado', color: '#b91c1c' },
-    { key: 'saipos', label: 'Saipos', subtitle: 'Lojas enviando forms', color: '#2563eb' },
+    { key: 'saipos_pm', label: 'Saipos P/M', subtitle: 'Lojas enviando forms', color: '#2563eb' },
+    { key: 'saipos_g', label: 'Saipos G', subtitle: 'Lojas enviando forms', color: '#1e40af' },
     { key: 'totem', label: 'Totem', subtitle: 'Novos totens', color: '#7c3aed' },
-    { key: 'comer_fora', label: 'Comer Fora', subtitle: 'Aceites', color: '#9C050B' },
+    { key: 'comer_fora_pm', label: 'Comer Fora P/M', subtitle: 'Aceites P/M', color: '#9C050B' },
+    { key: 'comer_fora_g', label: 'Comer Fora G', subtitle: 'Aceites G', color: '#7f1d1d' },
   ];
   const FISCAL_MONTHS = [
     { year: 2026, month: 4 }, { year: 2026, month: 5 }, { year: 2026, month: 6 },
@@ -816,7 +855,7 @@ export default function CRMPage() {
     setActivityLoading(false);
   };
   const NavBtn = ({ id, icon: Icon, label }) => (
-    <button onClick={() => { setView(id); if (id === 'scorecard') { setScData(null); loadScorecard(); } }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+    <button onClick={() => { setView(id); if (id === 'scorecard') { setScData(null); loadScorecard(); } if (id === 'updates') { loadUpdates(); } }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
       <Icon size={16} /> {label}
     </button>
   );
@@ -923,6 +962,7 @@ export default function CRMPage() {
           {(!isRestricted || profile?.team === 'comer_fora') && <NavBtn id="forecast" icon={Calendar} label="Forecast" />}
           <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
           {!isRestricted && <NavBtn id="scorecard" icon={Target} label="Scorecard" />}
+          <NavBtn id="updates" icon={History} label="Atualizações" />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {profile?.role === 'admin' && (
@@ -1022,6 +1062,7 @@ export default function CRMPage() {
           {pdvs.length > 0 && <MultiFilter label="PDV" selected={filterPDV} onChange={setFilterPDV} options={pdvs} filterId="pdv" />}
           <MultiFilter label="Etapa" selected={filterStage} onChange={setFilterStage} options={[...(PRODUCTS[activeProduct]?.stages || []), '(Vazio)']} filterId="stage" />
           {brands.some(b => b.culinaria) && <MultiFilter label="Culinaria" selected={filterCulinaria} onChange={setFilterCulinaria} options={[...new Set(brands.map(b => b.culinaria).filter(Boolean))].sort()} filterId="culinaria" />}
+          <MultiFilter label="Exec. Delivery" selected={filterExecDelivery} onChange={setFilterExecDelivery} options={[...new Set(brands.map(b => b.executivo_delivery).filter(Boolean))].sort()} filterId="exec_delivery" />
           <button onClick={() => setFilterTag(p => !p)} style={{ padding: '6px 14px', borderRadius: 8, border: filterTag ? '2px solid #7c3aed' : '1px solid #e2e8f0', background: filterTag ? '#f3e8ff' : '#fff', color: filterTag ? '#7c3aed' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>AT</button>
           {activeProduct === 'saipos' && (
             <select value={filterTopDown} onChange={e => setFilterTopDown(e.target.value)} style={{ padding: '6px 12px', borderRadius: 8, border: filterTopDown ? '2px solid #b45309' : '1px solid #e2e8f0', background: filterTopDown ? '#fef3c7' : '#fff', color: filterTopDown ? '#b45309' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer', outline: 'none' }}>
@@ -1051,6 +1092,9 @@ export default function CRMPage() {
               </select>
             ); })()}
           </>)}
+          {activeProduct === 'marcas_g' && (
+            <MultiFilter label="PDV Ofertado" selected={filterPdvOfertado} onChange={setFilterPdvOfertado} options={['3S Checkout','Saipos']} filterId="pdv_ofertado" />
+          )}
           {activeProduct === 'novos_produtos_3s' && (<>
             <MultiFilter label="Add-on" selected={filterNP3SAddon} onChange={setFilterNP3SAddon} options={['3S Eats','3S Go','Pagamento na Mesa']} filterId="np3s_addon" />
             <MultiFilter label="Mensalidade" selected={filterNP3SMensalidade} onChange={setFilterNP3SMensalidade} options={['3S Eats','3S Go','Pagamento na Mesa']} filterId="np3s_mens" />
@@ -1103,9 +1147,17 @@ export default function CRMPage() {
                           </>
                         ) : (
                           <>
-                            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || '—'} / ${b.responsavel_closer || '—'}` : '—')}</div>
+                            {(activeProduct === '3s' || activeProduct === 'marcas_g') ? (
+                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
+                            <div>BDR: {b.responsavel_bdr || '—'}</div>
+                            <div>Closer: {b.responsavel_closer || '—'}</div>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || '—'}</div>
+                        )}
                             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
+                              {activeProduct === 'marcas_g' && b.pipelines?.marcas_g?.pdv_ofertado && <span style={{ fontSize: 10, background: b.pipelines.marcas_g.pdv_ofertado === '3S Checkout' ? '#fef2f2' : '#dbeafe', color: b.pipelines.marcas_g.pdv_ofertado === '3S Checkout' ? '#EA1D2C' : '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>{b.pipelines.marcas_g.pdv_ofertado}</span>}
+                              {activeProduct !== 'marcas_g' && b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
                               {b.analise_teste_pdv && <span style={{ fontSize: 10, background: '#f3e8ff', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>AT</span>}
                               {b.top_down === 'Top Down' && <span style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>TD</span>}
                               {b.top_down === 'Não Top Down' && <span style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>NTD</span>}
@@ -1135,7 +1187,7 @@ export default function CRMPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    {['Marca','Responsavel',`Status ${product.name}`,'Class.','Estado','Lojas',''].map(h => (
+                    {(activeProduct === 'marcas_g' ? ['Marca','PDV','BDR','Closer',`Status ${product.name}`,'Estado','Lojas',''] : activeProduct === '3s' ? ['Marca','BDR','Closer',`Status ${product.name}`,'Class.','Estado','Lojas',''] : ['Marca','Responsavel',`Status ${product.name}`,'Class.','Estado','Lojas','']).map(h => (
                       <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                     ))}
                   </tr>
@@ -1145,7 +1197,18 @@ export default function CRMPage() {
                     <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => openBrandDetail(b, 'info')}
                       onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, fontSize: 13 }}>{b.marca}</td>
-                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.pipelines?.[activeProduct]?.responsavel || (activeProduct === '3s' ? `${b.responsavel_bdr || ''} / ${b.responsavel_closer || ''}` : '—')}</td>
+                      {activeProduct === 'marcas_g' ? (<>
+                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12 }}>
+                          {b.pipelines?.marcas_g?.pdv_ofertado ? <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, fontWeight: 700, background: b.pipelines.marcas_g.pdv_ofertado === '3S Checkout' ? '#fef2f2' : '#dbeafe', color: b.pipelines.marcas_g.pdv_ofertado === '3S Checkout' ? '#EA1D2C' : '#2563eb' }}>{b.pipelines.marcas_g.pdv_ofertado}</span> : '—'}
+                        </td>
+                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_bdr || '—'}</td>
+                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_closer || '—'}</td>
+                      </>) : activeProduct === '3s' ? (<>
+                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_bdr || '—'}</td>
+                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_closer || '—'}</td>
+                      </>) : (
+                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.pipelines?.[activeProduct]?.responsavel || '—'}</td>
+                      )}
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
                         <span style={{ fontSize: 11, background: product.color + '15', color: product.color, padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>{shortStage(b.pipelines?.[activeProduct]?.stage || '—')}</span>
                       </td>
@@ -1789,6 +1852,65 @@ export default function CRMPage() {
             </div>
           );
         })()}
+      {/* ÚLTIMAS ATUALIZAÇÕES */}
+      {view === 'updates' && (
+        <div style={{ padding: '20px 28px', maxWidth: 900, margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', margin: 0 }}>Últimas Atualizações</h2>
+            <button onClick={() => loadUpdates()} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              Atualizar
+            </button>
+          </div>
+          {/* Product filter tabs */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+            {[{ key: 'todos', label: 'Todos' }, ...Object.entries(PRODUCTS).map(([k, v]) => ({ key: k, label: v.name }))].map(tab => (
+              <button key={tab.key} onClick={() => { setUpdatesProduct(tab.key); loadUpdates(tab.key); }} style={{
+                padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: updatesProduct === tab.key ? (tab.key === 'todos' ? '#1e293b' : (PRODUCTS[tab.key]?.color || '#1e293b')) : '#f1f5f9',
+                color: updatesProduct === tab.key ? '#fff' : '#64748b',
+              }}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {/* Feed */}
+          {updatesLoading && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Carregando...</div>}
+          {!updatesLoading && updatesData.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Nenhuma movimentação encontrada.</div>}
+          {!updatesLoading && updatesData.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {updatesData.map(u => {
+                const prodConfig = PRODUCTS[u.product] || {};
+                const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') + ' ' + new Date(u.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+                return (
+                  <div key={u.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid #f1f5f9', padding: '14px 18px', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: '#1e293b', cursor: 'pointer' }} onClick={() => {
+                          const found = brands.find(b => b.id === u.brand_id);
+                          if (found) openBrandDetail(found, 'historico');
+                        }}>
+                          {u.marca}
+                        </span>
+                        {u.classificacao && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: CLASSIFICACAO_COLORS[u.classificacao] || '#e2e8f0', color: '#fff' }}>{u.classificacao}</span>}
+                        {u.chave_agrupamento_name && <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>{u.chave_agrupamento_name}</span>}
+                      </div>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{dateStr}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      <span style={{ padding: '2px 8px', borderRadius: 6, background: prodConfig.color || '#94a3b8', color: '#fff', fontSize: 10, fontWeight: 700 }}>{prodConfig.name || u.product}</span>
+                      <span style={{ color: '#64748b' }}>{u.from_stage || '—'}</span>
+                      <span style={{ color: '#94a3b8' }}>→</span>
+                      <span style={{ color: '#1e293b', fontWeight: 600 }}>{u.to_stage || '—'}</span>
+                    </div>
+                    {u.notes && <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, fontStyle: 'italic' }}>{u.notes}</div>}
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>por {u.changed_by_name || 'Sistema'}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
       {/* DETAIL PANEL */}
       {selectedBrand && (
         <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', boxShadow: '-4px 0 30px rgba(0,0,0,.12)', zIndex: 50, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -1817,6 +1939,13 @@ export default function CRMPage() {
               {selectedBrand.classificacao && <span style={{ fontSize: 11, background: (CLASSIFICACAO_COLORS[selectedBrand.classificacao] || '#94a3b8') + '20', color: CLASSIFICACAO_COLORS[selectedBrand.classificacao], padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>{selectedBrand.classificacao}</span>}
               {selectedBrand.estado && <span style={{ fontSize: 11, background: '#dbeafe', color: '#2563eb', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>{selectedBrand.estado}</span>}
             </div>
+            {(selectedBrand.executivo_delivery || selectedBrand.coordenador_delivery || selectedBrand.chave_agrupamento_name) && (
+              <div style={{ marginTop: 8, fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>
+                {selectedBrand.executivo_delivery && <div>Exec. Delivery: <span style={{ color: '#64748b', fontWeight: 500 }}>{selectedBrand.executivo_delivery}</span></div>}
+                {selectedBrand.coordenador_delivery && <div>Coord. Delivery: <span style={{ color: '#64748b', fontWeight: 500 }}>{selectedBrand.coordenador_delivery}</span></div>}
+                {selectedBrand.chave_agrupamento_name && <div>Chave Agrupamento: <span style={{ color: '#64748b', fontWeight: 500 }}>{selectedBrand.chave_agrupamento_name}</span></div>}
+              </div>
+            )}
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 24px' }}>
             {/* INFO TAB */}
@@ -2156,6 +2285,24 @@ export default function CRMPage() {
                               {(prod.responsaveis || []).map(r => <option key={r} value={r}>{r}</option>)}
                             </select>
                           </div>
+                          {key === 'marcas_g' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>PDV Ofertado:</span>
+                              <select value={pipeline.pdv_ofertado || ''} onChange={async e => {
+                                const newPdv = e.target.value;
+                                if (!testMode) {
+                                  await apiFetch('/api/pipelines', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand_id: selectedBrand.id, product: 'marcas_g', pdv_ofertado: newPdv, user_id: user?.id, user_name: profile?.name }) });
+                                  const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
+                                  const freshData = await freshRes.json();
+                                  if (freshData.brands) { setBrands(freshData.brands); setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev); }
+                                }
+                              }} disabled={!canEdit} style={{ flex: 1, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, outline: 'none', background: '#fff', opacity: canEdit ? 1 : 0.6 }}>
+                                <option value="">Selecione...</option>
+                                <option value="3S Checkout">3S Checkout</option>
+                                <option value="Saipos">Saipos</option>
+                              </select>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
