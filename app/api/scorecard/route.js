@@ -8,7 +8,7 @@ export const revalidate = 0;
 
 function closerToDupla(closer) {
   if (closer === 'Gabriela Roma' || closer === 'Lidia Esteves') return 'lidia_gabi';
-  if (closer === 'Diego Santos' || closer === 'Joao Biagiotti') return 'joao_diego';
+  if (closer === 'Marcos Pereira' || closer === 'Joao Biagiotti' || closer === 'Diego Santos') return 'marcos_joao';
   return 'michel_emerson';
 }
 
@@ -110,7 +110,7 @@ function getMondays(year, month) {
 }
 
 function computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, cutoffDate, year, month, classFilter) {
-  const DUPLA_KEYS = ['lidia_gabi', 'joao_diego', 'michel_emerson'];
+  const DUPLA_KEYS = ['lidia_gabi', 'marcos_joao', 'michel_emerson'];
   const ym = year + '-' + String(month).padStart(2, '0');
   const monthStart = new Date(year, month - 1, 1);
   // cutoff = end of cutoffDate day
@@ -151,7 +151,7 @@ export async function GET(request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const sb = createServerClient();
-    const DUPLA_KEYS = ['lidia_gabi', 'joao_diego', 'michel_emerson'];
+    const DUPLA_KEYS = ['lidia_gabi', 'marcos_joao', 'michel_emerson'];
     const classFilter = new URL(request.url).searchParams.get('class') || 'pm';
 
     const [allBrands, allPipes, allHistRaw, metasResult, fcstResult] = await Promise.all([
@@ -335,7 +335,7 @@ export async function GET(request) {
         : null;
 
       const WOW_METRICS = ['primeiro_contato', 'apresentacao', 'negociacao', 'contrato_assinado', 'lojas'];
-      const DUPLA_KEYS_WOW = ['total', 'lidia_gabi', 'joao_diego', 'michel_emerson'];
+      const DUPLA_KEYS_WOW = ['total', 'lidia_gabi', 'marcos_joao', 'michel_emerson'];
       wow = { refDate: refMon.toISOString().slice(0, 10), prevDate: prevMon.toISOString().slice(0, 10) };
       DUPLA_KEYS_WOW.forEach(dk => {
         wow[dk] = {};
