@@ -130,8 +130,6 @@ export default function CRMPage() {
   const [mergeSearch, setMergeSearch] = useState('');
   const [mergeTarget, setMergeTarget] = useState(null);
   const [mergeName, setMergeName] = useState('');
-  // ── MARCAS G: PDV Ofertado filter ──
-  const [filterPdvOfertado, setFilterPdvOfertado] = useState([]);
   // ── ÚLTIMAS ATUALIZAÇÕES ──
   const [updatesData, setUpdatesData] = useState([]);
   const [updatesProduct, setUpdatesProduct] = useState('todos');
@@ -258,12 +256,6 @@ export default function CRMPage() {
         d = d.filter(b => b.responsavel_bdr === profile.name || b.responsavel_closer === profile.name || Object.values(b.pipelines || {}).some(p => p.responsavel && p.responsavel.includes(profile.name)));
       }
     }
-    // Marcas G: 3S e Saipos mostram só P/M; marcas_g mostra só G
-    if (activeProduct === '3s' || activeProduct === 'saipos') {
-      d = d.filter(b => b.classificacao !== 'G');
-    } else if (activeProduct === 'marcas_g') {
-      d = d.filter(b => b.classificacao === 'G' && b.pipelines?.marcas_g);
-    }
     if (search) {
       const q = search.toLowerCase();
       d = d.filter(b => (b.marca||'').toLowerCase().includes(q) || (b.responsavel_bdr||'').toLowerCase().includes(q) || (b.responsavel_closer||'').toLowerCase().includes(q));
@@ -327,10 +319,8 @@ export default function CRMPage() {
     // Novos Produtos 3S filters
     if (filterNP3SAddon.length > 0) d = d.filter(b => { const det = b.novos_produtos_3s_details || {}; return filterNP3SAddon.some(a => a === '3S Eats' ? det.eats : a === '3S Go' ? det.go : a === 'Pagamento na Mesa' ? det.pagamento_mesa : false); });
     if (filterNP3SMensalidade.length > 0) d = d.filter(b => { const det = b.novos_produtos_3s_details || {}; return filterNP3SMensalidade.some(a => a === '3S Eats' ? det.eats_incluso : a === '3S Go' ? det.go_incluso : a === 'Pagamento na Mesa' ? det.pagamento_mesa_incluso : false); });
-    // Marcas G: filtro por PDV ofertado
-    if (filterPdvOfertado.length > 0) d = d.filter(b => filterPdvOfertado.includes(b.pipelines?.marcas_g?.pdv_ofertado));
     return d;
-  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterTimeCarteira, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo, filterCFEstrategia, filterCFSolucao, filterCFProvider, filterCFCidade, filterCFTrade, filterCFPrioridade, filterNP3SAddon, filterNP3SMensalidade, filterExecDelivery, filterPdvOfertado]);
+  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterTimeCarteira, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo, filterCFEstrategia, filterCFSolucao, filterCFProvider, filterCFCidade, filterCFTrade, filterCFPrioridade, filterNP3SAddon, filterNP3SMensalidade, filterExecDelivery]);
   // ── Loss/StandBy reasons ──
   const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
@@ -444,21 +434,14 @@ export default function CRMPage() {
     }
   };
   // ── Enable product ──
-  const enableProduct = async (brandId, productKey, pdvOfertado) => {
-    // Para marcas_g, exigir seleção de PDV
-    if (productKey === 'marcas_g' && !pdvOfertado) {
-      const choice = prompt('Selecione o PDV ofertado:\n1 - 3S Checkout\n2 - Saipos');
-      if (choice === '1') pdvOfertado = '3S Checkout';
-      else if (choice === '2') pdvOfertado = 'Saipos';
-      else return; // Cancelou
-    }
+  const enableProduct = async (brandId, productKey) => {
     setSaving(true);
-    setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { stage: '0. Nao Iniciado', active: true, responsavel: '', pdv_ofertado: pdvOfertado || null } } } : prev);
+    setSelectedBrand(prev => prev && prev.id === brandId ? { ...prev, pipelines: { ...prev.pipelines, [productKey]: { stage: '0. Nao Iniciado', active: true, responsavel: '' } } } : prev);
     if (!testMode) {
       await apiFetch('/api/pipelines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand_id: brandId, product: productKey, user_id: user?.id, user_name: profile?.name, pdv_ofertado: pdvOfertado || null }),
+        body: JSON.stringify({ brand_id: brandId, product: productKey, user_id: user?.id, user_name: profile?.name }),
       });
       const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
       const freshData = await freshRes.json();
@@ -763,8 +746,7 @@ export default function CRMPage() {
   const FORECAST_SECTIONS = [
     { key: '3s_pm', label: '3S Checkout P/M', subtitle: 'Contrato assinado', color: '#EA1D2C' },
     { key: '3s_g', label: '3S Checkout G', subtitle: 'Contrato assinado', color: '#b91c1c' },
-    { key: 'saipos_pm', label: 'Saipos P/M', subtitle: 'Lojas enviando forms', color: '#2563eb' },
-    { key: 'saipos_g', label: 'Saipos G', subtitle: 'Lojas enviando forms', color: '#1e40af' },
+    { key: 'saipos', label: 'Saipos', subtitle: 'Lojas enviando forms', color: '#2563eb' },
     { key: 'totem', label: 'Totem', subtitle: 'Novos totens', color: '#7c3aed' },
     { key: 'comer_fora_pm', label: 'Comer Fora P/M', subtitle: 'Aceites P/M', color: '#9C050B' },
     { key: 'comer_fora_g', label: 'Comer Fora G', subtitle: 'Aceites G', color: '#7f1d1d' },
@@ -1092,9 +1074,6 @@ export default function CRMPage() {
               </select>
             ); })()}
           </>)}
-          {activeProduct === 'marcas_g' && (
-            <MultiFilter label="PDV Ofertado" selected={filterPdvOfertado} onChange={setFilterPdvOfertado} options={['3S Checkout','Saipos']} filterId="pdv_ofertado" />
-          )}
           {activeProduct === 'novos_produtos_3s' && (<>
             <MultiFilter label="Add-on" selected={filterNP3SAddon} onChange={setFilterNP3SAddon} options={['3S Eats','3S Go','Pagamento na Mesa']} filterId="np3s_addon" />
             <MultiFilter label="Mensalidade" selected={filterNP3SMensalidade} onChange={setFilterNP3SMensalidade} options={['3S Eats','3S Go','Pagamento na Mesa']} filterId="np3s_mens" />
@@ -1147,7 +1126,7 @@ export default function CRMPage() {
                           </>
                         ) : (
                           <>
-                            {(activeProduct === '3s' || activeProduct === 'marcas_g') ? (
+                            {activeProduct === '3s' ? (
                           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
                             <div>BDR: {b.responsavel_bdr || '—'}</div>
                             <div>Closer: {b.responsavel_closer || '—'}</div>
@@ -1156,8 +1135,7 @@ export default function CRMPage() {
                           <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || '—'}</div>
                         )}
                             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {activeProduct === 'marcas_g' && b.pipelines?.marcas_g?.pdv_ofertado && <span style={{ fontSize: 10, background: b.pipelines.marcas_g.pdv_ofertado === '3S Checkout' ? '#fef2f2' : '#dbeafe', color: b.pipelines.marcas_g.pdv_ofertado === '3S Checkout' ? '#EA1D2C' : '#2563eb', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>{b.pipelines.marcas_g.pdv_ofertado}</span>}
-                              {activeProduct !== 'marcas_g' && b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
+                              {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
                               {b.analise_teste_pdv && <span style={{ fontSize: 10, background: '#f3e8ff', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>AT</span>}
                               {b.top_down === 'Top Down' && <span style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>TD</span>}
                               {b.top_down === 'Não Top Down' && <span style={{ fontSize: 10, background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>NTD</span>}
@@ -1187,7 +1165,7 @@ export default function CRMPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    {(activeProduct === 'marcas_g' ? ['Marca','PDV','BDR','Closer',`Status ${product.name}`,'Estado','Lojas',''] : activeProduct === '3s' ? ['Marca','BDR','Closer',`Status ${product.name}`,'Class.','Estado','Lojas',''] : ['Marca','Responsavel',`Status ${product.name}`,'Class.','Estado','Lojas','']).map(h => (
+                    {(activeProduct === '3s' ? ['Marca','BDR','Closer',`Status ${product.name}`,'Class.','Estado','Lojas',''] : ['Marca','Responsavel',`Status ${product.name}`,'Class.','Estado','Lojas','']).map(h => (
                       <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                     ))}
                   </tr>
@@ -1197,13 +1175,7 @@ export default function CRMPage() {
                     <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => openBrandDetail(b, 'info')}
                       onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, fontSize: 13 }}>{b.marca}</td>
-                      {activeProduct === 'marcas_g' ? (<>
-                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12 }}>
-                          {b.pipelines?.marcas_g?.pdv_ofertado ? <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, fontWeight: 700, background: b.pipelines.marcas_g.pdv_ofertado === '3S Checkout' ? '#fef2f2' : '#dbeafe', color: b.pipelines.marcas_g.pdv_ofertado === '3S Checkout' ? '#EA1D2C' : '#2563eb' }}>{b.pipelines.marcas_g.pdv_ofertado}</span> : '—'}
-                        </td>
-                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_bdr || '—'}</td>
-                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_closer || '—'}</td>
-                      </>) : activeProduct === '3s' ? (<>
+                      {activeProduct === '3s' ? (<>
                         <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_bdr || '—'}</td>
                         <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_closer || '—'}</td>
                       </>) : (
@@ -2285,24 +2257,6 @@ export default function CRMPage() {
                               {(prod.responsaveis || []).map(r => <option key={r} value={r}>{r}</option>)}
                             </select>
                           </div>
-                          {key === 'marcas_g' && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>PDV Ofertado:</span>
-                              <select value={pipeline.pdv_ofertado || ''} onChange={async e => {
-                                const newPdv = e.target.value;
-                                if (!testMode) {
-                                  await apiFetch('/api/pipelines', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand_id: selectedBrand.id, product: 'marcas_g', pdv_ofertado: newPdv, user_id: user?.id, user_name: profile?.name }) });
-                                  const freshRes = await apiFetch('/api/brands?limit=999', { cache: 'no-store' });
-                                  const freshData = await freshRes.json();
-                                  if (freshData.brands) { setBrands(freshData.brands); setSelectedBrand(prev => prev ? freshData.brands.find(b => b.id === prev.id) || prev : prev); }
-                                }
-                              }} disabled={!canEdit} style={{ flex: 1, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, outline: 'none', background: '#fff', opacity: canEdit ? 1 : 0.6 }}>
-                                <option value="">Selecione...</option>
-                                <option value="3S Checkout">3S Checkout</option>
-                                <option value="Saipos">Saipos</option>
-                              </select>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
