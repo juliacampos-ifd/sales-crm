@@ -5,8 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { MONTH_NAMES, getMonthBusinessDays, getMonthBusinessDaysMTD } from '@/lib/constants';
 import { TrendingUp, Calendar, ArrowLeft, ChevronDown, X } from 'lucide-react';
 
-const DUPLA_LABELS = { total:'FUNIL DE VENDA', lidia_gabi:'Lidia e Gabi', joao_diego:'Joao e Diego', michel_emerson:'Michel e Emerson' };
-const DUPLA_COLORS = { total:'#EA1D2C', lidia_gabi:'#DA5D69', joao_diego:'#9C050B', michel_emerson:'#A02331' };
+const DUPLA_LABELS = { total:'FUNIL DE VENDA', lidia_gabi:'Lidia e Gabi', marcos_joao:'Marcos e Joao', michel_emerson:'Michel e Emerson' };
+const DUPLA_COLORS = { total:'#EA1D2C', lidia_gabi:'#DA5D69', marcos_joao:'#9C050B', michel_emerson:'#A02331' };
 const METRIC_LABELS = { elegiveis:'Marcas Elegiveis', primeiro_contato:'Primeiro Contato', apresentacao:'Apresentacao', negociacao:'Negociacao', fechadas:'Marcas Fechadas', lojas:'Lojas Fechadas' };
 
 const FUNNEL_ROWS = [
@@ -105,7 +105,7 @@ export default function ScorecardPage() {
   }, [selMonth, selYear]);
 
   const curKey = `${selYear}-${String(selMonth).padStart(2,'0')}`;
-  const DUPLAS_KEYS = ['lidia_gabi','joao_diego','michel_emerson'];
+  const DUPLAS_KEYS = ['lidia_gabi','marcos_joao','michel_emerson'];
   const gmSingle = (dupla, y, m, f) => { if (!data?.metas) return 0; const x = data.metas.find(r => r.dupla === dupla && r.year === y && r.month === m); return x ? (x[f] || 0) : 0; };
   const gm = (dupla, y, m, f) => {
     if (dupla === 'total') return DUPLAS_KEYS.reduce((s, d) => s + gmSingle(d, y, m, f), 0);
@@ -269,7 +269,7 @@ export default function ScorecardPage() {
       </div>
 
       <div style={{ padding:'20px 28px 40px' }}>
-        {['total','lidia_gabi','joao_diego','michel_emerson'].map(dupla => {
+        {['total','lidia_gabi','marcos_joao','michel_emerson'].map(dupla => {
           const rows = buildRows(dupla);
           const open = openDupla === dupla;
           const clr = DUPLA_COLORS[dupla];
