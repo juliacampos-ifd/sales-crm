@@ -3,9 +3,15 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 
 const closerToDupla = (closer) => {
-  if (closer === 'Gabriela Roma') return 'lidia_gabi';
-  if (closer === 'Diego Santos') return 'joao_diego';
+  if (closer === 'Gabriela Roma' || closer === 'Lidia Esteves') return 'lidia_gabi';
+  if (closer === 'Marcos Pereira' || closer === 'Joao Biagiotti' || closer === 'Diego Santos') return 'marcos_joao';
   return 'michel_emerson';
+};
+
+const getCloserFromPipeResp = (pipeResp) => {
+  if (!pipeResp) return null;
+  const parts = pipeResp.split('/');
+  return parts.length > 1 ? parts[parts.length - 1].trim() : pipeResp.trim();
 };
 
 const stageToMetric = (stage) => {
@@ -59,9 +65,10 @@ export async function GET(request) {
 
     // Load all brands and pipelines
     const allBrands = await paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,base_elegivel,qtd_lojas_fisicas');
-    const allPipes = await paginate(sb, 'pipelines', 'brand_id,stage', [['product','3s']]);
+    const allPipes = await paginate(sb, 'pipelines', 'brand_id,stage,responsavel', [['product','3s']]);
     const pipeLk = {};
-    allPipes.forEach(p => { pipeLk[p.brand_id] = p.stage; });
+    const pipeRespLk = {};
+    allPipes.forEach(p => { pipeLk[p.brand_id] = p.stage; pipeRespLk[p.brand_id] = p.responsavel; });
     const brandLk = {};
     allBrands.forEach(b => { brandLk[b.id] = b; });
 
@@ -90,9 +97,10 @@ export async function GET(request) {
         if (seen.has(key)) return;
         seen.add(key);
         const active = activeBrand[key] || b;
-        const d = closerToDupla(active.responsavel_closer);
+        const closer = getCloserFromPipeResp(pipeRespLk[active.id]) || active.responsavel_closer;
+        const d = closerToDupla(closer);
         if (dupla !== 'total' && d !== dupla) return;
-        brands.push({ marca: active.marca, closer: active.responsavel_closer, stage: pipeLk[active.id] || '—', lojas: active.qtd_lojas_fisicas || 0 });
+        brands.push({ marca: active.marca, closer, stage: pipeLk[active.id] || '—', lojas: active.qtd_lojas_fisicas || 0 });
       });
       brands.sort((a, b) => a.marca.localeCompare(b.marca));
       const res = NextResponse.json({ brands, count: brands.length });
@@ -132,12 +140,13 @@ export async function GET(request) {
       const dedupKey = `${marcaKey}|${eYm}|${m}`;
       if (seen.has(dedupKey)) return;
       seen.add(dedupKey);
-      // Use ACTIVE brand data (current closer, current lojas)
-      const d = closerToDupla(active.responsavel_closer);
+      // Use ACTIVE brand data (current closer from pipeline, current lojas)
+      const closer = getCloserFromPipeResp(pipeRespLk[active.id]) || active.responsavel_closer;
+      const d = closerToDupla(closer);
       if (dupla !== 'total' && d !== dupla) return;
       brands.push({
         marca: active.marca,
-        closer: active.responsavel_closer,
+        closer,
         lojas: active.qtd_lojas_fisicas || 0,
         date: e.created_at
       });
