@@ -258,7 +258,7 @@ export default function CRMPage() {
     }
     if (search) {
       const q = search.toLowerCase();
-      d = d.filter(b => (b.marca||'').toLowerCase().includes(q) || (b.responsavel_bdr||'').toLowerCase().includes(q) || (b.responsavel_closer||'').toLowerCase().includes(q));
+      d = d.filter(b => (b.marca||'').toLowerCase().includes(q) || (b.pipelines?.[activeProduct]?.responsavel||'').toLowerCase().includes(q));
     }
     if (filterClass.length > 0) d = d.filter(b => {
       if (filterClass.includes('(Vazio)') && !b.classificacao) return true;
@@ -269,9 +269,9 @@ export default function CRMPage() {
       return filterEstado.filter(v => v !== '(Vazio)').includes(b.estado);
     });
     if (filterBDR.length > 0) d = d.filter(b => {
-      if (filterBDR.includes('(Vazio)') && !b.responsavel_bdr && !b.responsavel_closer) return true;
-      const bdrVals = filterBDR.filter(v => v !== '(Vazio)');
-      return bdrVals.includes(b.responsavel_bdr) || bdrVals.includes(b.responsavel_closer);
+      const resp = b.pipelines?.[activeProduct]?.responsavel || '';
+      if (filterBDR.includes('(Vazio)') && !resp) return true;
+      return filterBDR.filter(v => v !== '(Vazio)').some(f => resp.includes(f));
     });
     if (filterTimeCarteira.length > 0) d = d.filter(b => {
       if (filterTimeCarteira.includes('(Vazio)') && !b.time_carteira) return true;
@@ -664,9 +664,9 @@ export default function CRMPage() {
     return ['Todos', ...Array.from(s).sort()];
   }, [brands]);
   const bdrs = useMemo(() => {
-    const s = new Set([...brands.map(b => b.responsavel_bdr), ...brands.map(b => b.responsavel_closer)].filter(Boolean));
+    const s = new Set(brands.map(b => b.pipelines?.[activeProduct]?.responsavel).filter(Boolean));
     return Array.from(s).sort();
-  }, [brands]);
+  }, [brands, activeProduct]);
   const pdvs = useMemo(() => {
     const s = new Set(brands.map(b => b.pdv_atual).filter(Boolean));
     return Array.from(s).sort();
@@ -1126,14 +1126,7 @@ export default function CRMPage() {
                           </>
                         ) : (
                           <>
-                            {activeProduct === '3s' ? (
-                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
-                            <div>BDR: {b.responsavel_bdr || '—'}</div>
-                            <div>Closer: {b.responsavel_closer || '—'}</div>
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || '—'}</div>
-                        )}
+                            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Resp: {b.pipelines?.[activeProduct]?.responsavel || '—'}</div>
                             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                               {b.classificacao && <span style={{ fontSize: 10, background: (CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8') + '18', color: CLASSIFICACAO_COLORS[b.classificacao] || '#94a3b8', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>{b.classificacao}</span>}
                               {b.analise_teste_pdv && <span style={{ fontSize: 10, background: '#f3e8ff', color: '#7c3aed', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>AT</span>}
@@ -1165,7 +1158,7 @@ export default function CRMPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    {(activeProduct === '3s' ? ['Marca','BDR','Closer',`Status ${product.name}`,'Class.','Estado','Lojas',''] : ['Marca','Responsavel',`Status ${product.name}`,'Class.','Estado','Lojas','']).map(h => (
+                    {['Marca','Responsavel',`Status ${product.name}`,'Class.','Estado','Lojas',''].map(h => (
                       <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                     ))}
                   </tr>
@@ -1175,12 +1168,7 @@ export default function CRMPage() {
                     <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => openBrandDetail(b, 'info')}
                       onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, fontSize: 13 }}>{b.marca}</td>
-                      {activeProduct === '3s' ? (<>
-                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_bdr || '—'}</td>
-                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.responsavel_closer || '—'}</td>
-                      </>) : (
-                        <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.pipelines?.[activeProduct]?.responsavel || '—'}</td>
-                      )}
+                      <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{b.pipelines?.[activeProduct]?.responsavel || '—'}</td>
                       <td style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
                         <span style={{ fontSize: 11, background: product.color + '15', color: product.color, padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>{shortStage(b.pipelines?.[activeProduct]?.stage || '—')}</span>
                       </td>
