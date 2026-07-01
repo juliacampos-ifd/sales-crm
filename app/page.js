@@ -664,7 +664,7 @@ export default function CRMPage() {
     return ['Todos', ...Array.from(s).sort()];
   }, [brands]);
   const bdrs = useMemo(() => {
-    const s = new Set(brands.map(b => b.pipelines?.[activeProduct]?.responsavel).filter(Boolean));
+    const s = new Set(brands.flatMap(b => (b.pipelines?.[activeProduct]?.responsavel || '').split('/').map(n => n.trim())).filter(Boolean));
     return Array.from(s).sort();
   }, [brands, activeProduct]);
   const pdvs = useMemo(() => {
