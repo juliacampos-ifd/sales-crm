@@ -51,6 +51,7 @@ export default function CRMPage() {
   const [filterCFCidade, setFilterCFCidade] = useState([]);
   const [filterCFTrade, setFilterCFTrade] = useState([]);
   const [filterCFPrioridade, setFilterCFPrioridade] = useState([]);
+  const [filterCFPrioMes, setFilterCFPrioMes] = useState([]);
   const [cfDetails, setCfDetails] = useState({});
   const [cfQualifModal, setCfQualifModal] = useState(null);
   const [cfQualifData, setCfQualifData] = useState({
@@ -316,11 +317,12 @@ export default function CRMPage() {
     if (filterCFCidade.length > 0) d = d.filter(b => { const c = b.comer_fora_details?.cidade || ''; return filterCFCidade.some(f => c.includes(f)); });
     if (filterCFTrade.length > 0) d = d.filter(b => { const t = b.comer_fora_details?.trade ? 'Sim' : 'Não'; return filterCFTrade.includes(t); });
     if (filterCFPrioridade.length > 0) d = d.filter(b => filterCFPrioridade.includes(String(b.comer_fora_details?.prioridade)));
+    if (filterCFPrioMes.length > 0) d = d.filter(b => filterCFPrioMes.includes(String(b.comer_fora_details?.prioridade_mes)));
     // Novos Produtos 3S filters
     if (filterNP3SAddon.length > 0) d = d.filter(b => { const det = b.novos_produtos_3s_details || {}; return filterNP3SAddon.some(a => a === '3S Eats' ? det.eats : a === '3S Go' ? det.go : a === 'Pagamento na Mesa' ? det.pagamento_mesa : false); });
     if (filterNP3SMensalidade.length > 0) d = d.filter(b => { const det = b.novos_produtos_3s_details || {}; return filterNP3SMensalidade.some(a => a === '3S Eats' ? det.eats_incluso : a === '3S Go' ? det.go_incluso : a === 'Pagamento na Mesa' ? det.pagamento_mesa_incluso : false); });
     return d;
-  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterTimeCarteira, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo, filterCFEstrategia, filterCFSolucao, filterCFProvider, filterCFCidade, filterCFTrade, filterCFPrioridade, filterNP3SAddon, filterNP3SMensalidade, filterExecDelivery]);
+  }, [brands, profile, search, filterClass, filterEstado, filterBDR, filterTimeCarteira, filterPDV, filterBaseElegivel, filterHaas, filterStage, filterCulinaria, filterTag, filterTopDown, activeProduct, filterEVSinergia, filterEVBaseAndres, filterEVTipo, filterCFEstrategia, filterCFSolucao, filterCFProvider, filterCFCidade, filterCFTrade, filterCFPrioridade, filterCFPrioMes, filterNP3SAddon, filterNP3SMensalidade, filterExecDelivery]);
   // ── Loss/StandBy reasons ──
   const LOSS_REASONS = ['Sistema proprio','Sem interesse em mudar de PDV','Desistencia na mudanca de PDV','Desenvolvimento Solucao','Em negociacao com outro PDV','Fechou com concorrente ha pouco tempo','Proposta declinada','Sem perfil LA','Sem perfil 3S - Perfil Saipos','Atrito Negociacao','Trava por projetos internos da marca','Interesse apenas em Comer Fora','Falencia','Outros'];
   // ── Change stage (respects testMode) ──
@@ -1062,6 +1064,7 @@ export default function CRMPage() {
             <MultiFilter label="Cidade" selected={filterCFCidade} onChange={setFilterCFCidade} options={[...new Set(brands.filter(b=>b.comer_fora_details?.cidade).flatMap(b=>(b.comer_fora_details.cidade||'').split(',').map(s=>s.trim()).filter(Boolean)))].sort()} filterId="cf_cidade" />
             <MultiFilter label="Trade" selected={filterCFTrade} onChange={setFilterCFTrade} options={['Sim','Não']} filterId="cf_trade" />
             <MultiFilter label="Prioridade" selected={filterCFPrioridade} onChange={setFilterCFPrioridade} options={['1','2','3']} filterId="cf_prioridade" />
+            <MultiFilter label="Prioridade Mes" selected={filterCFPrioMes} onChange={setFilterCFPrioMes} options={['1','2']} filterId="cf_prio_mes" />
           </>)}
           {activeProduct === 'emilia_vision' && (<>
             <MultiFilter label="Tipo" selected={filterEVTipo} onChange={setFilterEVTipo} options={['Hunting','Farming']} filterId="ev_tipo" />
