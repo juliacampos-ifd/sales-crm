@@ -1993,6 +1993,7 @@ export default function CRMPage() {
                           <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Area</th>
                           <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Responsavel</th>
                           <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Deadline</th>
+                          <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Tempo Aberto</th>
                           <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Status</th>
                         </tr>
                       </thead>
@@ -2010,6 +2011,7 @@ export default function CRMPage() {
                               <td style={{ padding: '8px 14px', fontSize: 11, color: '#475569', borderBottom: '1px solid #f1f5f9' }}>{fca.area || '—'}</td>
                               <td style={{ padding: '8px 14px', fontSize: 12, color: '#475569', borderBottom: '1px solid #f1f5f9' }}>{fca.responsavel_nome || '—'}</td>
                               <td style={{ padding: '8px 14px', fontSize: 12, color: isOverdue ? '#ef4444' : '#94a3b8', fontWeight: isOverdue ? 600 : 400, borderBottom: '1px solid #f1f5f9' }}>{fca.deadline ? new Date(fca.deadline + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                              <td style={{ padding: '8px 14px', textAlign: 'center', fontSize: 11, fontWeight: 600, borderBottom: '1px solid #f1f5f9', color: (() => { if (fca.status === 'Concluído') return '#94a3b8'; const days = Math.floor((new Date() - new Date(fca.created_at)) / 86400000); return days > 14 ? '#ef4444' : days > 7 ? '#f59e0b' : '#64748b'; })() }}>{(() => { const days = Math.floor((new Date() - new Date(fca.created_at)) / 86400000); return fca.status === 'Concluído' ? '—' : days === 0 ? 'Hoje' : days === 1 ? '1 dia' : days + ' dias'; })()}</td>
                               <td style={{ padding: '8px 14px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>
                                 {canEdit ? (
                                   <select value={fca.status} onChange={e => updateFcaStatus(fca.id, e.target.value)} style={{ padding: '3px 6px', borderRadius: 6, border: `1px solid ${statusColors[fca.status]}20`, background: statusColors[fca.status] + '15', color: statusColors[fca.status], fontSize: 10, fontWeight: 700, cursor: 'pointer', outline: 'none' }}>
@@ -2365,6 +2367,47 @@ export default function CRMPage() {
                     {saving ? 'Salvando...' : 'Salvar Alteracoes'}
                   </button>
                 )}
+                {/* FCAs no card info */}
+                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12, marginTop: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', letterSpacing: 1 }}>FCAs {brandFcas.filter(f => f.status !== 'Concluído').length > 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: '#fef2f2', color: '#ef4444', marginLeft: 4 }}>{brandFcas.filter(f => f.status !== 'Concluído').length}</span>}</span>
+                    {canEdit && !fcaAdding && (
+                      <button onClick={() => { setFcaAdding(true); setDetailTab('fcas'); }} style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '4px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#EA1D2C', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        <Plus size={12} /> Novo
+                      </button>
+                    )}
+                  </div>
+                  {brandFcas.filter(f => f.status !== 'Concluído').length === 0 && <p style={{ color: '#cbd5e1', fontSize: 12, margin: 0 }}>Nenhum FCA aberto</p>}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {brandFcas.filter(f => f.status !== 'Concluído').map(fca => {
+                      const statusColors = { 'Aberto': '#ef4444', 'Em andamento': '#f59e0b' };
+                      const isOverdue = fca.deadline && new Date(fca.deadline) < new Date();
+                      return (
+                        <div key={fca.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: isOverdue ? '#fef2f2' : '#f8fafc', borderRadius: 8, border: `1px solid ${isOverdue ? '#fecaca' : '#f1f5f9'}`, gap: 8 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fca.tarefa}</div>
+                            <div style={{ display: 'flex', gap: 6, marginTop: 2, alignItems: 'center' }}>
+                              {fca.area && <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 4px', borderRadius: 3, background: '#f1f5f9', color: '#475569' }}>{fca.area}</span>}
+                              {fca.deadline && <span style={{ fontSize: 10, color: isOverdue ? '#ef4444' : '#94a3b8', fontWeight: isOverdue ? 600 : 400 }}>{new Date(fca.deadline + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
+                              {fca.responsavel_nome && <span style={{ fontSize: 10, color: '#94a3b8' }}>{fca.responsavel_nome}</span>}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                            <span style={{ padding: '2px 6px', borderRadius: 4, background: (statusColors[fca.status] || '#94a3b8') + '15', color: statusColors[fca.status] || '#94a3b8', fontSize: 9, fontWeight: 700 }}>{fca.status}</span>
+                            {canEdit && (
+                              <button onClick={() => updateFcaStatus(fca.id, 'Concluído')} title="Concluir" style={{ background: 'none', border: '1px solid #d1fae5', borderRadius: 4, cursor: 'pointer', padding: '2px 4px', display: 'flex', alignItems: 'center' }}>
+                                <Check size={12} color="#22c55e" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {brandFcas.filter(f => f.status === 'Concluído').length > 0 && (
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{brandFcas.filter(f => f.status === 'Concluído').length} concluido(s)</div>
+                  )}
+                </div>
               </div>
             )}
             {/* PIPELINES TAB */}
