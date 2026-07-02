@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PRODUCTS, CLASSIFICACAO_COLORS, MONTH_NAMES, DUPLAS, getMonthBusinessDays, getMonthBusinessDaysMTD } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload, Plus, Save, Sparkles, Award, FlaskConical, X, Package } from 'lucide-react';
+import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload, Plus, Save, Sparkles, Award, FlaskConical, X, Package, ClipboardList } from 'lucide-react';
 
 // Helper que adiciona Authorization header em todas as chamadas de API
 async function apiFetch(url, options = {}) {
@@ -135,6 +135,16 @@ export default function CRMPage() {
   const [updatesData, setUpdatesData] = useState([]);
   const [updatesProduct, setUpdatesProduct] = useState('todos');
   const [updatesLoading, setUpdatesLoading] = useState(false);
+  // ── FCAs ──
+  const [brandFcas, setBrandFcas] = useState([]);
+  const [fcaForm, setFcaForm] = useState({ tarefa: '', deadline: '', area: '', responsavel_nome: '' });
+  const [fcaAdding, setFcaAdding] = useState(false);
+  const [allFcas, setAllFcas] = useState([]);
+  const [fcasLoading, setFcasLoading] = useState(false);
+  const [filterFcaArea, setFilterFcaArea] = useState([]);
+  const [filterFcaMarca, setFilterFcaMarca] = useState('');
+  const [filterFcaResp, setFilterFcaResp] = useState('');
+  const [filterFcaStatus, setFilterFcaStatus] = useState([]);
   // ── Open filter tracking ──
   const [openFilter, setOpenFilter] = useState(null);
   // ── Init edit fields when selecting a brand ──
@@ -160,6 +170,9 @@ export default function CRMPage() {
     setPipelinesChanged(false);
     setPendingResp({});
     loadHistory(brand.id, brand._oldIds);
+    loadBrandFcas(brand.id);
+    setFcaAdding(false);
+    setFcaForm({ tarefa: '', deadline: '', area: '', responsavel_nome: '' });
   };
   // ── Auth check ──
   useEffect(() => {
@@ -501,6 +514,49 @@ export default function CRMPage() {
       await loadScorecard();
     } catch (err) { console.error('Error deleting history:', err); }
   };
+  // ── FCAs ──
+  const loadBrandFcas = async (brandId) => {
+    try {
+      const res = await apiFetch(`/api/fcas?brand_id=${brandId}`);
+      const data = await res.json();
+      if (data.fcas) setBrandFcas(data.fcas);
+    } catch (err) { console.error('Error loading FCAs:', err); }
+  };
+  const loadAllFcas = async () => {
+    setFcasLoading(true);
+    try {
+      const res = await apiFetch('/api/fcas');
+      const data = await res.json();
+      if (data.fcas) setAllFcas(data.fcas);
+    } catch (err) { console.error('Error loading all FCAs:', err); }
+    setFcasLoading(false);
+  };
+  const addFca = async () => {
+    if (!fcaForm.tarefa.trim() || !selectedBrand) return;
+    try {
+      await apiFetch('/api/fcas', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_id: selectedBrand.id, ...fcaForm, created_by: profile?.name || '' }) });
+      setFcaForm({ tarefa: '', deadline: '', area: '', responsavel_nome: '' });
+      setFcaAdding(false);
+      loadBrandFcas(selectedBrand.id);
+    } catch (err) { console.error('Error adding FCA:', err); }
+  };
+  const updateFcaStatus = async (fcaId, newStatus) => {
+    try {
+      await apiFetch('/api/fcas', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: fcaId, status: newStatus }) });
+      setBrandFcas(prev => prev.map(f => f.id === fcaId ? { ...f, status: newStatus } : f));
+      setAllFcas(prev => prev.map(f => f.id === fcaId ? { ...f, status: newStatus } : f));
+    } catch (err) { console.error('Error updating FCA:', err); }
+  };
+  const deleteFca = async (fcaId) => {
+    if (!confirm('Excluir este FCA?')) return;
+    try {
+      await apiFetch('/api/fcas?id=' + fcaId, { method: 'DELETE' });
+      setBrandFcas(prev => prev.filter(f => f.id !== fcaId));
+      setAllFcas(prev => prev.filter(f => f.id !== fcaId));
+    } catch (err) { console.error('Error deleting FCA:', err); }
+  };
   // ── Últimas Atualizações ──
   const loadUpdates = async (productFilter) => {
     setUpdatesLoading(true);
@@ -839,7 +895,7 @@ export default function CRMPage() {
     setActivityLoading(false);
   };
   const NavBtn = ({ id, icon: Icon, label }) => (
-    <button onClick={() => { setView(id); if (id === 'scorecard') { setScData(null); loadScorecard(); } if (id === 'updates') { loadUpdates(); } }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+    <button onClick={() => { setView(id); if (id === 'scorecard') { setScData(null); loadScorecard(); } if (id === 'updates') { loadUpdates(); } if (id === 'fcas') { loadAllFcas(); } }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: view === id ? '#EA1D2C' : 'transparent', color: view === id ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
       <Icon size={16} /> {label}
     </button>
   );
@@ -947,6 +1003,7 @@ export default function CRMPage() {
           <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
           {!isRestricted && <NavBtn id="scorecard" icon={Target} label="Scorecard" />}
           <NavBtn id="updates" icon={History} label="Atualizações" />
+          <NavBtn id="fcas" icon={ClipboardList} label="FCAs" />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {profile?.role === 'admin' && (
@@ -1874,15 +1931,115 @@ export default function CRMPage() {
           )}
         </div>
       )}
+      {/* ABA FCAs CONSOLIDADA */}
+      {view === 'fcas' && (
+        <div style={{ padding: '20px 28px', maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', margin: 0 }}>FCAs</h2>
+            <button onClick={() => loadAllFcas()} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Atualizar</button>
+          </div>
+
+          {/* Filtros */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input value={filterFcaMarca} onChange={e => setFilterFcaMarca(e.target.value)} placeholder="Buscar marca..." style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, width: 180, outline: 'none' }} />
+            <input value={filterFcaResp} onChange={e => setFilterFcaResp(e.target.value)} placeholder="Responsavel..." style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, width: 160, outline: 'none' }} />
+            <div style={{ display: 'flex', gap: 4 }}>
+              {['Comercial','Pré Vendas','Projetos','Planejamento','Liderança'].map(a => (
+                <button key={a} onClick={() => setFilterFcaArea(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a])} style={{ padding: '5px 10px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filterFcaArea.includes(a) ? '#EA1D2C' : '#f1f5f9', color: filterFcaArea.includes(a) ? '#fff' : '#64748b' }}>{a}</button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {['Aberto','Em andamento','Concluído'].map(s => (
+                <button key={s} onClick={() => setFilterFcaStatus(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} style={{ padding: '5px 10px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filterFcaStatus.includes(s) ? ({Aberto:'#ef4444','Em andamento':'#f59e0b','Concluído':'#22c55e'}[s]) : '#f1f5f9', color: filterFcaStatus.includes(s) ? '#fff' : '#64748b' }}>{s === 'Concluído' ? 'Concluido' : s}</button>
+              ))}
+            </div>
+            {(filterFcaArea.length > 0 || filterFcaStatus.length > 0 || filterFcaMarca || filterFcaResp) && (
+              <button onClick={() => { setFilterFcaArea([]); setFilterFcaStatus([]); setFilterFcaMarca(''); setFilterFcaResp(''); }} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#94a3b8' }}>Limpar</button>
+            )}
+          </div>
+
+          {/* Contadores */}
+          {(() => {
+            const filtered = allFcas.filter(f => {
+              if (filterFcaMarca && !(f.brands?.marca || '').toLowerCase().includes(filterFcaMarca.toLowerCase())) return false;
+              if (filterFcaResp && !(f.responsavel_nome || '').toLowerCase().includes(filterFcaResp.toLowerCase())) return false;
+              if (filterFcaArea.length > 0 && !filterFcaArea.includes(f.area)) return false;
+              if (filterFcaStatus.length > 0 && !filterFcaStatus.includes(f.status)) return false;
+              return true;
+            });
+            const abertos = filtered.filter(f => f.status === 'Aberto').length;
+            const andamento = filtered.filter(f => f.status === 'Em andamento').length;
+            const concluidos = filtered.filter(f => f.status === 'Concluído').length;
+            const vencidos = filtered.filter(f => f.deadline && f.status !== 'Concluído' && new Date(f.deadline) < new Date()).length;
+
+            return (
+              <>
+                <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                  <div style={{ background: '#fef2f2', borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 700, color: '#ef4444' }}>{abertos} abertos</div>
+                  <div style={{ background: '#fffbeb', borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 700, color: '#f59e0b' }}>{andamento} em andamento</div>
+                  <div style={{ background: '#f0fdf4', borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 700, color: '#22c55e' }}>{concluidos} concluidos</div>
+                  {vencidos > 0 && <div style={{ background: '#fef2f2', borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 700, color: '#dc2626', border: '1px solid #fecaca' }}>{vencidos} vencidos</div>}
+                </div>
+
+                {fcasLoading && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Carregando...</div>}
+                {!fcasLoading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Nenhum FCA encontrado.</div>}
+                {!fcasLoading && filtered.length > 0 && (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc' }}>
+                          <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Marca</th>
+                          <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Tarefa</th>
+                          <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Area</th>
+                          <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Responsavel</th>
+                          <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Deadline</th>
+                          <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(fca => {
+                          const statusColors = { 'Aberto': '#ef4444', 'Em andamento': '#f59e0b', 'Concluído': '#22c55e' };
+                          const isOverdue = fca.deadline && fca.status !== 'Concluído' && new Date(fca.deadline) < new Date();
+                          return (
+                            <tr key={fca.id} style={{ background: isOverdue ? '#fef2f208' : '#fff' }}>
+                              <td style={{ padding: '8px 14px', fontSize: 12, fontWeight: 600, color: '#1e293b', borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }} onClick={() => { const found = brands.find(b => b.id === fca.brand_id); if (found) openBrandDetail(found, 'fcas'); }}>
+                                <div>{fca.brands?.marca || '—'}</div>
+                                {fca.brands?.classificacao && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: CLASSIFICACAO_COLORS[fca.brands.classificacao] || '#e2e8f0', color: '#fff', marginRight: 4 }}>{fca.brands.classificacao}</span>}
+                              </td>
+                              <td style={{ padding: '8px 14px', fontSize: 12, color: fca.status === 'Concluído' ? '#94a3b8' : '#1e293b', borderBottom: '1px solid #f1f5f9', textDecoration: fca.status === 'Concluído' ? 'line-through' : 'none', maxWidth: 300 }}>{fca.tarefa}</td>
+                              <td style={{ padding: '8px 14px', fontSize: 11, color: '#475569', borderBottom: '1px solid #f1f5f9' }}>{fca.area || '—'}</td>
+                              <td style={{ padding: '8px 14px', fontSize: 12, color: '#475569', borderBottom: '1px solid #f1f5f9' }}>{fca.responsavel_nome || '—'}</td>
+                              <td style={{ padding: '8px 14px', fontSize: 12, color: isOverdue ? '#ef4444' : '#94a3b8', fontWeight: isOverdue ? 600 : 400, borderBottom: '1px solid #f1f5f9' }}>{fca.deadline ? new Date(fca.deadline + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                              <td style={{ padding: '8px 14px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>
+                                {canEdit ? (
+                                  <select value={fca.status} onChange={e => updateFcaStatus(fca.id, e.target.value)} style={{ padding: '3px 6px', borderRadius: 6, border: `1px solid ${statusColors[fca.status]}20`, background: statusColors[fca.status] + '15', color: statusColors[fca.status], fontSize: 10, fontWeight: 700, cursor: 'pointer', outline: 'none' }}>
+                                    <option>Aberto</option><option>Em andamento</option><option value="Concluído">Concluido</option>
+                                  </select>
+                                ) : (
+                                  <span style={{ padding: '3px 6px', borderRadius: 6, background: statusColors[fca.status] + '15', color: statusColors[fca.status], fontSize: 10, fontWeight: 700 }}>{fca.status}</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
       {/* DETAIL PANEL */}
       {selectedBrand && (
         <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', boxShadow: '-4px 0 30px rgba(0,0,0,.12)', zIndex: 50, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 2 }}>
             <button onClick={() => setSelectedBrand(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}><ArrowLeft size={16} /> Voltar</button>
             <div style={{ display: 'flex', gap: 6 }}>
-              {['info', 'pipelines', 'historico'].map(t => (
-                <button key={t} onClick={() => { setDetailTab(t); if (t === 'historico') loadHistory(selectedBrand.id, selectedBrand._oldIds); }} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: detailTab === t ? '#EA1D2C' : '#f1f5f9', color: detailTab === t ? '#fff' : '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                  {t === 'info' ? 'Info' : t === 'pipelines' ? 'Produtos' : 'Historico'}
+              {['info', 'pipelines', 'historico', 'fcas'].map(t => (
+                <button key={t} onClick={() => { setDetailTab(t); if (t === 'historico') loadHistory(selectedBrand.id, selectedBrand._oldIds); if (t === 'fcas') loadBrandFcas(selectedBrand.id); }} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: detailTab === t ? '#EA1D2C' : '#f1f5f9', color: detailTab === t ? '#fff' : '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                  {t === 'info' ? 'Info' : t === 'pipelines' ? 'Produtos' : t === 'historico' ? 'Historico' : 'FCAs'}
                 </button>
               ))}
             </div>
@@ -2286,6 +2443,77 @@ export default function CRMPage() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* FCAs */}
+            {detailTab === 'fcas' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>FCAs ({brandFcas.length})</span>
+                  {canEdit && !fcaAdding && (
+                    <button onClick={() => setFcaAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#EA1D2C', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      <Plus size={14} /> Novo FCA
+                    </button>
+                  )}
+                </div>
+
+                {/* Form para novo FCA */}
+                {canEdit && fcaAdding && (
+                  <div style={{ background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0', padding: 14, marginBottom: 12 }}>
+                    <input value={fcaForm.tarefa} onChange={e => setFcaForm(p => ({...p, tarefa: e.target.value}))} placeholder="Tarefa..." style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, marginBottom: 8, boxSizing: 'border-box', outline: 'none' }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 2 }}>Deadline</span>
+                        <input type="date" value={fcaForm.deadline} onChange={e => setFcaForm(p => ({...p, deadline: e.target.value}))} style={{ width: '100%', padding: '6px 8px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, boxSizing: 'border-box', outline: 'none' }} />
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 2 }}>Area</span>
+                        <select value={fcaForm.area} onChange={e => setFcaForm(p => ({...p, area: e.target.value}))} style={{ width: '100%', padding: '6px 8px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12, background: '#fff', boxSizing: 'border-box', outline: 'none' }}>
+                          <option value="">—</option>
+                          <option>Comercial</option><option>Pré Vendas</option><option>Projetos</option><option>Planejamento</option><option>Liderança</option>
+                        </select>
+                      </div>
+                    </div>
+                    <input value={fcaForm.responsavel_nome} onChange={e => setFcaForm(p => ({...p, responsavel_nome: e.target.value}))} placeholder="Responsavel..." style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, marginBottom: 10, boxSizing: 'border-box', outline: 'none' }} />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => { setFcaAdding(false); setFcaForm({ tarefa: '', deadline: '', area: '', responsavel_nome: '' }); }} style={{ flex: 1, padding: '8px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+                      <button onClick={addFca} disabled={!fcaForm.tarefa.trim()} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: fcaForm.tarefa.trim() ? '#EA1D2C' : '#fca5a5', color: '#fff', fontSize: 12, fontWeight: 600, cursor: fcaForm.tarefa.trim() ? 'pointer' : 'not-allowed' }}>Adicionar</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Lista de FCAs */}
+                {brandFcas.length === 0 && !fcaAdding && <p style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', padding: 24 }}>Nenhum FCA registrado</p>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {brandFcas.map(fca => {
+                    const statusColors = { 'Aberto': '#ef4444', 'Em andamento': '#f59e0b', 'Concluído': '#22c55e' };
+                    const isOverdue = fca.deadline && fca.status !== 'Concluído' && new Date(fca.deadline) < new Date();
+                    return (
+                      <div key={fca.id} style={{ background: '#fff', borderRadius: 10, border: `1px solid ${isOverdue ? '#fecaca' : '#f1f5f9'}`, padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: fca.status === 'Concluído' ? '#94a3b8' : '#1e293b', textDecoration: fca.status === 'Concluído' ? 'line-through' : 'none' }}>{fca.tarefa}</div>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                              {fca.area && <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: '#f1f5f9', color: '#475569' }}>{fca.area}</span>}
+                              {fca.responsavel_nome && <span style={{ fontSize: 11, color: '#64748b' }}>{fca.responsavel_nome}</span>}
+                              {fca.deadline && <span style={{ fontSize: 11, color: isOverdue ? '#ef4444' : '#94a3b8', fontWeight: isOverdue ? 600 : 400 }}>{new Date(fca.deadline + 'T12:00:00').toLocaleDateString('pt-BR')}</span>}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            {canEdit && (
+                              <select value={fca.status} onChange={e => updateFcaStatus(fca.id, e.target.value)} style={{ padding: '3px 6px', borderRadius: 6, border: `1px solid ${statusColors[fca.status]}20`, background: statusColors[fca.status] + '15', color: statusColors[fca.status], fontSize: 10, fontWeight: 700, cursor: 'pointer', outline: 'none' }}>
+                                <option>Aberto</option><option>Em andamento</option><option value="Concluído">Concluido</option>
+                              </select>
+                            )}
+                            {!canEdit && <span style={{ padding: '3px 6px', borderRadius: 6, background: statusColors[fca.status] + '15', color: statusColors[fca.status], fontSize: 10, fontWeight: 700 }}>{fca.status}</span>}
+                            {canEdit && <button onClick={() => deleteFca(fca.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db' }}><X size={12} /></button>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
