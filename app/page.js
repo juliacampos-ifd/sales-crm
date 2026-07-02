@@ -253,6 +253,7 @@ export default function CRMPage() {
   }, [user, loadBrands]);
   // Viewer = read-only (vê tudo, não edita nada)
   const canEdit = profile?.role !== 'viewer';
+  const canDeleteFca = profile?.role === 'admin' || profile?.role === 'gestor';
   // Restricted = viewer locked to a specific product
   const isRestricted = profile?.team === 'emilia_vision' || profile?.team === 'comer_fora';
   // ── Role-based filtering ──
@@ -1936,7 +1937,36 @@ export default function CRMPage() {
         <div style={{ padding: '20px 28px', maxWidth: 1100, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', margin: 0 }}>FCAs</h2>
-            <button onClick={() => loadAllFcas()} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Atualizar</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => {
+                const rows = allFcas.filter(f => {
+                  if (filterFcaMarca && !(f.brands?.marca || '').toLowerCase().includes(filterFcaMarca.toLowerCase())) return false;
+                  if (filterFcaResp && !(f.responsavel_nome || '').toLowerCase().includes(filterFcaResp.toLowerCase())) return false;
+                  if (filterFcaArea.length > 0 && !filterFcaArea.includes(f.area)) return false;
+                  if (filterFcaStatus.length > 0 && !filterFcaStatus.includes(f.status)) return false;
+                  return true;
+                });
+                const header = 'Marca,Tarefa,Area,Responsavel,Deadline,Status,Tempo Aberto (dias),Criado em';
+                const csvRows = rows.map(f => {
+                  const days = Math.floor((new Date() - new Date(f.created_at)) / 86400000);
+                  return [
+                    '"' + (f.brands?.marca || '').replace(/"/g, '""') + '"',
+                    '"' + (f.tarefa || '').replace(/"/g, '""') + '"',
+                    f.area || '',
+                    '"' + (f.responsavel_nome || '').replace(/"/g, '""') + '"',
+                    f.deadline || '',
+                    f.status,
+                    f.status === 'Concluído' ? '' : days,
+                    f.created_at ? new Date(f.created_at).toLocaleDateString('pt-BR') : '',
+                  ].join(',');
+                });
+                const csv = '﻿' + header + '\n' + csvRows.join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = 'fcas_export.csv'; a.click(); URL.revokeObjectURL(url);
+              }} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Exportar CSV</button>
+              <button onClick={() => loadAllFcas()} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Atualizar</button>
+            </div>
           </div>
 
           {/* Filtros */}
@@ -1995,6 +2025,7 @@ export default function CRMPage() {
                           <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Deadline</th>
                           <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Tempo Aberto</th>
                           <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Status</th>
+                          {canDeleteFca && <th style={{ padding: '10px 14px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0', width: 40 }}></th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -2021,6 +2052,9 @@ export default function CRMPage() {
                                   <span style={{ padding: '3px 6px', borderRadius: 6, background: statusColors[fca.status] + '15', color: statusColors[fca.status], fontSize: 10, fontWeight: 700 }}>{fca.status}</span>
                                 )}
                               </td>
+                              {canDeleteFca && <td style={{ padding: '8px 6px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>
+                                <button onClick={() => deleteFca(fca.id)} title="Excluir FCA" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d1d5db', display: 'flex', alignItems: 'center' }}><X size={14} /></button>
+                              </td>}
                             </tr>
                           );
                         })}
@@ -2550,7 +2584,7 @@ export default function CRMPage() {
                               </select>
                             )}
                             {!canEdit && <span style={{ padding: '3px 6px', borderRadius: 6, background: statusColors[fca.status] + '15', color: statusColors[fca.status], fontSize: 10, fontWeight: 700 }}>{fca.status}</span>}
-                            {canEdit && <button onClick={() => deleteFca(fca.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db' }}><X size={12} /></button>}
+                            {canDeleteFca && <button onClick={() => deleteFca(fca.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d1d5db' }}><X size={12} /></button>}
                           </div>
                         </div>
                       </div>
