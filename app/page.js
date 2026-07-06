@@ -1126,7 +1126,7 @@ export default function CRMPage() {
           <span style={{ fontSize: 18, fontWeight: 800, color: '#EA1D2C' }}>SalesCRM</span>
         </div>
         <div style={{ display: 'flex', gap: 4, background: '#f1f5f9', borderRadius: 10, padding: 3 }}>
-          <NavBtn id="pipeline" icon={LayoutGrid} label="Pipeline" />
+          {profile?.team !== 'projetos' && <NavBtn id="pipeline" icon={LayoutGrid} label="Pipeline" />}
           {canEdit && !isRestricted && <a href="/input" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Plus size={16} /> Nova Marca
           </a>}
@@ -1135,10 +1135,10 @@ export default function CRMPage() {
           </a>}
           {(!isRestricted || profile?.team === 'projetos') && <NavBtn id="projetos" icon={Package} label="Projetos" />}
           {(!isRestricted || profile?.team === 'comer_fora' || profile?.team === 'projetos') && <NavBtn id="forecast" icon={Calendar} label="Forecast" />}
-          <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
+          {profile?.team !== 'projetos' && <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />}
           {!isRestricted && <NavBtn id="scorecard" icon={Target} label="Scorecard" />}
-          <NavBtn id="updates" icon={History} label="Atualizações" />
-          <NavBtn id="fcas" icon={ClipboardList} label="FCAs" />
+          {profile?.team !== 'projetos' && <NavBtn id="updates" icon={History} label="Atualizações" />}
+          {profile?.team !== 'projetos' && <NavBtn id="fcas" icon={ClipboardList} label="FCAs" />}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {profile?.role === 'admin' && (
