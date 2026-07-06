@@ -158,6 +158,7 @@ export default function CRMPage() {
   const [projetosFilterStatus, setProjetosFilterStatus] = useState([]);
   const [projetosFilterEtapa, setProjetosFilterEtapa] = useState([]);
   const [projetosFilterMes, setProjetosFilterMes] = useState([]);
+  const [projetosFilterFY, setProjetosFilterFY] = useState('');
   const [projetosSort, setProjetosSort] = useState({ col: null, dir: 'asc' });
   const [projetosTab, setProjetosTab] = useState('projetos'); // 'projetos' | 'dashboard'
   const [novaLojaModal, setNovaLojaModal] = useState(false);
@@ -1350,21 +1351,39 @@ export default function CRMPage() {
           const PROJ_STATUS_COLORS = { ativada: '#22c55e', agendada: '#3b82f6', pendente: '#f59e0b', 'em aberto': '#94a3b8' };
           const PROJ_ETAPAS = ['Rollout', 'Piloto', 'Orgânico', 'Projeto'];
           const PROJ_STATUSES = ['ativada', 'agendada', 'pendente', 'em aberto'];
-          const allMeses = [...new Set(projetos.map(p => p.mes_golive).filter(Boolean))].sort((a, b) => {
-            const MO = { janeiro:1, fevereiro:2, 'março':3, marco:3, abril:4, maio:5, junho:6, julho:7, agosto:8, setembro:9, outubro:10, novembro:11, dezembro:12 };
+          // Usar mes_golive_ajustado com fallback para mes_golive (igual ao dashboard)
+          const getMes = (p) => (p.mes_golive_ajustado || '').trim() || (p.mes_golive || '').trim();
+          // Meses a ignorar (antes de outubro/25, igual ao dashboard)
+          const MESES_IGNORAR = ['maio-25','junho-25','julho-25','agosto-25','setembro-25'];
+          // FY com mesma lógica do dashboard: FY26 = out/25 a mar/26, FY27 = abr/26 a mar/27
+          const FY26_MESES = ['outubro-25','novembro-25','dezembro-25','janeiro-26','fevereiro-26','março-26'];
+          const FY27_MESES = ['abril-26','maio-26','junho-26','julho-26','agosto-26','setembro-26','outubro-26','novembro-26','dezembro-26','janeiro-27','fevereiro-27','março-27'];
+          const getFY = (mesStr) => {
+            const m = (mesStr || '').trim().toLowerCase();
+            if (FY26_MESES.includes(m)) return 'FY26';
+            if (FY27_MESES.includes(m)) return 'FY27';
+            return '';
+          };
+          // Filtrar dados ignorando meses antigos (igual ao dashboard)
+          const projetosValidos = projetos.filter(p => !MESES_IGNORAR.includes(getMes(p).toLowerCase()));
+          const MO = { janeiro:1, fevereiro:2, 'março':3, marco:3, abril:4, maio:5, junho:6, julho:7, agosto:8, setembro:9, outubro:10, novembro:11, dezembro:12 };
+          const allMeses = [...new Set(projetosValidos.map(p => getMes(p)).filter(Boolean))].sort((a, b) => {
             const pa = a.split('-'), pb = b.split('-');
             const ya = parseInt(pa[1]||'0'), yb = parseInt(pb[1]||'0');
             if (ya !== yb) return ya - yb;
             return (MO[pa[0]] || 0) - (MO[pb[0]] || 0);
           });
-          let fp = projetos;
+          const allFYs = [...new Set(projetosValidos.map(p => getFY(getMes(p))).filter(Boolean))].sort();
+
+          let fp = projetosValidos;
           if (projetosSearch) {
             const q = projetosSearch.toLowerCase();
             fp = fp.filter(p => (p.marca||'').toLowerCase().includes(q) || (p.loja||'').toLowerCase().includes(q));
           }
           if (projetosFilterStatus.length > 0) fp = fp.filter(p => projetosFilterStatus.includes(p.status));
           if (projetosFilterEtapa.length > 0) fp = fp.filter(p => projetosFilterEtapa.includes(p.etapa_projeto));
-          if (projetosFilterMes.length > 0) fp = fp.filter(p => projetosFilterMes.includes(p.mes_golive));
+          if (projetosFilterMes.length > 0) fp = fp.filter(p => projetosFilterMes.includes(getMes(p)));
+          if (projetosFilterFY) fp = fp.filter(p => getFY(getMes(p)) === projetosFilterFY);
 
           // Sorting for table view
           const sortedFp = [...fp];
@@ -1387,7 +1406,7 @@ export default function CRMPage() {
           const getGroupKey = (p) => {
             if (projetosGroupBy === 'status') return p.status || 'pendente';
             if (projetosGroupBy === 'etapa') return p.etapa_projeto || '(Sem etapa)';
-            if (projetosGroupBy === 'mes_golive') return p.mes_golive || '(Sem mês)';
+            if (projetosGroupBy === 'mes_golive') return getMes(p) || '(Sem mês)';
             return p.status || 'pendente';
           };
           const kanbanGroups = {};
@@ -1399,11 +1418,12 @@ export default function CRMPage() {
             kanbanGroups[k].push(p);
           });
 
-          // KPIs
-          const totalProjetos = fp.length;
-          const ativadas = fp.filter(p => p.status === 'ativada').length;
-          const agendadas = fp.filter(p => p.status === 'agendada').length;
-          const pendentes = fp.filter(p => p.status === 'pendente').length;
+          // KPIs — mesma lógica do dashboard
+          const ativadas = fp.filter(p => (p.status||'').trim().toLowerCase() === 'ativada').length;
+          const agendadas = fp.filter(p => (p.status||'').trim().toLowerCase() === 'agendada').length;
+          const pendentes = fp.filter(p => (p.status||'').trim().toLowerCase() === 'pendente').length;
+          const churn = fp.filter(p => (p.status||'').trim().toLowerCase() === 'churn').length;
+          const implantacoes = ativadas + agendadas;
 
           return (
             <div>
@@ -1434,13 +1454,14 @@ export default function CRMPage() {
                     </div>
                   </div>
 
-                  {/* KPIs */}
+                  {/* KPIs — mesmos do dashboard */}
                   <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
                     {[
-                      { label: 'Total', value: totalProjetos, color: '#1e293b' },
+                      { label: 'Implantações (ativ. + agend.)', value: implantacoes, color: '#1e293b' },
                       { label: 'Ativadas', value: ativadas, color: '#22c55e' },
                       { label: 'Agendadas', value: agendadas, color: '#3b82f6' },
                       { label: 'Pendentes', value: pendentes, color: '#f59e0b' },
+                      { label: 'Churn', value: churn, color: '#EA1D2C' },
                     ].map(kpi => (
                       <div key={kpi.label} style={{ flex: 1, minWidth: 120, background: '#fff', borderRadius: 12, padding: '12px 16px', border: '1px solid #e2e8f0' }}>
                         <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>{kpi.label}</div>
@@ -1449,61 +1470,65 @@ export default function CRMPage() {
                     ))}
                   </div>
 
-                  {/* Filters - reorganized */}
-                  <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                    {/* Left: search + groupBy */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ position: 'relative', minWidth: 220 }}>
+                  {/* Filters - dropdowns */}
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div style={{ position: 'relative', minWidth: 220 }}>
+                      <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Busca</label>
+                      <div style={{ position: 'relative' }}>
                         <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: '#94a3b8' }} />
-                        <input placeholder="Buscar marca ou loja..." value={projetosSearch} onChange={e => setProjetosSearch(e.target.value)} style={{ width: '100%', padding: '8px 8px 8px 30px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        {projetosView === 'kanban' && (
-                          <select value={projetosGroupBy} onChange={e => setProjetosGroupBy(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#64748b' }}>
-                            <option value="status">Agrupar: Status</option>
-                            <option value="etapa">Agrupar: Etapa</option>
-                            <option value="mes_golive">Agrupar: Mês Go-live</option>
-                          </select>
-                        )}
-                        <button onClick={() => {
-                          const rows = [['Marca','Loja','Etapa','Classificação','Status','Mês Go-live','Data Migração','Data Go-live','Motivo Pendências','Detalhamento','UF','Executivo','Resp. Projetos']];
-                          fp.forEach(p => rows.push([p.marca, p.loja, p.etapa_projeto, p.classificacao_forecast, p.status, p.mes_golive, p.data_migracao||'', p.data_golive||'', p.motivo_pendencias, p.detalhamento_pendencias, p.uf, p.executivo_responsavel, p.responsavel_projetos]));
-                          const csv = rows.map(r => r.map(c => `"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-                          const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-                          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'projetos.csv'; a.click();
-                        }} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Exportar CSV</button>
+                        <input placeholder="Marca ou loja..." value={projetosSearch} onChange={e => setProjetosSearch(e.target.value)} style={{ width: '100%', padding: '7px 8px 7px 30px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                       </div>
                     </div>
-                    {/* Center: Status filter */}
                     <div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Status</div>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {PROJ_STATUSES.map(s => (
-                          <button key={s} onClick={() => setProjetosFilterStatus(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
-                            style={{ padding: '6px 12px', borderRadius: 8, border: projetosFilterStatus.includes(s) ? '2px solid ' + PROJ_STATUS_COLORS[s] : '1px solid #e2e8f0', background: projetosFilterStatus.includes(s) ? PROJ_STATUS_COLORS[s] + '15' : '#fff', color: projetosFilterStatus.includes(s) ? PROJ_STATUS_COLORS[s] : '#64748b', fontWeight: 600, fontSize: 11, cursor: 'pointer', textTransform: 'capitalize' }}>{s}</button>
-                        ))}
-                      </div>
+                      <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Status</label>
+                      <select multiple value={projetosFilterStatus} onChange={e => setProjetosFilterStatus([...e.target.selectedOptions].map(o => o.value))}
+                        style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#1e293b', minWidth: 130, height: 34 }}>
+                        {PROJ_STATUSES.map(s => <option key={s} value={s} style={{ textTransform: 'capitalize' }}>{s}</option>)}
+                      </select>
                     </div>
-                    {/* Center: Etapa filter */}
                     <div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Etapa</div>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {PROJ_ETAPAS.map(e => (
-                          <button key={e} onClick={() => setProjetosFilterEtapa(prev => prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e])}
-                            style={{ padding: '6px 12px', borderRadius: 8, border: projetosFilterEtapa.includes(e) ? '2px solid #6366f1' : '1px solid #e2e8f0', background: projetosFilterEtapa.includes(e) ? '#6366f115' : '#fff', color: projetosFilterEtapa.includes(e) ? '#6366f1' : '#64748b', fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>{e}</button>
-                        ))}
-                      </div>
+                      <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Etapa</label>
+                      <select multiple value={projetosFilterEtapa} onChange={e => setProjetosFilterEtapa([...e.target.selectedOptions].map(o => o.value))}
+                        style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#1e293b', minWidth: 120, height: 34 }}>
+                        {PROJ_ETAPAS.map(et => <option key={et} value={et}>{et}</option>)}
+                      </select>
                     </div>
-                    {/* Right: Mês Go-live filter */}
                     <div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Mês Go-live</div>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 400 }}>
-                        {allMeses.map(m => (
-                          <button key={m} onClick={() => setProjetosFilterMes(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])}
-                            style={{ padding: '4px 10px', borderRadius: 8, border: projetosFilterMes.includes(m) ? '2px solid #8b5cf6' : '1px solid #e2e8f0', background: projetosFilterMes.includes(m) ? '#8b5cf615' : '#fff', color: projetosFilterMes.includes(m) ? '#8b5cf6' : '#64748b', fontWeight: 600, fontSize: 10, cursor: 'pointer' }}>{m}</button>
-                        ))}
-                      </div>
+                      <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Mês Go-live</label>
+                      <select multiple value={projetosFilterMes} onChange={e => setProjetosFilterMes([...e.target.selectedOptions].map(o => o.value))}
+                        style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#1e293b', minWidth: 130, height: 34 }}>
+                        {allMeses.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
                     </div>
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Ano Fiscal</label>
+                      <select value={projetosFilterFY} onChange={e => setProjetosFilterFY(e.target.value)}
+                        style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#1e293b', minWidth: 90, height: 34 }}>
+                        <option value="">Todos</option>
+                        {allFYs.map(fy => <option key={fy} value={fy}>{fy}</option>)}
+                      </select>
+                    </div>
+                    {projetosView === 'kanban' && (
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Agrupar</label>
+                        <select value={projetosGroupBy} onChange={e => setProjetosGroupBy(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#1e293b', minWidth: 130, height: 34 }}>
+                          <option value="status">Status</option>
+                          <option value="etapa">Etapa</option>
+                          <option value="mes_golive">Mês Go-live</option>
+                        </select>
+                      </div>
+                    )}
+                    {(projetosFilterStatus.length > 0 || projetosFilterEtapa.length > 0 || projetosFilterMes.length > 0 || projetosFilterFY) && (
+                      <button onClick={() => { setProjetosFilterStatus([]); setProjetosFilterEtapa([]); setProjetosFilterMes([]); setProjetosFilterFY(''); }}
+                        style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#EA1D2C', fontWeight: 600, fontSize: 12, cursor: 'pointer', height: 34 }}>Limpar filtros</button>
+                    )}
+                    <button onClick={() => {
+                      const rows = [['Marca','Loja','Etapa','Classificação','Status','Mês Go-live','Data Migração','Data Go-live','Motivo Pendências','Detalhamento','UF','Executivo','Resp. Projetos']];
+                      fp.forEach(p => rows.push([p.marca, p.loja, p.etapa_projeto, p.classificacao_forecast, p.status, getMes(p), p.data_migracao||'', p.data_golive||'', p.motivo_pendencias, p.detalhamento_pendencias, p.uf, p.executivo_responsavel, p.responsavel_projetos]));
+                      const csv = rows.map(r => r.map(c => `"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+                      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+                      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'projetos.csv'; a.click();
+                    }} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer', height: 34 }}>Exportar CSV</button>
                   </div>
 
                   {projetosLoading && <div style={{ textAlign: 'center', padding: 40 }}><p style={{ color: '#94a3b8' }}>Carregando projetos...</p></div>}
@@ -1605,7 +1630,7 @@ export default function CRMPage() {
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
                                   <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: (PROJ_STATUS_COLORS[p.status] || '#94a3b8') + '15', color: PROJ_STATUS_COLORS[p.status] || '#94a3b8', fontWeight: 600, textTransform: 'capitalize' }}>{p.status || '—'}</span>
                                 </td>
-                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.mes_golive || '—'}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{getMes(p) || '—'}</td>
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.data_golive ? new Date(p.data_golive).toLocaleDateString('pt-BR') : '—'}</td>
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: p.motivo_pendencias ? '#92400e' : '#94a3b8', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.motivo_pendencias || ''}>{p.motivo_pendencias || '—'}</td>
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.executivo_responsavel || '—'}</td>
