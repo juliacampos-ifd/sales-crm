@@ -158,7 +158,7 @@ export default function CRMPage() {
   const [projetosFilterStatus, setProjetosFilterStatus] = useState([]);
   const [projetosFilterEtapa, setProjetosFilterEtapa] = useState([]);
   const [projetosFilterMes, setProjetosFilterMes] = useState([]);
-  const [projetosFilterFY, setProjetosFilterFY] = useState('');
+  const [projetosFilterFY, setProjetosFilterFY] = useState([]);
   const [projetosSort, setProjetosSort] = useState({ col: null, dir: 'asc' });
   const [projetosTab, setProjetosTab] = useState('projetos'); // 'projetos' | 'dashboard'
   const [novaLojaModal, setNovaLojaModal] = useState(false);
@@ -221,9 +221,10 @@ export default function CRMPage() {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (data) {
       setProfile(data);
-      // Auto-select product for restricted team users
+      // Auto-select product/view for restricted team users
       if (data.team === 'emilia_vision') setActiveProduct('emilia_vision');
       if (data.team === 'comer_fora') setActiveProduct('comer_fora');
+      if (data.team === 'projetos') { setView('projetos'); loadProjetos(); }
       if (data.role === 'admin') {
         try {
           const res = await apiFetch('/api/activity?_t=' + Date.now(), { cache: 'no-store' });
@@ -283,7 +284,7 @@ export default function CRMPage() {
   const canEdit = profile?.role !== 'viewer';
   const canDeleteFca = profile?.role === 'admin' || profile?.role === 'gestor';
   // Restricted = viewer locked to a specific product
-  const isRestricted = profile?.team === 'emilia_vision' || profile?.team === 'comer_fora';
+  const isRestricted = profile?.team === 'emilia_vision' || profile?.team === 'comer_fora' || profile?.team === 'projetos';
   // ── Role-based filtering ──
   const filtered = useMemo(() => {
     let d = brands;
@@ -1132,8 +1133,8 @@ export default function CRMPage() {
           {!isRestricted && <a href="/rv" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Award size={16} /> RV
           </a>}
-          {!isRestricted && <NavBtn id="projetos" icon={Package} label="Projetos" />}
-          {(!isRestricted || profile?.team === 'comer_fora') && <NavBtn id="forecast" icon={Calendar} label="Forecast" />}
+          {(!isRestricted || profile?.team === 'projetos') && <NavBtn id="projetos" icon={Package} label="Projetos" />}
+          {(!isRestricted || profile?.team === 'comer_fora' || profile?.team === 'projetos') && <NavBtn id="forecast" icon={Calendar} label="Forecast" />}
           <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />
           {!isRestricted && <NavBtn id="scorecard" icon={Target} label="Scorecard" />}
           <NavBtn id="updates" icon={History} label="Atualizações" />
@@ -1383,7 +1384,7 @@ export default function CRMPage() {
           if (projetosFilterStatus.length > 0) fp = fp.filter(p => projetosFilterStatus.includes(p.status));
           if (projetosFilterEtapa.length > 0) fp = fp.filter(p => projetosFilterEtapa.includes(p.etapa_projeto));
           if (projetosFilterMes.length > 0) fp = fp.filter(p => projetosFilterMes.includes(getMes(p)));
-          if (projetosFilterFY) fp = fp.filter(p => getFY(getMes(p)) === projetosFilterFY);
+          if (projetosFilterFY.length > 0) fp = fp.filter(p => projetosFilterFY.includes(getFY(getMes(p))));
 
           // Sorting for table view
           const sortedFp = [...fp];
@@ -1470,57 +1471,22 @@ export default function CRMPage() {
                     ))}
                   </div>
 
-                  {/* Filters - dropdowns */}
-                  <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                    <div style={{ position: 'relative', minWidth: 220 }}>
-                      <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Busca</label>
-                      <div style={{ position: 'relative' }}>
-                        <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: '#94a3b8' }} />
-                        <input placeholder="Marca ou loja..." value={projetosSearch} onChange={e => setProjetosSearch(e.target.value)} style={{ width: '100%', padding: '7px 8px 7px 30px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
-                      </div>
+                  {/* Filters - MultiFilter dropdowns */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', minWidth: 200, maxWidth: 260 }}>
+                      <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: '#94a3b8' }} />
+                      <input placeholder="Buscar marca ou loja..." value={projetosSearch} onChange={e => setProjetosSearch(e.target.value)} style={{ width: '100%', padding: '7px 8px 7px 30px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                     </div>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Status</label>
-                      <select multiple value={projetosFilterStatus} onChange={e => setProjetosFilterStatus([...e.target.selectedOptions].map(o => o.value))}
-                        style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#1e293b', minWidth: 130, height: 34 }}>
-                        {PROJ_STATUSES.map(s => <option key={s} value={s} style={{ textTransform: 'capitalize' }}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Etapa</label>
-                      <select multiple value={projetosFilterEtapa} onChange={e => setProjetosFilterEtapa([...e.target.selectedOptions].map(o => o.value))}
-                        style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#1e293b', minWidth: 120, height: 34 }}>
-                        {PROJ_ETAPAS.map(et => <option key={et} value={et}>{et}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Mês Go-live</label>
-                      <select multiple value={projetosFilterMes} onChange={e => setProjetosFilterMes([...e.target.selectedOptions].map(o => o.value))}
-                        style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#1e293b', minWidth: 130, height: 34 }}>
-                        {allMeses.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Ano Fiscal</label>
-                      <select value={projetosFilterFY} onChange={e => setProjetosFilterFY(e.target.value)}
-                        style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#1e293b', minWidth: 90, height: 34 }}>
-                        <option value="">Todos</option>
-                        {allFYs.map(fy => <option key={fy} value={fy}>{fy}</option>)}
-                      </select>
-                    </div>
+                    <MultiFilter label="Status" selected={projetosFilterStatus} onChange={setProjetosFilterStatus} options={PROJ_STATUSES} filterId="proj_status" />
+                    <MultiFilter label="Etapa" selected={projetosFilterEtapa} onChange={setProjetosFilterEtapa} options={PROJ_ETAPAS} filterId="proj_etapa" />
+                    <MultiFilter label="Mês Go-live" selected={projetosFilterMes} onChange={setProjetosFilterMes} options={allMeses} filterId="proj_mes" />
+                    <MultiFilter label="Ano Fiscal" selected={projetosFilterFY} onChange={setProjetosFilterFY} options={allFYs} filterId="proj_fy" />
                     {projetosView === 'kanban' && (
-                      <div>
-                        <label style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Agrupar</label>
-                        <select value={projetosGroupBy} onChange={e => setProjetosGroupBy(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#1e293b', minWidth: 130, height: 34 }}>
-                          <option value="status">Status</option>
-                          <option value="etapa">Etapa</option>
-                          <option value="mes_golive">Mês Go-live</option>
-                        </select>
-                      </div>
-                    )}
-                    {(projetosFilterStatus.length > 0 || projetosFilterEtapa.length > 0 || projetosFilterMes.length > 0 || projetosFilterFY) && (
-                      <button onClick={() => { setProjetosFilterStatus([]); setProjetosFilterEtapa([]); setProjetosFilterMes([]); setProjetosFilterFY(''); }}
-                        style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#EA1D2C', fontWeight: 600, fontSize: 12, cursor: 'pointer', height: 34 }}>Limpar filtros</button>
+                      <select value={projetosGroupBy} onChange={e => setProjetosGroupBy(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 12, outline: 'none', color: '#64748b', background: '#fff' }}>
+                        <option value="status">Agrupar: Status</option>
+                        <option value="etapa">Agrupar: Etapa</option>
+                        <option value="mes_golive">Agrupar: Mês Go-live</option>
+                      </select>
                     )}
                     <button onClick={() => {
                       const rows = [['Marca','Loja','Etapa','Classificação','Status','Mês Go-live','Data Migração','Data Go-live','Motivo Pendências','Detalhamento','UF','Executivo','Resp. Projetos']];
@@ -1528,7 +1494,7 @@ export default function CRMPage() {
                       const csv = rows.map(r => r.map(c => `"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
                       const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
                       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'projetos.csv'; a.click();
-                    }} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer', height: 34 }}>Exportar CSV</button>
+                    }} style={{ padding: '6px 14px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 500, fontSize: 12, cursor: 'pointer' }}>Exportar CSV</button>
                   </div>
 
                   {projetosLoading && <div style={{ textAlign: 'center', padding: 40 }}><p style={{ color: '#94a3b8' }}>Carregando projetos...</p></div>}
