@@ -265,8 +265,8 @@ export default function CRMPage() {
       d = d.filter(b => b.pipelines?.comer_fora);
     } else if (profile?.role === 'executivo') {
       if (profile.team === 'saipos') {
-        // Marcos/Lucas: veem todas as marcas que têm pipeline saipos ou totem
-        d = d.filter(b => b.pipelines?.saipos || b.pipelines?.totem || b.pipelines?.comer_fora);
+        // Marcos/Lucas/Leandro/Marilia: veem marcas com pipeline saipos, totem, comer_fora ou emilia_vision
+        d = d.filter(b => b.pipelines?.saipos || b.pipelines?.totem || b.pipelines?.comer_fora || b.pipelines?.emilia_vision);
       } else {
         d = d.filter(b => b.responsavel_bdr === profile.name || b.responsavel_closer === profile.name || Object.values(b.pipelines || {}).some(p => p.responsavel && p.responsavel.includes(profile.name)));
       }
