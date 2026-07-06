@@ -157,6 +157,13 @@ export default function CRMPage() {
   const [projetosSearch, setProjetosSearch] = useState('');
   const [projetosFilterStatus, setProjetosFilterStatus] = useState([]);
   const [projetosFilterEtapa, setProjetosFilterEtapa] = useState([]);
+  const [projetosFilterMes, setProjetosFilterMes] = useState([]);
+  const [projetosSort, setProjetosSort] = useState({ col: null, dir: 'asc' });
+  const [projetosTab, setProjetosTab] = useState('projetos'); // 'projetos' | 'dashboard'
+  const [novaLojaModal, setNovaLojaModal] = useState(false);
+  const [novaLojaMarca, setNovaLojaMarca] = useState('');
+  const [novaLojaMarcaNova, setNovaLojaMarcaNova] = useState('');
+  const [novaLojaNome, setNovaLojaNome] = useState('');
   const [projetoModal, setProjetoModal] = useState(null); // projeto sendo editado
   const [contratoModal, setContratoModal] = useState(null); // {brandId, brandName} para modal de contrato
   const [contratoForm, setContratoForm] = useState({ qtd_lojas_contrato: '', mensalidade: '', valor_setup: '', valor_implantacao: '', duracao_contrato: '', contrato_file: null });
@@ -638,6 +645,24 @@ export default function CRMPage() {
       await apiFetch('/api/projetos?id=' + id, { method: 'DELETE' });
       setProjetos(prev => prev.filter(p => p.id !== id));
     } catch (err) { console.error('Error deleting projeto:', err); }
+  };
+  const addNovaLoja = async () => {
+    const marca = novaLojaMarca === '__nova__' ? novaLojaMarcaNova.trim() : novaLojaMarca;
+    const loja = novaLojaNome.trim();
+    if (!marca || !loja) return;
+    try {
+      const res = await apiFetch('/api/projetos', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marca, loja, status: 'pendente' }) });
+      const proj = await res.json();
+      if (proj.id) {
+        setProjetos(prev => [...prev, proj]);
+        setNovaLojaModal(false);
+        setNovaLojaMarca('');
+        setNovaLojaMarcaNova('');
+        setNovaLojaNome('');
+        setProjetoModal(proj);
+      }
+    } catch (err) { console.error('Error adding loja:', err); }
   };
   const uploadContrato = async (projetoId, file) => {
     try {
@@ -1325,6 +1350,13 @@ export default function CRMPage() {
           const PROJ_STATUS_COLORS = { ativada: '#22c55e', agendada: '#3b82f6', pendente: '#f59e0b', 'em aberto': '#94a3b8' };
           const PROJ_ETAPAS = ['Rollout', 'Piloto', 'Orgânico', 'Projeto'];
           const PROJ_STATUSES = ['ativada', 'agendada', 'pendente', 'em aberto'];
+          const allMeses = [...new Set(projetos.map(p => p.mes_golive).filter(Boolean))].sort((a, b) => {
+            const MO = { janeiro:1, fevereiro:2, 'março':3, marco:3, abril:4, maio:5, junho:6, julho:7, agosto:8, setembro:9, outubro:10, novembro:11, dezembro:12 };
+            const pa = a.split('-'), pb = b.split('-');
+            const ya = parseInt(pa[1]||'0'), yb = parseInt(pb[1]||'0');
+            if (ya !== yb) return ya - yb;
+            return (MO[pa[0]] || 0) - (MO[pb[0]] || 0);
+          });
           let fp = projetos;
           if (projetosSearch) {
             const q = projetosSearch.toLowerCase();
@@ -1332,15 +1364,24 @@ export default function CRMPage() {
           }
           if (projetosFilterStatus.length > 0) fp = fp.filter(p => projetosFilterStatus.includes(p.status));
           if (projetosFilterEtapa.length > 0) fp = fp.filter(p => projetosFilterEtapa.includes(p.etapa_projeto));
+          if (projetosFilterMes.length > 0) fp = fp.filter(p => projetosFilterMes.includes(p.mes_golive));
 
-          // Brand view: agrupar por marca
-          const brandGroups = {};
-          if (projetosBrandView) {
-            fp.forEach(p => {
-              if (!brandGroups[p.marca]) brandGroups[p.marca] = [];
-              brandGroups[p.marca].push(p);
+          // Sorting for table view
+          const sortedFp = [...fp];
+          if (projetosSort.col) {
+            sortedFp.sort((a, b) => {
+              let va = a[projetosSort.col] || '', vb = b[projetosSort.col] || '';
+              if (projetosSort.col === 'data_golive' || projetosSort.col === 'data_migracao') {
+                va = va || '9999-12-31'; vb = vb || '9999-12-31';
+              }
+              const cmp = String(va).localeCompare(String(vb), 'pt-BR', { numeric: true });
+              return projetosSort.dir === 'asc' ? cmp : -cmp;
             });
           }
+          const toggleSort = (col) => {
+            setProjetosSort(prev => prev.col === col ? { col, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' });
+          };
+          const sortIcon = (col) => projetosSort.col === col ? (projetosSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
 
           // Kanban grouping
           const getGroupKey = (p) => {
@@ -1350,7 +1391,7 @@ export default function CRMPage() {
             return p.status || 'pendente';
           };
           const kanbanGroups = {};
-          const groupOrder = projetosGroupBy === 'status' ? PROJ_STATUSES : projetosGroupBy === 'etapa' ? PROJ_ETAPAS : [];
+          const groupOrder = projetosGroupBy === 'status' ? PROJ_STATUSES : projetosGroupBy === 'etapa' ? PROJ_ETAPAS : allMeses;
           groupOrder.forEach(g => { kanbanGroups[g] = []; });
           fp.forEach(p => {
             const k = getGroupKey(p);
@@ -1366,174 +1407,261 @@ export default function CRMPage() {
 
           return (
             <div>
-              {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#1e293b' }}>Projetos</h2>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => setProjetosBrandView(false)} style={{ padding: '6px 14px', borderRadius: 8, border: !projetosBrandView ? '2px solid #EA1D2C' : '1px solid #e2e8f0', background: !projetosBrandView ? '#EA1D2C10' : '#fff', color: !projetosBrandView ? '#EA1D2C' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Por Loja</button>
-                  <button onClick={() => setProjetosBrandView(true)} style={{ padding: '6px 14px', borderRadius: 8, border: projetosBrandView ? '2px solid #EA1D2C' : '1px solid #e2e8f0', background: projetosBrandView ? '#EA1D2C10' : '#fff', color: projetosBrandView ? '#EA1D2C' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Por Marca</button>
-                  <span style={{ width: 1, background: '#e2e8f0', margin: '0 4px' }} />
-                  <button onClick={() => setProjetosView('kanban')} style={{ padding: '6px 14px', borderRadius: 8, border: projetosView === 'kanban' ? '2px solid #EA1D2C' : '1px solid #e2e8f0', background: projetosView === 'kanban' ? '#EA1D2C10' : '#fff', color: projetosView === 'kanban' ? '#EA1D2C' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Kanban</button>
-                  <button onClick={() => setProjetosView('tabela')} style={{ padding: '6px 14px', borderRadius: 8, border: projetosView === 'tabela' ? '2px solid #EA1D2C' : '1px solid #e2e8f0', background: projetosView === 'tabela' ? '#EA1D2C10' : '#fff', color: projetosView === 'tabela' ? '#EA1D2C' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Tabela</button>
-                  <span style={{ width: 1, background: '#e2e8f0', margin: '0 4px' }} />
-                  <a href="/implantacao" target="_blank" rel="noopener" style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', fontWeight: 600, fontSize: 12, textDecoration: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>Dashboard Impl.</a>
-                </div>
+              {/* Sub-tabs: Projetos | Dashboard */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#f1f5f9', borderRadius: 10, padding: 3, width: 'fit-content' }}>
+                <button onClick={() => setProjetosTab('projetos')} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: projetosTab === 'projetos' ? '#EA1D2C' : 'transparent', color: projetosTab === 'projetos' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Projetos</button>
+                <button onClick={() => setProjetosTab('dashboard')} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: projetosTab === 'dashboard' ? '#EA1D2C' : 'transparent', color: projetosTab === 'dashboard' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Dashboard</button>
               </div>
 
-              {/* KPIs */}
-              <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-                {[
-                  { label: 'Total', value: totalProjetos, color: '#1e293b' },
-                  { label: 'Ativadas', value: ativadas, color: '#22c55e' },
-                  { label: 'Agendadas', value: agendadas, color: '#3b82f6' },
-                  { label: 'Pendentes', value: pendentes, color: '#f59e0b' },
-                ].map(kpi => (
-                  <div key={kpi.label} style={{ flex: 1, minWidth: 120, background: '#fff', borderRadius: 12, padding: '12px 16px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>{kpi.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
+              {projetosTab === 'dashboard' && (
+                <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden', height: 'calc(100vh - 180px)' }}>
+                  <iframe src="/implantacao" style={{ width: '100%', height: '100%', border: 'none' }} title="Dashboard Implantação" />
+                </div>
+              )}
+
+              {projetosTab === 'projetos' && (
+                <>
+                  {/* Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#1e293b' }}>Projetos</h2>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {canEdit && <button onClick={() => { setNovaLojaModal(true); setNovaLojaMarca(''); setNovaLojaMarcaNova(''); setNovaLojaNome(''); }} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #EA1D2C, #DA5D69)', color: '#fff', fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={14} /> Nova Loja</button>}
+                      <button onClick={() => setProjetosBrandView(false)} style={{ padding: '6px 14px', borderRadius: 8, border: !projetosBrandView ? '2px solid #EA1D2C' : '1px solid #e2e8f0', background: !projetosBrandView ? '#EA1D2C10' : '#fff', color: !projetosBrandView ? '#EA1D2C' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Por Loja</button>
+                      <button onClick={() => setProjetosBrandView(true)} style={{ padding: '6px 14px', borderRadius: 8, border: projetosBrandView ? '2px solid #EA1D2C' : '1px solid #e2e8f0', background: projetosBrandView ? '#EA1D2C10' : '#fff', color: projetosBrandView ? '#EA1D2C' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Por Marca</button>
+                      <span style={{ width: 1, background: '#e2e8f0', margin: '0 4px' }} />
+                      <button onClick={() => setProjetosView('kanban')} style={{ padding: '6px 14px', borderRadius: 8, border: projetosView === 'kanban' ? '2px solid #EA1D2C' : '1px solid #e2e8f0', background: projetosView === 'kanban' ? '#EA1D2C10' : '#fff', color: projetosView === 'kanban' ? '#EA1D2C' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Kanban</button>
+                      <button onClick={() => setProjetosView('tabela')} style={{ padding: '6px 14px', borderRadius: 8, border: projetosView === 'tabela' ? '2px solid #EA1D2C' : '1px solid #e2e8f0', background: projetosView === 'tabela' ? '#EA1D2C10' : '#fff', color: projetosView === 'tabela' ? '#EA1D2C' : '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Tabela</button>
+                    </div>
                   </div>
-                ))}
-              </div>
 
-              {/* Filters */}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 300 }}>
-                  <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: '#94a3b8' }} />
-                  <input placeholder="Buscar marca ou loja..." value={projetosSearch} onChange={e => setProjetosSearch(e.target.value)} style={{ width: '100%', padding: '8px 8px 8px 30px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none' }} />
-                </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {PROJ_STATUSES.map(s => (
-                    <button key={s} onClick={() => setProjetosFilterStatus(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
-                      style={{ padding: '6px 12px', borderRadius: 8, border: projetosFilterStatus.includes(s) ? '2px solid ' + PROJ_STATUS_COLORS[s] : '1px solid #e2e8f0', background: projetosFilterStatus.includes(s) ? PROJ_STATUS_COLORS[s] + '15' : '#fff', color: projetosFilterStatus.includes(s) ? PROJ_STATUS_COLORS[s] : '#64748b', fontWeight: 600, fontSize: 11, cursor: 'pointer', textTransform: 'capitalize' }}>{s}</button>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {PROJ_ETAPAS.map(e => (
-                    <button key={e} onClick={() => setProjetosFilterEtapa(prev => prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e])}
-                      style={{ padding: '6px 12px', borderRadius: 8, border: projetosFilterEtapa.includes(e) ? '2px solid #6366f1' : '1px solid #e2e8f0', background: projetosFilterEtapa.includes(e) ? '#6366f115' : '#fff', color: projetosFilterEtapa.includes(e) ? '#6366f1' : '#64748b', fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>{e}</button>
-                  ))}
-                </div>
-                {projetosView === 'kanban' && (
-                  <select value={projetosGroupBy} onChange={e => setProjetosGroupBy(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#64748b' }}>
-                    <option value="status">Agrupar: Status</option>
-                    <option value="etapa">Agrupar: Etapa</option>
-                    <option value="mes_golive">Agrupar: Mês Go-live</option>
-                  </select>
-                )}
-                {/* CSV Export */}
-                <button onClick={() => {
-                  const rows = [['Marca','Loja','Etapa','Classificação','Status','Mês Go-live','Data Migração','Data Go-live','Motivo Pendências','Detalhamento','UF','Executivo','Resp. Projetos']];
-                  fp.forEach(p => rows.push([p.marca, p.loja, p.etapa_projeto, p.classificacao_forecast, p.status, p.mes_golive, p.data_migracao||'', p.data_golive||'', p.motivo_pendencias, p.detalhamento_pendencias, p.uf, p.executivo_responsavel, p.responsavel_projetos]));
-                  const csv = rows.map(r => r.map(c => `"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
-                  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-                  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'projetos.csv'; a.click();
-                }} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Exportar CSV</button>
-              </div>
-
-              {projetosLoading && <div style={{ textAlign: 'center', padding: 40 }}><p style={{ color: '#94a3b8' }}>Carregando projetos...</p></div>}
-
-              {!projetosLoading && projetosView === 'kanban' && !projetosBrandView && (
-                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 20, alignItems: 'flex-start' }}>
-                  {Object.entries(kanbanGroups).map(([group, items]) => (
-                    <div key={group} style={{ flex: '0 0 260px', background: '#f8fafc', borderRadius: 14, border: '1px solid #e2e8f0', maxHeight: 'calc(100vh - 320px)', display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ padding: '10px 14px', borderBottom: '2px solid ' + (PROJ_STATUS_COLORS[group] || '#6366f1'), display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>{group}</span>
-                        <span style={{ background: (PROJ_STATUS_COLORS[group] || '#6366f1') + '20', color: PROJ_STATUS_COLORS[group] || '#6366f1', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>{items.length}</span>
+                  {/* KPIs */}
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                    {[
+                      { label: 'Total', value: totalProjetos, color: '#1e293b' },
+                      { label: 'Ativadas', value: ativadas, color: '#22c55e' },
+                      { label: 'Agendadas', value: agendadas, color: '#3b82f6' },
+                      { label: 'Pendentes', value: pendentes, color: '#f59e0b' },
+                    ].map(kpi => (
+                      <div key={kpi.label} style={{ flex: 1, minWidth: 120, background: '#fff', borderRadius: 12, padding: '12px 16px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>{kpi.label}</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
                       </div>
-                      <div style={{ padding: 6, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {items.map(p => (
-                          <div key={p.id} onClick={() => setProjetoModal(p)} style={{ background: '#fff', borderRadius: 10, padding: '8px 10px', border: '1px solid #e2e8f0', cursor: 'pointer', fontSize: 12 }}
-                            onMouseEnter={e => e.currentTarget.style.borderColor = '#EA1D2C'} onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}>
-                            <div style={{ fontWeight: 700, fontSize: 12, color: '#1e293b', marginBottom: 2 }}>{p.loja}</div>
-                            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{p.marca}</div>
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {p.etapa_projeto && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 6, background: '#6366f115', color: '#6366f1', fontWeight: 600 }}>{p.etapa_projeto}</span>}
-                              {p.data_golive && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b', fontWeight: 600 }}>{new Date(p.data_golive).toLocaleDateString('pt-BR')}</span>}
-                              {p.motivo_pendencias && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 6, background: '#fef3c7', color: '#92400e', fontWeight: 600 }} title={p.motivo_pendencias}>Pend.</span>}
-                            </div>
-                          </div>
+                    ))}
+                  </div>
+
+                  {/* Filters - reorganized */}
+                  <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                    {/* Left: search + groupBy */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ position: 'relative', minWidth: 220 }}>
+                        <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: '#94a3b8' }} />
+                        <input placeholder="Buscar marca ou loja..." value={projetosSearch} onChange={e => setProjetosSearch(e.target.value)} style={{ width: '100%', padding: '8px 8px 8px 30px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {projetosView === 'kanban' && (
+                          <select value={projetosGroupBy} onChange={e => setProjetosGroupBy(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', color: '#64748b' }}>
+                            <option value="status">Agrupar: Status</option>
+                            <option value="etapa">Agrupar: Etapa</option>
+                            <option value="mes_golive">Agrupar: Mês Go-live</option>
+                          </select>
+                        )}
+                        <button onClick={() => {
+                          const rows = [['Marca','Loja','Etapa','Classificação','Status','Mês Go-live','Data Migração','Data Go-live','Motivo Pendências','Detalhamento','UF','Executivo','Resp. Projetos']];
+                          fp.forEach(p => rows.push([p.marca, p.loja, p.etapa_projeto, p.classificacao_forecast, p.status, p.mes_golive, p.data_migracao||'', p.data_golive||'', p.motivo_pendencias, p.detalhamento_pendencias, p.uf, p.executivo_responsavel, p.responsavel_projetos]));
+                          const csv = rows.map(r => r.map(c => `"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+                          const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+                          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'projetos.csv'; a.click();
+                        }} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Exportar CSV</button>
+                      </div>
+                    </div>
+                    {/* Center: Status filter */}
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Status</div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {PROJ_STATUSES.map(s => (
+                          <button key={s} onClick={() => setProjetosFilterStatus(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
+                            style={{ padding: '6px 12px', borderRadius: 8, border: projetosFilterStatus.includes(s) ? '2px solid ' + PROJ_STATUS_COLORS[s] : '1px solid #e2e8f0', background: projetosFilterStatus.includes(s) ? PROJ_STATUS_COLORS[s] + '15' : '#fff', color: projetosFilterStatus.includes(s) ? PROJ_STATUS_COLORS[s] : '#64748b', fontWeight: 600, fontSize: 11, cursor: 'pointer', textTransform: 'capitalize' }}>{s}</button>
                         ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {!projetosLoading && projetosView === 'kanban' && projetosBrandView && (
-                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  {Object.entries(brandGroups).sort((a, b) => a[0].localeCompare(b[0])).map(([marca, items]) => (
-                    <div key={marca} style={{ flex: '0 0 280px', background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', maxHeight: 'calc(100vh - 320px)', display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ padding: '10px 14px', borderBottom: '2px solid #EA1D2C', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 700, fontSize: 13 }}>{marca}</span>
-                        <span style={{ background: '#EA1D2C20', color: '#EA1D2C', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>{items.length}</span>
-                      </div>
-                      <div style={{ padding: 6, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {items.map(p => (
-                          <div key={p.id} onClick={() => setProjetoModal(p)} style={{ background: '#f8fafc', borderRadius: 8, padding: '6px 10px', border: '1px solid #f1f5f9', cursor: 'pointer', fontSize: 12 }}
-                            onMouseEnter={e => e.currentTarget.style.borderColor = '#EA1D2C'} onMouseLeave={e => e.currentTarget.style.borderColor = '#f1f5f9'}>
-                            <div style={{ fontWeight: 600, fontSize: 12, color: '#1e293b' }}>{p.loja}</div>
-                            <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
-                              <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 6, background: (PROJ_STATUS_COLORS[p.status] || '#94a3b8') + '15', color: PROJ_STATUS_COLORS[p.status] || '#94a3b8', fontWeight: 600, textTransform: 'capitalize' }}>{p.status}</span>
-                              {p.etapa_projeto && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 6, background: '#6366f115', color: '#6366f1', fontWeight: 600 }}>{p.etapa_projeto}</span>}
-                              {p.data_golive && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b' }}>{new Date(p.data_golive).toLocaleDateString('pt-BR')}</span>}
-                            </div>
-                          </div>
+                    {/* Center: Etapa filter */}
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Etapa</div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {PROJ_ETAPAS.map(e => (
+                          <button key={e} onClick={() => setProjetosFilterEtapa(prev => prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e])}
+                            style={{ padding: '6px 12px', borderRadius: 8, border: projetosFilterEtapa.includes(e) ? '2px solid #6366f1' : '1px solid #e2e8f0', background: projetosFilterEtapa.includes(e) ? '#6366f115' : '#fff', color: projetosFilterEtapa.includes(e) ? '#6366f1' : '#64748b', fontWeight: 600, fontSize: 11, cursor: 'pointer' }}>{e}</button>
                         ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {/* TABLE VIEW */}
-              {!projetosLoading && projetosView === 'tabela' && (
-                <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
-                      <thead>
-                        <tr style={{ background: '#f8fafc' }}>
-                          {['Marca','Loja','Etapa','Class. Forecast','Status','Mês Go-live','Data Go-live','Motivo Pendências','Executivo','Resp. Projetos',''].map(h => (
-                            <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {fp.map(p => (
-                          <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => setProjetoModal(p)}
-                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, fontSize: 12 }}>{p.marca}</td>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 12 }}>{p.loja}</td>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
-                              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: '#6366f115', color: '#6366f1', fontWeight: 600 }}>{p.etapa_projeto || '—'}</span>
-                            </td>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.classificacao_forecast || '—'}</td>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
-                              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: (PROJ_STATUS_COLORS[p.status] || '#94a3b8') + '15', color: PROJ_STATUS_COLORS[p.status] || '#94a3b8', fontWeight: 600, textTransform: 'capitalize' }}>{p.status || '—'}</span>
-                            </td>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.mes_golive || '—'}</td>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.data_golive ? new Date(p.data_golive).toLocaleDateString('pt-BR') : '—'}</td>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: p.motivo_pendencias ? '#92400e' : '#94a3b8', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.motivo_pendencias || ''}>{p.motivo_pendencias || '—'}</td>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.executivo_responsavel || '—'}</td>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.responsavel_projetos || '—'}</td>
-                            <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
-                              {canEdit && (profile?.role === 'admin' || profile?.role === 'gestor') && <button onClick={e => { e.stopPropagation(); deleteProjeto(p.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d1d5db' }}><X size={14} /></button>}
-                            </td>
-                          </tr>
+                    {/* Right: Mês Go-live filter */}
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Mês Go-live</div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 400 }}>
+                        {allMeses.map(m => (
+                          <button key={m} onClick={() => setProjetosFilterMes(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])}
+                            style={{ padding: '4px 10px', borderRadius: 8, border: projetosFilterMes.includes(m) ? '2px solid #8b5cf6' : '1px solid #e2e8f0', background: projetosFilterMes.includes(m) ? '#8b5cf615' : '#fff', color: projetosFilterMes.includes(m) ? '#8b5cf6' : '#64748b', fontWeight: 600, fontSize: 10, cursor: 'pointer' }}>{m}</button>
                         ))}
-                      </tbody>
-                    </table>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {!projetosLoading && fp.length === 0 && (
-                <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 14 }}>
-                  Nenhum projeto encontrado. Rode o SQL de seed para importar os dados do CSV.
-                </div>
+                  {projetosLoading && <div style={{ textAlign: 'center', padding: 40 }}><p style={{ color: '#94a3b8' }}>Carregando projetos...</p></div>}
+
+                  {/* KANBAN - POR LOJA */}
+                  {!projetosLoading && projetosView === 'kanban' && !projetosBrandView && (
+                    <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 20, alignItems: 'flex-start' }}>
+                      {Object.entries(kanbanGroups).map(([group, items]) => (
+                        <div key={group} style={{ flex: '0 0 260px', background: '#f8fafc', borderRadius: 14, border: '1px solid #e2e8f0', maxHeight: 'calc(100vh - 360px)', display: 'flex', flexDirection: 'column' }}>
+                          <div style={{ padding: '10px 14px', borderBottom: '2px solid ' + (PROJ_STATUS_COLORS[group] || '#6366f1'), display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>{group}</span>
+                            <span style={{ background: (PROJ_STATUS_COLORS[group] || '#6366f1') + '20', color: PROJ_STATUS_COLORS[group] || '#6366f1', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>{items.length}</span>
+                          </div>
+                          <div style={{ padding: 6, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {items.map(p => (
+                              <div key={p.id} onClick={() => setProjetoModal(p)} style={{ background: '#fff', borderRadius: 10, padding: '8px 10px', border: '1px solid #e2e8f0', cursor: 'pointer', fontSize: 12 }}
+                                onMouseEnter={e => e.currentTarget.style.borderColor = '#EA1D2C'} onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}>
+                                <div style={{ fontWeight: 700, fontSize: 12, color: '#1e293b', marginBottom: 2 }}>{p.loja}</div>
+                                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{p.marca}</div>
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                  {p.etapa_projeto && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 6, background: '#6366f115', color: '#6366f1', fontWeight: 600 }}>{p.etapa_projeto}</span>}
+                                  {p.data_golive && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 6, background: '#f1f5f9', color: '#64748b', fontWeight: 600 }}>{new Date(p.data_golive).toLocaleDateString('pt-BR')}</span>}
+                                  {p.motivo_pendencias && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 6, background: '#fef3c7', color: '#92400e', fontWeight: 600 }} title={p.motivo_pendencias}>Pend.</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* KANBAN - POR MARCA (consolidado) */}
+                  {!projetosLoading && projetosView === 'kanban' && projetosBrandView && (
+                    <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 20, alignItems: 'flex-start' }}>
+                      {Object.entries(kanbanGroups).map(([group, items]) => {
+                        const byMarca = {};
+                        items.forEach(p => {
+                          if (!byMarca[p.marca]) byMarca[p.marca] = [];
+                          byMarca[p.marca].push(p);
+                        });
+                        return (
+                          <div key={group} style={{ flex: '0 0 260px', background: '#f8fafc', borderRadius: 14, border: '1px solid #e2e8f0', maxHeight: 'calc(100vh - 360px)', display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ padding: '10px 14px', borderBottom: '2px solid ' + (PROJ_STATUS_COLORS[group] || '#6366f1'), display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize' }}>{group}</span>
+                              <span style={{ background: (PROJ_STATUS_COLORS[group] || '#6366f1') + '20', color: PROJ_STATUS_COLORS[group] || '#6366f1', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>{items.length}</span>
+                            </div>
+                            <div style={{ padding: 6, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {Object.entries(byMarca).sort((a, b) => a[0].localeCompare(b[0])).map(([marca, lojas]) => {
+                                const statusCount = {};
+                                lojas.forEach(l => { statusCount[l.status] = (statusCount[l.status] || 0) + 1; });
+                                return (
+                                  <div key={marca} style={{ background: '#fff', borderRadius: 10, padding: '8px 10px', border: '1px solid #e2e8f0', fontSize: 12 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 12, color: '#1e293b', marginBottom: 3 }}>{marca}</div>
+                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 2 }}>
+                                      <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{lojas.length} {lojas.length === 1 ? 'loja' : 'lojas'}</span>
+                                      {Object.entries(statusCount).map(([st, ct]) => (
+                                        <span key={st} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 6, background: (PROJ_STATUS_COLORS[st] || '#94a3b8') + '15', color: PROJ_STATUS_COLORS[st] || '#94a3b8', fontWeight: 600, textTransform: 'capitalize' }}>{st}: {ct}</span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* TABLE VIEW with sorting */}
+                  {!projetosLoading && projetosView === 'tabela' && (
+                    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+                          <thead>
+                            <tr style={{ background: '#f8fafc' }}>
+                              {[
+                                { label: 'Marca', col: 'marca' }, { label: 'Loja', col: 'loja' }, { label: 'Etapa', col: 'etapa_projeto' },
+                                { label: 'Class. Forecast', col: 'classificacao_forecast' }, { label: 'Status', col: 'status' },
+                                { label: 'Mês Go-live', col: 'mes_golive' }, { label: 'Data Go-live', col: 'data_golive' },
+                                { label: 'Motivo Pend.', col: 'motivo_pendencias' }, { label: 'Executivo', col: 'executivo_responsavel' },
+                                { label: 'Resp. Projetos', col: 'responsavel_projetos' }, { label: '', col: null }
+                              ].map(h => (
+                                <th key={h.label || '_del'} onClick={() => h.col && toggleSort(h.col)} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: projetosSort.col === h.col ? '#EA1D2C' : '#64748b', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap', cursor: h.col ? 'pointer' : 'default', userSelect: 'none' }}>{h.label}{sortIcon(h.col)}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedFp.map(p => (
+                              <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => setProjetoModal(p)}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, fontSize: 12 }}>{p.marca}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 12 }}>{p.loja}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
+                                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: '#6366f115', color: '#6366f1', fontWeight: 600 }}>{p.etapa_projeto || '—'}</span>
+                                </td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.classificacao_forecast || '—'}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
+                                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: (PROJ_STATUS_COLORS[p.status] || '#94a3b8') + '15', color: PROJ_STATUS_COLORS[p.status] || '#94a3b8', fontWeight: 600, textTransform: 'capitalize' }}>{p.status || '—'}</span>
+                                </td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.mes_golive || '—'}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.data_golive ? new Date(p.data_golive).toLocaleDateString('pt-BR') : '—'}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: p.motivo_pendencias ? '#92400e' : '#94a3b8', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.motivo_pendencias || ''}>{p.motivo_pendencias || '—'}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.executivo_responsavel || '—'}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.responsavel_projetos || '—'}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
+                                  {canEdit && (profile?.role === 'admin' || profile?.role === 'gestor') && <button onClick={e => { e.stopPropagation(); deleteProjeto(p.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d1d5db' }}><X size={14} /></button>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {!projetosLoading && fp.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 14 }}>
+                      Nenhum projeto encontrado. Rode o SQL de seed para importar os dados do CSV.
+                    </div>
+                  )}
+                </>
               )}
             </div>
           );
         })()}
+
+        {/* MODAL NOVA LOJA */}
+        {novaLojaModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNovaLojaModal(false)}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: 420, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
+              <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 800, color: '#1e293b' }}>Nova Loja</h3>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Marca</label>
+                <select value={novaLojaMarca} onChange={e => setNovaLojaMarca(e.target.value)} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none' }}>
+                  <option value="">Selecione...</option>
+                  {[...new Set(projetos.map(p => p.marca).filter(Boolean))].sort().map(m => <option key={m} value={m}>{m}</option>)}
+                  <option value="__nova__">+ Nova marca</option>
+                </select>
+              </div>
+              {novaLojaMarca === '__nova__' && (
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Nome da nova marca</label>
+                  <input value={novaLojaMarcaNova} onChange={e => setNovaLojaMarcaNova(e.target.value)} placeholder="Ex: Burger King" style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+              )}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Nome da Loja</label>
+                <input value={novaLojaNome} onChange={e => setNovaLojaNome(e.target.value)} placeholder="Ex: Burger King - Shopping Morumbi" style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button onClick={() => setNovaLojaModal(false)} style={{ padding: '10px 20px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={addNovaLoja} disabled={(!novaLojaMarca || (novaLojaMarca === '__nova__' && !novaLojaMarcaNova.trim())) || !novaLojaNome.trim()} style={{ padding: '10px 20px', border: 'none', borderRadius: 8, background: 'linear-gradient(135deg, #EA1D2C, #DA5D69)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: ((!novaLojaMarca || (novaLojaMarca === '__nova__' && !novaLojaMarcaNova.trim())) || !novaLojaNome.trim()) ? 0.5 : 1 }}>Criar</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* MODAL EDITAR PROJETO */}
         {projetoModal && (
