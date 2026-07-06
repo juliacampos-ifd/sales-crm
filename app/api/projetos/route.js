@@ -36,7 +36,7 @@ export async function POST(request) {
   if (!marca || !loja) return NextResponse.json({ error: 'marca e loja são obrigatórios' }, { status: 400 });
 
   const insert = { marca, loja, brand_id: brand_id || null };
-  const ALLOWED = ['etapa_projeto', 'classificacao_forecast', 'status', 'mes_golive', 'semana_mes',
+  const ALLOWED = ['etapa_projeto', 'classificacao_forecast', 'status', 'mes_golive', 'mes_golive_ajustado', 'semana_mes',
     'data_migracao', 'data_golive', 'motivo_pendencias', 'detalhamento_pendencias', 'cnpj', 'uf',
     'modelo_operacao', 'possui_totem', 'executivo_responsavel', 'responsavel_projetos',
     'qtd_lojas_contrato', 'mensalidade', 'valor_setup', 'valor_implantacao',
