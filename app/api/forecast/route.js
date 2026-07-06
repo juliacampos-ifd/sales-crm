@@ -11,7 +11,8 @@ export async function GET(request) {
   const supabase = createServerClient();
   const { data: metas } = await supabase.from('forecast_metas').select('*');
   const { data: entries } = await supabase.from('forecast_entries').select('*').order('created_at', { ascending: true });
-  const res = NextResponse.json({ metas: metas || [], entries: entries || [] });
+  const { data: highlights } = await supabase.from('forecast_highlights').select('*');
+  const res = NextResponse.json({ metas: metas || [], entries: entries || [], highlights: highlights || [] });
   res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, s-maxage=0');
   res.headers.set('CDN-Cache-Control', 'no-store');
   res.headers.set('Vercel-CDN-Cache-Control', 'no-store');
@@ -34,6 +35,15 @@ export async function POST(request) {
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data);
+  }
+
+  if (body.action === 'update_highlight') {
+    const { section, content } = body;
+    const { error } = await supabase
+      .from('forecast_highlights')
+      .upsert({ section, content, updated_at: new Date().toISOString() }, { onConflict: 'section' });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
   }
 
   if (body.action === 'add_entry') {
