@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PRODUCTS, CLASSIFICACAO_COLORS, MONTH_NAMES, DUPLAS, getMonthBusinessDays, getMonthBusinessDaysMTD } from '@/lib/constants';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Line, Legend } from 'recharts';
 import { Users, TrendingUp, Target, Search, Eye, ArrowLeft, Filter, Calendar, History, LayoutGrid, LogOut, Shield, UserCheck, AlertCircle, Check, Building2, Upload, Plus, Save, Sparkles, Award, FlaskConical, X, Package, ClipboardList } from 'lucide-react';
 
 // Helper que adiciona Authorization header em todas as chamadas de API
@@ -1135,8 +1135,8 @@ export default function CRMPage() {
           {!isRestricted && <a href="/rv" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}>
             <Award size={16} /> RV
           </a>}
-          {(!isRestricted || profile?.team === 'projetos') && <NavBtn id="projetos" icon={Package} label="Projetos" />}
           {(!isRestricted || profile?.team === 'comer_fora' || profile?.team === 'projetos') && <NavBtn id="forecast" icon={Calendar} label="Forecast" />}
+          {(!isRestricted || profile?.team === 'projetos') && <NavBtn id="projetos" icon={Package} label="Projetos" />}
           {profile?.team !== 'projetos' && <NavBtn id="dashboard" icon={TrendingUp} label="Dashboard" />}
           {!isRestricted && <NavBtn id="scorecard" icon={Target} label="Scorecard" />}
           {profile?.team !== 'projetos' && <NavBtn id="updates" icon={History} label="Atualizações" />}
@@ -1494,36 +1494,28 @@ export default function CRMPage() {
                     {/* Gráfico Mensal */}
                     <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: 20, marginBottom: 18 }}>
                       <h4 style={{ margin: '0 0 16px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Distribuição Mensal — go-live</h4>
-                      <div style={{ overflowX: 'auto' }}>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', minWidth: mesesGraf.length * 56, height: 220, padding: '0 4px' }}>
-                          {mesesGraf.map(m => {
-                            const ml = m.toLowerCase();
-                            const d = porMes[ml] || { ativ: 0, agend: 0, pend: 0 };
-                            const meta = METAS_MENSAL[ml] || 0;
-                            const total = d.ativ + d.agend;
-                            const maxVal = Math.max(...mesesGraf.map(x => { const dd = porMes[x.toLowerCase()] || {}; return (dd.ativ||0)+(dd.agend||0); }), ...Object.values(METAS_MENSAL), 1);
-                            const scale = 180 / maxVal;
-                            return (
-                              <div key={m} style={{ flex: 1, minWidth: 44, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: '#1e293b' }}>{total || ''}</div>
-                                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                  <div style={{ width: '60%', display: 'flex', flexDirection: 'column-reverse' }}>
-                                    {d.ativ > 0 && <div style={{ height: d.ativ * scale, background: '#22c55e', borderRadius: '4px 4px 0 0', minHeight: 2 }} title={`Ativadas: ${d.ativ}`} />}
-                                    {d.agend > 0 && <div style={{ height: d.agend * scale, background: '#3b82f6', minHeight: 2 }} title={`Agendadas: ${d.agend}`} />}
-                                  </div>
-                                  {meta > 0 && <div style={{ width: '80%', height: 2, background: '#94a3b8', marginTop: -(meta * scale), position: 'relative' }} title={`Meta: ${meta}`}><span style={{ position: 'absolute', right: -4, top: -8, fontSize: 8, color: '#94a3b8' }}>{meta}</span></div>}
-                                </div>
-                                <div style={{ fontSize: 9, color: '#64748b', fontWeight: 600, textAlign: 'center', marginTop: 4 }}>{MES_LABEL[ml] || m}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 12, fontSize: 11 }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: '#22c55e' }} /> Ativadas</span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: '#3b82f6' }} /> Agendadas</span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 2, background: '#94a3b8' }} /> Meta</span>
-                        </div>
-                      </div>
+                      {(() => {
+                        const chartData = mesesGraf.map(m => {
+                          const ml = m.toLowerCase();
+                          const d = porMes[ml] || { ativ: 0, agend: 0, pend: 0 };
+                          return { name: MES_LABEL[ml] || m, Ativadas: d.ativ, Agendadas: d.agend, Pendentes: d.pend, Meta: METAS_MENSAL[ml] || null };
+                        });
+                        return (
+                          <ResponsiveContainer width="100%" height={280}>
+                            <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+                              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                              <Legend iconSize={10} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                              <Bar dataKey="Ativadas" stackId="impl" fill="#22c55e" radius={[0, 0, 0, 0]} barSize={28} />
+                              <Bar dataKey="Agendadas" stackId="impl" fill="#3b82f6" radius={[0, 0, 0, 0]} barSize={28} />
+                              <Bar dataKey="Pendentes" stackId="impl" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={28} />
+                              <Line type="monotone" dataKey="Meta" stroke="#94a3b8" strokeWidth={2} dot={{ r: 3, fill: '#94a3b8' }} strokeDasharray="6 3" connectNulls={false} />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        );
+                      })()}
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 18 }}>
