@@ -60,7 +60,7 @@ export async function PATCH(request) {
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
-  const ALLOWED = ['marca', 'loja', 'etapa_projeto', 'classificacao_forecast', 'status', 'mes_golive',
+  const ALLOWED = ['marca', 'loja', 'etapa_projeto', 'classificacao_forecast', 'status', 'mes_golive', 'mes_golive_ajustado',
     'semana_mes', 'data_migracao', 'data_golive', 'motivo_pendencias', 'detalhamento_pendencias',
     'cnpj', 'uf', 'modelo_operacao', 'possui_totem', 'executivo_responsavel', 'responsavel_projetos',
     'qtd_lojas_contrato', 'mensalidade', 'valor_setup', 'valor_implantacao',
