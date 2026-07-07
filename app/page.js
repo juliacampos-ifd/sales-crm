@@ -159,6 +159,8 @@ export default function CRMPage() {
   const [projetosFilterEtapa, setProjetosFilterEtapa] = useState([]);
   const [projetosFilterMes, setProjetosFilterMes] = useState([]);
   const [projetosFilterFY, setProjetosFilterFY] = useState([]);
+  const [projetosFilterResp, setProjetosFilterResp] = useState([]);
+  const [projetoModalDirty, setProjetoModalDirty] = useState({});
   const [projetosSort, setProjetosSort] = useState({ col: null, dir: 'asc' });
   const [projetosTab, setProjetosTab] = useState('projetos'); // 'projetos' | 'dashboard'
   const [novaLojaModal, setNovaLojaModal] = useState(false);
@@ -1375,6 +1377,7 @@ export default function CRMPage() {
             return (MO[pa[0]] || 0) - (MO[pb[0]] || 0);
           });
           const allFYs = [...new Set(projetosValidos.map(p => getFY(getMes(p))).filter(Boolean))].sort();
+          const allResps = [...new Set(projetosValidos.map(p => (p.responsavel_projetos || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
           let fp = projetosValidos;
           if (projetosSearch) {
@@ -1385,6 +1388,7 @@ export default function CRMPage() {
           if (projetosFilterEtapa.length > 0) fp = fp.filter(p => projetosFilterEtapa.includes(p.etapa_projeto));
           if (projetosFilterMes.length > 0) fp = fp.filter(p => projetosFilterMes.includes(getMes(p)));
           if (projetosFilterFY.length > 0) fp = fp.filter(p => projetosFilterFY.includes(getFY(getMes(p))));
+          if (projetosFilterResp.length > 0) fp = fp.filter(p => projetosFilterResp.includes((p.responsavel_projetos || '').trim()));
 
           // Sorting for table view
           const sortedFp = [...fp];
@@ -1424,7 +1428,7 @@ export default function CRMPage() {
           const agendadas = fp.filter(p => (p.status||'').trim().toLowerCase() === 'agendada').length;
           const pendentes = fp.filter(p => (p.status||'').trim().toLowerCase() === 'pendente').length;
           const churn = fp.filter(p => (p.status||'').trim().toLowerCase() === 'churn').length;
-          const implantacoes = ativadas + agendadas;
+          const implantacoes = ativadas + agendadas + pendentes;
 
           return (
             <div>
@@ -1434,11 +1438,200 @@ export default function CRMPage() {
                 <button onClick={() => setProjetosTab('dashboard')} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: projetosTab === 'dashboard' ? '#EA1D2C' : 'transparent', color: projetosTab === 'dashboard' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Dashboard</button>
               </div>
 
-              {projetosTab === 'dashboard' && (
-                <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden', height: 'calc(100vh - 180px)' }}>
-                  <iframe src="/implantacao" style={{ width: '100%', height: '100%', border: 'none' }} title="Dashboard Implantação" />
-                </div>
-              )}
+              {projetosTab === 'dashboard' && (() => {
+                // Dashboard interno usando dados da tabela projetos
+                const MES_LABEL = { 'outubro-25':'Out/25','novembro-25':'Nov/25','dezembro-25':'Dez/25','janeiro-26':'Jan/26','fevereiro-26':'Fev/26','março-26':'Mar/26','abril-26':'Abr/26','maio-26':'Mai/26','junho-26':'Jun/26','julho-26':'Jul/26','agosto-26':'Ago/26','setembro-26':'Set/26','outubro-26':'Out/26','novembro-26':'Nov/26','dezembro-26':'Dez/26','janeiro-27':'Jan/27','fevereiro-27':'Fev/27','março-27':'Mar/27' };
+                const METAS_MENSAL = { 'abril-26':60,'maio-26':90,'junho-26':131,'julho-26':291,'agosto-26':298,'setembro-26':384,'outubro-26':237,'novembro-26':273,'dezembro-26':353,'janeiro-27':327,'fevereiro-27':216,'março-27':170 };
+
+                // Contagem por mês
+                const porMes = {};
+                fp.forEach(p => {
+                  const m = getMes(p).toLowerCase();
+                  if (!m) return;
+                  if (!porMes[m]) porMes[m] = { ativ: 0, agend: 0, pend: 0 };
+                  const s = (p.status||'').trim().toLowerCase();
+                  if (s === 'ativada') porMes[m].ativ++;
+                  else if (s === 'agendada') porMes[m].agend++;
+                  else if (s === 'pendente') porMes[m].pend++;
+                });
+                const mesesGraf = allMeses.filter(m => porMes[m.toLowerCase()] || FY27_MESES.includes(m.toLowerCase()));
+
+                // Por etapa
+                const porEtapa = {};
+                fp.forEach(p => { const e = (p.etapa_projeto || 'Não informado').trim(); porEtapa[e] = (porEtapa[e] || 0) + 1; });
+
+                // Por classificação
+                const porClassif = {};
+                fp.forEach(p => {
+                  const cl = (p.classificacao_forecast || 'Não informado').trim();
+                  const s = (p.status||'').trim().toLowerCase();
+                  if (!porClassif[cl]) porClassif[cl] = { a: 0, g: 0, p: 0 };
+                  if (s === 'ativada') porClassif[cl].a++;
+                  else if (s === 'agendada') porClassif[cl].g++;
+                  else if (s === 'pendente') porClassif[cl].p++;
+                });
+
+                // Top 10 marcas
+                const porMarca = {};
+                fp.forEach(p => {
+                  const m = (p.marca||'').trim();
+                  if (!m) return;
+                  if (!porMarca[m]) porMarca[m] = { ativ: 0, agend: 0, total: 0 };
+                  porMarca[m].total++;
+                  const s = (p.status||'').trim().toLowerCase();
+                  if (s === 'ativada') porMarca[m].ativ++;
+                  if (s === 'agendada') porMarca[m].agend++;
+                });
+                const top10 = Object.entries(porMarca).sort((a, b) => b[1].total - a[1].total).slice(0, 10);
+
+                // Pendências
+                const pendItems = fp.filter(p => (p.status||'').trim().toLowerCase() === 'pendente' && p.motivo_pendencias);
+
+                const barH = 18;
+
+                return (
+                  <div>
+                    {/* Gráfico Mensal */}
+                    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: 20, marginBottom: 18 }}>
+                      <h4 style={{ margin: '0 0 16px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Distribuição Mensal — go-live</h4>
+                      <div style={{ overflowX: 'auto' }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', minWidth: mesesGraf.length * 56, height: 220, padding: '0 4px' }}>
+                          {mesesGraf.map(m => {
+                            const ml = m.toLowerCase();
+                            const d = porMes[ml] || { ativ: 0, agend: 0, pend: 0 };
+                            const meta = METAS_MENSAL[ml] || 0;
+                            const total = d.ativ + d.agend;
+                            const maxVal = Math.max(...mesesGraf.map(x => { const dd = porMes[x.toLowerCase()] || {}; return (dd.ativ||0)+(dd.agend||0); }), ...Object.values(METAS_MENSAL), 1);
+                            const scale = 180 / maxVal;
+                            return (
+                              <div key={m} style={{ flex: 1, minWidth: 44, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: '#1e293b' }}>{total || ''}</div>
+                                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                  <div style={{ width: '60%', display: 'flex', flexDirection: 'column-reverse' }}>
+                                    {d.ativ > 0 && <div style={{ height: d.ativ * scale, background: '#22c55e', borderRadius: '4px 4px 0 0', minHeight: 2 }} title={`Ativadas: ${d.ativ}`} />}
+                                    {d.agend > 0 && <div style={{ height: d.agend * scale, background: '#3b82f6', minHeight: 2 }} title={`Agendadas: ${d.agend}`} />}
+                                  </div>
+                                  {meta > 0 && <div style={{ width: '80%', height: 2, background: '#94a3b8', marginTop: -(meta * scale), position: 'relative' }} title={`Meta: ${meta}`}><span style={{ position: 'absolute', right: -4, top: -8, fontSize: 8, color: '#94a3b8' }}>{meta}</span></div>}
+                                </div>
+                                <div style={{ fontSize: 9, color: '#64748b', fontWeight: 600, textAlign: 'center', marginTop: 4 }}>{MES_LABEL[ml] || m}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 12, fontSize: 11 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: '#22c55e' }} /> Ativadas</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: '#3b82f6' }} /> Agendadas</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 2, background: '#94a3b8' }} /> Meta</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 18 }}>
+                      {/* Por Etapa */}
+                      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: 20 }}>
+                        <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Por Etapa do Projeto</h4>
+                        {Object.entries(porEtapa).sort((a, b) => b[1] - a[1]).map(([etapa, count]) => {
+                          const pct = Math.round(count / fp.length * 100);
+                          const colors = { Rollout: '#22c55e', Piloto: '#3b82f6', 'Orgânico': '#f59e0b', Projeto: '#8b5cf6' };
+                          return (
+                            <div key={etapa} style={{ marginBottom: 8 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>{etapa}</span>
+                                <span style={{ color: '#64748b' }}>{count} ({pct}%)</span>
+                              </div>
+                              <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4 }}>
+                                <div style={{ height: 8, borderRadius: 4, background: colors[etapa] || '#94a3b8', width: pct + '%', transition: 'width .3s' }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Top 10 Marcas */}
+                      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: 20 }}>
+                        <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Top 10 Marcas</h4>
+                        {top10.map(([marca, d]) => {
+                          const maxT = top10[0]?.[1]?.total || 1;
+                          return (
+                            <div key={marca} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: '#1e293b', minWidth: 120, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{marca}</span>
+                              <div style={{ flex: 1, display: 'flex', height: barH, borderRadius: 4, overflow: 'hidden' }}>
+                                {d.ativ > 0 && <div style={{ width: (d.ativ / maxT * 100) + '%', background: '#22c55e', height: barH }} title={`Ativadas: ${d.ativ}`} />}
+                                {d.agend > 0 && <div style={{ width: (d.agend / maxT * 100) + '%', background: '#3b82f6', height: barH }} title={`Agendadas: ${d.agend}`} />}
+                              </div>
+                              <span style={{ fontSize: 11, color: '#64748b', minWidth: 24, textAlign: 'right' }}>{d.total}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Acompanhamento por Classificação */}
+                    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: 20, marginBottom: 18 }}>
+                      <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Acompanhamento por Classificação</h4>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: 'left', padding: '8px 12px', background: '#f8fafc', color: '#334155', fontWeight: 700, fontSize: 11, borderBottom: '2px solid #e2e8f0' }}>Classificação</th>
+                            <th style={{ padding: '8px 12px', background: '#f8fafc', color: '#334155', fontWeight: 700, fontSize: 11, borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>Total</th>
+                            <th style={{ padding: '8px 12px', background: '#f0fdf4', color: '#15803d', fontWeight: 700, fontSize: 11, borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>Ativada</th>
+                            <th style={{ padding: '8px 12px', background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: 11, borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>Agendada</th>
+                            <th style={{ padding: '8px 12px', background: '#fff7ed', color: '#c2410c', fontWeight: 700, fontSize: 11, borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>Pendente</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(porClassif).sort((a, b) => a[0].localeCompare(b[0])).map(([cl, d]) => (
+                            <tr key={cl}>
+                              <td style={{ padding: '8px 12px', fontWeight: 600, borderBottom: '1px solid #f1f5f9' }}>{cl}</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, borderBottom: '1px solid #f1f5f9' }}>{d.a + d.g + d.p}</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #f1f5f9', color: d.a ? '#1e293b' : '#cbd5e1' }}>{d.a}</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #f1f5f9', color: d.g ? '#1e293b' : '#cbd5e1' }}>{d.g}</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '1px solid #f1f5f9', color: d.p ? '#1e293b' : '#cbd5e1' }}>{d.p}</td>
+                            </tr>
+                          ))}
+                          <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                            <td style={{ padding: '8px 12px', fontWeight: 700 }}>Total geral</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{Object.values(porClassif).reduce((s, d) => s + d.a + d.g + d.p, 0)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{Object.values(porClassif).reduce((s, d) => s + d.a, 0)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{Object.values(porClassif).reduce((s, d) => s + d.g, 0)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{Object.values(porClassif).reduce((s, d) => s + d.p, 0)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pendências */}
+                    {pendItems.length > 0 && (
+                      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: 20 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                          <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Marcas com Pendências</h4>
+                          <span style={{ background: '#fef2f2', color: '#EA1D2C', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{pendItems.length}</span>
+                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ background: '#f8fafc' }}>
+                              <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Marca</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Motivo</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Detalhamento</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Executivo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pendItems.map(p => (
+                              <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => { setProjetoModal(p); setProjetoModalDirty({}); }}>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>{p.marca}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', color: '#64748b' }}>{p.motivo_pendencias}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', color: '#94a3b8', fontSize: 11, maxWidth: 300 }}>{p.detalhamento_pendencias || '—'}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', color: '#64748b' }}>{p.executivo_responsavel || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {projetosTab === 'projetos' && (
                 <>
@@ -1458,7 +1651,7 @@ export default function CRMPage() {
                   {/* KPIs — mesmos do dashboard */}
                   <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
                     {[
-                      { label: 'Implantações (ativ. + agend.)', value: implantacoes, color: '#1e293b' },
+                      { label: 'Implantações', value: implantacoes, color: '#1e293b' },
                       { label: 'Ativadas', value: ativadas, color: '#22c55e' },
                       { label: 'Agendadas', value: agendadas, color: '#3b82f6' },
                       { label: 'Pendentes', value: pendentes, color: '#f59e0b' },
@@ -1481,6 +1674,7 @@ export default function CRMPage() {
                     <MultiFilter label="Etapa" selected={projetosFilterEtapa} onChange={setProjetosFilterEtapa} options={PROJ_ETAPAS} filterId="proj_etapa" />
                     <MultiFilter label="Mês Go-live" selected={projetosFilterMes} onChange={setProjetosFilterMes} options={allMeses} filterId="proj_mes" />
                     <MultiFilter label="Ano Fiscal" selected={projetosFilterFY} onChange={setProjetosFilterFY} options={allFYs} filterId="proj_fy" />
+                    <MultiFilter label="Resp. Projetos" selected={projetosFilterResp} onChange={setProjetosFilterResp} options={allResps} filterId="proj_resp" />
                     {projetosView === 'kanban' && (
                       <select value={projetosGroupBy} onChange={e => setProjetosGroupBy(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 12, outline: 'none', color: '#64748b', background: '#fff' }}>
                         <option value="status">Agrupar: Status</option>
@@ -1510,7 +1704,7 @@ export default function CRMPage() {
                           </div>
                           <div style={{ padding: 6, flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
                             {items.map(p => (
-                              <div key={p.id} onClick={() => setProjetoModal(p)} style={{ background: '#fff', borderRadius: 10, padding: '8px 10px', border: '1px solid #e2e8f0', cursor: 'pointer', fontSize: 12 }}
+                              <div key={p.id} onClick={() => { setProjetoModal(p); setProjetoModalDirty({}); }} style={{ background: '#fff', borderRadius: 10, padding: '8px 10px', border: '1px solid #e2e8f0', cursor: 'pointer', fontSize: 12 }}
                                 onMouseEnter={e => e.currentTarget.style.borderColor = '#EA1D2C'} onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}>
                                 <div style={{ fontWeight: 700, fontSize: 12, color: '#1e293b', marginBottom: 2 }}>{p.loja}</div>
                                 <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{p.marca}</div>
@@ -1569,14 +1763,15 @@ export default function CRMPage() {
                   {!projetosLoading && projetosView === 'tabela' && (
                     <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                       <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1400 }}>
                           <thead>
                             <tr style={{ background: '#f8fafc' }}>
                               {[
                                 { label: 'Marca', col: 'marca' }, { label: 'Loja', col: 'loja' }, { label: 'Etapa', col: 'etapa_projeto' },
                                 { label: 'Class. Forecast', col: 'classificacao_forecast' }, { label: 'Status', col: 'status' },
                                 { label: 'Mês Go-live', col: 'mes_golive' }, { label: 'Data Go-live', col: 'data_golive' },
-                                { label: 'Motivo Pend.', col: 'motivo_pendencias' }, { label: 'Executivo', col: 'executivo_responsavel' },
+                                { label: 'Motivo Pend.', col: 'motivo_pendencias' }, { label: 'Detalhamento', col: 'detalhamento_pendencias' },
+                                { label: 'Executivo', col: 'executivo_responsavel' },
                                 { label: 'Resp. Projetos', col: 'responsavel_projetos' }, { label: '', col: null }
                               ].map(h => (
                                 <th key={h.label || '_del'} onClick={() => h.col && toggleSort(h.col)} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: projetosSort.col === h.col ? '#EA1D2C' : '#64748b', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap', cursor: h.col ? 'pointer' : 'default', userSelect: 'none' }}>{h.label}{sortIcon(h.col)}</th>
@@ -1585,7 +1780,7 @@ export default function CRMPage() {
                           </thead>
                           <tbody>
                             {sortedFp.map(p => (
-                              <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => setProjetoModal(p)}
+                              <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => { setProjetoModal(p); setProjetoModalDirty({}); }}
                                 onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: 600, fontSize: 12 }}>{p.marca}</td>
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 12 }}>{p.loja}</td>
@@ -1599,6 +1794,7 @@ export default function CRMPage() {
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{getMes(p) || '—'}</td>
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.data_golive ? new Date(p.data_golive).toLocaleDateString('pt-BR') : '—'}</td>
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: p.motivo_pendencias ? '#92400e' : '#94a3b8', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.motivo_pendencias || ''}>{p.motivo_pendencias || '—'}</td>
+                                <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.detalhamento_pendencias || ''}>{p.detalhamento_pendencias || '—'}</td>
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.executivo_responsavel || '—'}</td>
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontSize: 11, color: '#64748b' }}>{p.responsavel_projetos || '—'}</td>
                                 <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
@@ -1656,76 +1852,76 @@ export default function CRMPage() {
 
         {/* MODAL EDITAR PROJETO */}
         {projetoModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setProjetoModal(null)}>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => { setProjetoModal(null); setProjetoModalDirty({}); }}>
             <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: 600, maxHeight: '85vh', overflowY: 'auto', padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#1e293b' }}>{projetoModal.loja}</h3>
-                <button onClick={() => setProjetoModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><X size={18} color="#94a3b8" /></button>
+                <button onClick={() => { setProjetoModal(null); setProjetoModalDirty({}); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><X size={18} color="#94a3b8" /></button>
               </div>
               <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>{projetoModal.marca}</p>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Status</label>
-                  <select value={projetoModal.status || 'pendente'} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, status: v })); updateProjeto(projetoModal.id, { status: v }); }}
+                  <select value={projetoModal.status || 'pendente'} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, status: v })); setProjetoModalDirty(prev => ({ ...prev, status: v })); }}
                     disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none' }}>
-                    <option value="ativada">Ativada</option><option value="agendada">Agendada</option><option value="pendente">Pendente</option><option value="em aberto">Em aberto</option>
+                    <option value="ativada">Ativada</option><option value="agendada">Agendada</option><option value="pendente">Pendente</option><option value="em aberto">Em aberto</option><option value="churn">Churn</option>
                   </select>
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Etapa Projeto</label>
-                  <select value={projetoModal.etapa_projeto || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, etapa_projeto: v })); updateProjeto(projetoModal.id, { etapa_projeto: v }); }}
+                  <select value={projetoModal.etapa_projeto || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, etapa_projeto: v })); setProjetoModalDirty(prev => ({ ...prev, etapa_projeto: v })); }}
                     disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none' }}>
                     <option value="">—</option><option value="Rollout">Rollout</option><option value="Piloto">Piloto</option><option value="Orgânico">Orgânico</option><option value="Projeto">Projeto</option>
                   </select>
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Classificação Forecast</label>
-                  <select value={projetoModal.classificacao_forecast || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, classificacao_forecast: v })); updateProjeto(projetoModal.id, { classificacao_forecast: v }); }}
+                  <select value={projetoModal.classificacao_forecast || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, classificacao_forecast: v })); setProjetoModalDirty(prev => ({ ...prev, classificacao_forecast: v })); }}
                     disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none' }}>
                     <option value="">—</option><option value="Rollout">Rollout</option><option value="Setup">Setup</option><option value="Produto">Produto</option><option value="Trava comercial">Trava comercial</option><option value="Trava operacionais">Trava operacionais</option><option value="Avaliando piloto">Avaliando piloto</option><option value="Outros">Outros</option>
                   </select>
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Mês Go-live</label>
-                  <input value={projetoModal.mes_golive || ''} onChange={e => setProjetoModal(prev => ({ ...prev, mes_golive: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { mes_golive: e.target.value })}
+                  <input value={projetoModal.mes_golive || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, mes_golive: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, mes_golive: e.target.value })); }}
                     disabled={!canEdit} placeholder="julho-26" style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Data Migração</label>
-                  <input type="date" value={projetoModal.data_migracao || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, data_migracao: v })); updateProjeto(projetoModal.id, { data_migracao: v || null }); }}
+                  <input type="date" value={projetoModal.data_migracao || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, data_migracao: v })); setProjetoModalDirty(prev => ({ ...prev, data_migracao: v || null })); }}
                     disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Data Go-live</label>
-                  <input type="date" value={projetoModal.data_golive || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, data_golive: v })); updateProjeto(projetoModal.id, { data_golive: v || null }); }}
+                  <input type="date" value={projetoModal.data_golive || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, data_golive: v })); setProjetoModalDirty(prev => ({ ...prev, data_golive: v || null })); }}
                     disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>UF</label>
-                  <input value={projetoModal.uf || ''} onChange={e => setProjetoModal(prev => ({ ...prev, uf: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { uf: e.target.value })}
+                  <input value={projetoModal.uf || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, uf: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, uf: e.target.value })); }}
                     disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>CNPJ</label>
-                  <input value={projetoModal.cnpj || ''} onChange={e => setProjetoModal(prev => ({ ...prev, cnpj: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { cnpj: e.target.value })}
+                  <input value={projetoModal.cnpj || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, cnpj: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, cnpj: e.target.value })); }}
                     disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Executivo Responsável</label>
-                  <input value={projetoModal.executivo_responsavel || ''} onChange={e => setProjetoModal(prev => ({ ...prev, executivo_responsavel: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { executivo_responsavel: e.target.value })}
+                  <input value={projetoModal.executivo_responsavel || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, executivo_responsavel: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, executivo_responsavel: e.target.value })); }}
                     disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Responsável Projetos</label>
-                  <input value={projetoModal.responsavel_projetos || ''} onChange={e => setProjetoModal(prev => ({ ...prev, responsavel_projetos: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { responsavel_projetos: e.target.value })}
+                  <input value={projetoModal.responsavel_projetos || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, responsavel_projetos: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, responsavel_projetos: e.target.value })); }}
                     disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               </div>
 
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Motivo Pendências</label>
-                <select value={projetoModal.motivo_pendencias || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, motivo_pendencias: v })); updateProjeto(projetoModal.id, { motivo_pendencias: v }); }}
+                <select value={projetoModal.motivo_pendencias || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, motivo_pendencias: v })); setProjetoModalDirty(prev => ({ ...prev, motivo_pendencias: v })); }}
                   disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none' }}>
                   <option value="">— Sem pendência</option>
                   <option value="Cadastro: Aguardando cliente">Cadastro: Aguardando cliente</option>
@@ -1736,7 +1932,7 @@ export default function CRMPage() {
               </div>
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Detalhamento Pendências</label>
-                <textarea value={projetoModal.detalhamento_pendencias || ''} onChange={e => setProjetoModal(prev => ({ ...prev, detalhamento_pendencias: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { detalhamento_pendencias: e.target.value })}
+                <textarea value={projetoModal.detalhamento_pendencias || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, detalhamento_pendencias: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, detalhamento_pendencias: e.target.value })); }}
                   disabled={!canEdit} rows={2} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
               </div>
 
@@ -1746,28 +1942,28 @@ export default function CRMPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Lojas Contrato</label>
-                    <input type="number" value={projetoModal.qtd_lojas_contrato || ''} onChange={e => setProjetoModal(prev => ({ ...prev, qtd_lojas_contrato: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { qtd_lojas_contrato: e.target.value ? Number(e.target.value) : null })}
+                    <input type="number" value={projetoModal.qtd_lojas_contrato || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, qtd_lojas_contrato: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, qtd_lojas_contrato: e.target.value ? Number(e.target.value) : null })); }}
                       disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Mensalidade (R$)</label>
-                    <input type="number" step="0.01" value={projetoModal.mensalidade || ''} onChange={e => setProjetoModal(prev => ({ ...prev, mensalidade: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { mensalidade: e.target.value ? Number(e.target.value) : null })}
+                    <input type="number" step="0.01" value={projetoModal.mensalidade || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, mensalidade: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, mensalidade: e.target.value ? Number(e.target.value) : null })); }}
                       disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Valor Setup (R$)</label>
-                    <input type="number" step="0.01" value={projetoModal.valor_setup || ''} onChange={e => setProjetoModal(prev => ({ ...prev, valor_setup: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { valor_setup: e.target.value ? Number(e.target.value) : null })}
+                    <input type="number" step="0.01" value={projetoModal.valor_setup || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, valor_setup: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, valor_setup: e.target.value ? Number(e.target.value) : null })); }}
                       disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Duração Contrato</label>
-                    <input value={projetoModal.duracao_contrato || ''} onChange={e => setProjetoModal(prev => ({ ...prev, duracao_contrato: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { duracao_contrato: e.target.value })}
+                    <input value={projetoModal.duracao_contrato || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, duracao_contrato: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, duracao_contrato: e.target.value })); }}
                       disabled={!canEdit} placeholder="12 meses" style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                   </div>
                 </div>
                 <div style={{ marginBottom: 8 }}>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Valor Implantação (R$)</label>
-                  <input type="number" step="0.01" value={projetoModal.valor_implantacao || ''} onChange={e => setProjetoModal(prev => ({ ...prev, valor_implantacao: e.target.value }))} onBlur={e => updateProjeto(projetoModal.id, { valor_implantacao: e.target.value ? Number(e.target.value) : null })}
+                  <input type="number" step="0.01" value={projetoModal.valor_implantacao || ''} onChange={e => { setProjetoModal(prev => ({ ...prev, valor_implantacao: e.target.value })); setProjetoModalDirty(prev => ({ ...prev, valor_implantacao: e.target.value ? Number(e.target.value) : null })); }}
                     disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                 </div>
                 {projetoModal.contrato_url ? (
@@ -1790,6 +1986,20 @@ export default function CRMPage() {
                   </div>
                 ) : null}
               </div>
+
+              {/* Botão Salvar */}
+              {canEdit && (
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button onClick={() => { setProjetoModal(null); setProjetoModalDirty({}); }} style={{ padding: '10px 20px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                  <button disabled={Object.keys(projetoModalDirty).length === 0} onClick={async () => {
+                    if (Object.keys(projetoModalDirty).length === 0) return;
+                    await updateProjeto(projetoModal.id, projetoModalDirty);
+                    setProjetoModalDirty({});
+                  }} style={{ padding: '10px 24px', border: 'none', borderRadius: 8, background: Object.keys(projetoModalDirty).length > 0 ? 'linear-gradient(135deg, #EA1D2C, #DA5D69)' : '#e2e8f0', color: Object.keys(projetoModalDirty).length > 0 ? '#fff' : '#94a3b8', fontWeight: 700, fontSize: 13, cursor: Object.keys(projetoModalDirty).length > 0 ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Save size={14} /> Salvar
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
