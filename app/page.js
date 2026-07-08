@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PRODUCTS, CLASSIFICACAO_COLORS, MONTH_NAMES, DUPLAS, getMonthBusinessDays, getMonthBusinessDaysMTD } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Line, Legend } from 'recharts';
@@ -1641,201 +1641,287 @@ export default function CRMPage() {
               {projetosTab === 'acompanhamento' && (() => {
                 if (projetosLogsLoading) return <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Carregando logs...</div>;
 
-                // Lógica inspirada no script: agrupar movimentações por semana
-                // Foco: mudanças de mes_golive, mes_golive_ajustado e status
-                const CAMPOS_ACOMP = ['status', 'mes_golive', 'mes_golive_ajustado'];
-                const logsRelevantes = projetosLogs.filter(l => CAMPOS_ACOMP.includes(l.campo));
+                // ======================================================
+                // LÓGICA: Analisar mudanças na coluna data_golive
+                // Igual ao script: se a data saiu do mês vigente → saída
+                //                   se entrou no mês vigente → entrada
+                // Agrupa por marca, conta lojas por marca
+                // ======================================================
+                const logsDataGolive = projetosLogs.filter(l => l.campo === 'data_golive');
+                const logsStatus = projetosLogs.filter(l => l.campo === 'status');
+                const logsRelevantes = [...logsDataGolive, ...logsStatus];
 
-                // Calcular semanas (segunda a domingo) retroativas
+                // Mês vigente
                 const hoje = new Date();
-                const diaSemana = hoje.getDay();
-                const diffSeg = diaSemana === 0 ? -6 : 1 - diaSemana;
-                const segundaAtual = new Date(hoje);
-                segundaAtual.setDate(hoje.getDate() + diffSeg);
-                segundaAtual.setHours(0,0,0,0);
+                const mesVigenteNum = hoje.getMonth(); // 0-11
+                const anoVigente = hoje.getFullYear();
 
-                const semanas = [];
-                for (let i = 0; i < 6; i++) {
-                  const ini = new Date(segundaAtual);
-                  ini.setDate(segundaAtual.getDate() - (i * 7));
-                  const fim = new Date(ini);
-                  fim.setDate(ini.getDate() + 6);
-                  fim.setHours(23,59,59,999);
-                  semanas.push({ ini, fim, label: `${ini.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} - ${fim.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}` });
-                }
-
-                // Status colors para badges
-                const STATUS_COLORS_ACOMP = {
-                  'Nova': '#3b82f6', 'Captação': '#8b5cf6', 'Churn': '#ef4444',
-                  'Setup': '#f59e0b', 'Inventário': '#f97316', 'Reversão': '#ef4444',
-                  'Remarcada': '#ec4899', 'Ativada': '#22c55e', 'Agendada': '#3b82f6',
+                // Helper: extrair mês/ano de uma data string (YYYY-MM-DD ou DD/MM/YYYY ou vazio)
+                const extrairMesAno = (val) => {
+                  if (!val || val === '' || val === 'null') return null;
+                  const str = String(val).trim();
+                  // ISO format: YYYY-MM-DD
+                  if (str.match(/^\d{4}-\d{2}/)) {
+                    const p = str.split('-');
+                    return { mes: parseInt(p[1]) - 1, ano: parseInt(p[0]) };
+                  }
+                  // BR format: DD/MM/YYYY
+                  if (str.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+                    const p = str.split('/');
+                    return { mes: parseInt(p[1]) - 1, ano: parseInt(p[2]) };
+                  }
+                  return null;
                 };
 
-                // Construir dados por semana
+                const isMesVigente = (ma) => ma && ma.mes === mesVigenteNum && ma.ano === anoVigente;
+
+                // Semanas do mês vigente (segunda a domingo)
+                const primeiroDoMes = new Date(anoVigente, mesVigenteNum, 1);
+                const ultimoDoMes = new Date(anoVigente, mesVigenteNum + 1, 0);
+
+                // Encontrar a primeira segunda-feira <= primeiro dia do mês
+                let primeiraSegunda = new Date(primeiroDoMes);
+                const dow = primeiraSegunda.getDay();
+                const diff = dow === 0 ? -6 : 1 - dow;
+                primeiraSegunda.setDate(primeiraSegunda.getDate() + diff);
+                primeiraSegunda.setHours(0,0,0,0);
+
+                const semanas = [];
+                let seg = new Date(primeiraSegunda);
+                while (seg <= ultimoDoMes || semanas.length === 0) {
+                  const ini = new Date(seg);
+                  const fim = new Date(seg);
+                  fim.setDate(seg.getDate() + 6);
+                  fim.setHours(23,59,59,999);
+                  const numSemana = semanas.length + 1;
+                  semanas.push({
+                    ini, fim, numSemana,
+                    label: `${ini.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} - ${fim.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}`
+                  });
+                  seg = new Date(seg);
+                  seg.setDate(seg.getDate() + 7);
+                }
+
+                // Mês vigente label
+                const MESES_NOMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+                const mesLabel = `${MESES_NOMES[mesVigenteNum]}/${String(anoVigente).slice(-2)}`;
+
+                // Total de lojas planejadas para o mês (baseline = contagem atual)
+                const mesVigenteStr = (() => {
+                  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+                  return `${meses[mesVigenteNum]}-${String(anoVigente).slice(-2)}`;
+                })();
+                const totalAtualMes = fp.filter(p => getMes(p).toLowerCase() === mesVigenteStr).length;
+
+                // Status colors e labels
+                const STATUS_COLORS_ACOMP = {
+                  'Churn': '#ef4444', 'Remarcada': '#ec4899', 'Nova': '#3b82f6',
+                  'Captação': '#8b5cf6', 'Ativada': '#22c55e',
+                  'Setup': '#f59e0b', 'Inventário': '#f97316', 'Reversão': '#ef4444',
+                  'Saída': '#ef4444', 'Entrada': '#22c55e',
+                };
+
+                // Processar cada semana
                 const semanasData = semanas.map(sem => {
-                  const logsSemana = logsRelevantes.filter(l => {
+                  // Filtrar logs da semana
+                  const logsDaSemana = logsRelevantes.filter(l => {
                     const dt = new Date(l.created_at);
                     return dt >= sem.ini && dt <= sem.fim;
                   });
 
-                  // Agrupar por projeto (deduplicar: manter origem inicial e destino final)
+                  // Deduplicar por projeto: manter origem inicial e destino final por campo
                   const porProjeto = {};
-                  logsSemana.forEach(l => {
+                  // Ordenar por created_at ascending para deduplicação correta
+                  const logsSorted = [...logsDaSemana].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                  logsSorted.forEach(l => {
                     const pid = l.projeto_id;
                     if (!porProjeto[pid]) {
-                      porProjeto[pid] = {
-                        marca: l.projetos?.marca || '—',
-                        loja: l.projetos?.loja || '—',
-                        mesAtual: getMes(l.projetos || {}),
-                        changes: {}
-                      };
+                      porProjeto[pid] = { marca: l.projetos?.marca || '—', loja: l.projetos?.loja || '—', changes: {} };
                     }
-                    const campo = l.campo;
-                    if (!porProjeto[pid].changes[campo]) {
-                      porProjeto[pid].changes[campo] = { de: l.valor_anterior, para: l.valor_novo };
+                    if (!porProjeto[pid].changes[l.campo]) {
+                      porProjeto[pid].changes[l.campo] = { de: l.valor_anterior, para: l.valor_novo };
                     } else {
-                      porProjeto[pid].changes[campo].para = l.valor_novo;
+                      porProjeto[pid].changes[l.campo].para = l.valor_novo;
                     }
                   });
 
-                  // Classificar movimentações
-                  const movs = [];
+                  // Gerar movimentações
+                  const movsPorMarca = {}; // { marca: { lojas: +-N, items: [{status, obs, lojaCount}] } }
                   let entradas = 0, saidas = 0;
 
                   Object.entries(porProjeto).forEach(([pid, info]) => {
-                    // Mudança de status
-                    if (info.changes.status) {
-                      const { de, para } = info.changes.status;
-                      if (de === para) return;
-                      const deLower = (de||'').toLowerCase();
-                      const paraLower = (para||'').toLowerCase();
+                    const marca = info.marca;
+                    if (!movsPorMarca[marca]) movsPorMarca[marca] = [];
 
-                      if (paraLower === 'churn') {
-                        movs.push({ marca: info.marca, lojas: -1, status: 'Churn', obs: 'Churn', color: '#ef4444' });
+                    // 1. Mudança de data_golive (principal — igual ao script ResumoPlan)
+                    if (info.changes.data_golive) {
+                      const { de, para } = info.changes.data_golive;
+                      if (de === para) return;
+                      const deMes = extrairMesAno(de);
+                      const paraMes = extrairMesAno(para);
+                      const deNoMes = isMesVigente(deMes);
+                      const paraNoMes = isMesVigente(paraMes);
+
+                      if (deNoMes && !paraNoMes) {
+                        // Saiu do mês vigente
+                        const destino = paraMes ? `${MESES_NOMES[paraMes.mes]}/${String(paraMes.ano).slice(-2)}` : 'Removida';
+                        movsPorMarca[marca].push({ dir: -1, status: 'Remarcada', obs: `Saiu para ${destino}` });
                         saidas++;
-                      } else if (paraLower === 'ativada' && deLower !== 'ativada') {
-                        movs.push({ marca: info.marca, lojas: 0, status: 'Ativada', obs: `Ativada (era ${de || 'pendente'})`, color: '#22c55e' });
-                      } else if (deLower === '' && paraLower) {
-                        movs.push({ marca: info.marca, lojas: 1, status: 'Nova', obs: 'Loja nova', color: '#3b82f6' });
+                      } else if (!deNoMes && paraNoMes) {
+                        // Entrou no mês vigente
+                        const origem = deMes ? `${MESES_NOMES[deMes.mes]}/${String(deMes.ano).slice(-2)}` : 'Sem data';
+                        movsPorMarca[marca].push({ dir: 1, status: 'Entrada', obs: `Veio de ${origem}` });
+                        entradas++;
+                      } else if (deNoMes && paraNoMes) {
+                        // Mudou data dentro do mês
+                        movsPorMarca[marca].push({ dir: 0, status: 'Remarcada', obs: `Remarcou de ${de || '—'} para ${para || '—'}` });
+                      } else if (!deMes && paraNoMes) {
+                        // Não tinha data, agora tem no mês = nova
+                        movsPorMarca[marca].push({ dir: 1, status: 'Nova', obs: 'Data go-live definida' });
                         entradas++;
                       }
                     }
 
-                    // Mudança de mês go-live (remarcação)
-                    const mesChange = info.changes.mes_golive_ajustado || info.changes.mes_golive;
-                    if (mesChange && mesChange.de !== mesChange.para) {
-                      const deMes = (mesChange.de || '').trim();
-                      const paraMes = (mesChange.para || '').trim();
-                      if (deMes && paraMes && deMes !== paraMes) {
-                        movs.push({ marca: info.marca, lojas: 0, status: 'Remarcada', obs: `${deMes} → ${paraMes}`, color: '#ec4899' });
+                    // 2. Mudança de status (churn, ativação, etc.)
+                    if (info.changes.status) {
+                      const { de, para } = info.changes.status;
+                      if (de === para) return;
+                      const paraL = (para||'').toLowerCase();
+                      const deL = (de||'').toLowerCase();
+
+                      if (paraL === 'churn' && deL !== 'churn') {
+                        movsPorMarca[marca].push({ dir: -1, status: 'Churn', obs: 'Churn' });
+                        if (!info.changes.data_golive) saidas++; // evitar contar duplo
                       }
                     }
                   });
 
-                  // Agrupar movimentações por marca
-                  const porMarcaMovs = {};
-                  movs.forEach(m => {
-                    const key = `${m.marca}__${m.status}__${m.obs}`;
-                    if (!porMarcaMovs[key]) {
-                      porMarcaMovs[key] = { ...m, count: 1 };
-                    } else {
-                      porMarcaMovs[key].count++;
-                      porMarcaMovs[key].lojas += m.lojas;
-                    }
+                  // Agrupar: para cada marca, somar lojas e juntar por status
+                  const rows = [];
+                  Object.entries(movsPorMarca).forEach(([marca, items]) => {
+                    if (items.length === 0) return;
+                    // Agrupar items por status+obs
+                    const grupo = {};
+                    items.forEach(it => {
+                      const key = `${it.status}|${it.obs}`;
+                      if (!grupo[key]) grupo[key] = { ...it, count: 1 };
+                      else { grupo[key].count++; grupo[key].dir += it.dir; }
+                    });
+                    Object.values(grupo).forEach(g => {
+                      rows.push({
+                        marca,
+                        lojas: g.dir,
+                        lojasCount: g.count,
+                        status: g.status,
+                        obs: g.obs,
+                        color: STATUS_COLORS_ACOMP[g.status] || '#94a3b8',
+                      });
+                    });
                   });
 
-                  const movsAgrupadas = Object.values(porMarcaMovs);
                   const saldo = entradas - saidas;
-
-                  return { ...sem, movs: movsAgrupadas, entradas, saidas, saldo, totalMovs: logsSemana.length };
+                  return { ...sem, rows, entradas, saidas, saldo };
                 });
 
-                // Saldo total acumulado baseado nos projetos atuais do mês vigente
-                const mesAtual = (() => {
-                  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
-                  const m = hoje.getMonth();
-                  const a = String(hoje.getFullYear()).slice(-2);
-                  return `${meses[m]}-${a}`;
-                })();
-                const totalMesAtual = fp.filter(p => getMes(p).toLowerCase() === mesAtual).length;
+                // Calcular saldos acumulados (do fim para o início)
+                // Total atual = baseline. Semana mais recente saldo acumulado = totalAtualMes
+                // Semanas anteriores: subtrair os saldos das semanas seguintes
+                let saldoAcumulado = totalAtualMes;
+                const saldos = new Array(semanasData.length).fill(0);
+                // A semana 0 é a mais antiga, última é a mais recente
+                // Percorrer do mais recente ao mais antigo
+                for (let i = semanasData.length - 1; i >= 0; i--) {
+                  saldos[i] = saldoAcumulado;
+                  saldoAcumulado -= semanasData[i].saldo;
+                }
+                // saldoAcumulado agora é o "Início" (antes da primeira semana)
+                const saldoInicial = saldoAcumulado;
 
                 return (
                   <div>
-                    {/* Header com total do mês */}
+                    {/* Header */}
                     <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
                       <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: '16px 24px', flex: 1 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Mês vigente ({mesAtual})</div>
-                        <div style={{ fontSize: 28, fontWeight: 800, color: '#1e293b' }}>{totalMesAtual} <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>lojas</span></div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Mês vigente</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#1e293b' }}>{mesLabel}</div>
                       </div>
                       <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: '16px 24px', flex: 1 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Registros no período</div>
-                        <div style={{ fontSize: 28, fontWeight: 800, color: '#1e293b' }}>{logsRelevantes.length} <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>movimentações</span></div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Lojas planejadas (atual)</div>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#1e293b' }}>{totalAtualMes}</div>
                       </div>
                       <button onClick={loadProjetosLogs} style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: '16px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#64748b' }}>
                         <History size={16} /> Atualizar
                       </button>
                     </div>
 
-                    {logsRelevantes.length === 0 ? (
-                      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: 40, textAlign: 'center', color: '#94a3b8' }}>
-                        <History size={32} style={{ marginBottom: 12, opacity: 0.4 }} />
-                        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Nenhuma movimentação registrada</div>
-                        <div style={{ fontSize: 12 }}>As movimentações aparecerão aqui conforme os projetos forem editados pelo time.</div>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                        {semanasData.map((sem, idx) => (
-                          <div key={idx} style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                            {/* Header da semana */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: idx === 0 ? '#fef2f2' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <span style={{ fontSize: 13, fontWeight: 800, color: '#1e293b' }}>{idx === 0 ? 'Semana atual' : `Semana ${idx + 1}`}</span>
-                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{sem.label}</span>
-                              </div>
-                              {sem.movs.length > 0 && (
-                                <div style={{ display: 'flex', gap: 12, fontSize: 11, fontWeight: 600 }}>
-                                  <span style={{ color: '#22c55e' }}>+{sem.entradas}</span>
-                                  <span style={{ color: '#ef4444' }}>-{sem.saidas}</span>
-                                  <span style={{ color: sem.saldo >= 0 ? '#22c55e' : '#ef4444', background: sem.saldo >= 0 ? '#f0fdf4' : '#fef2f2', padding: '2px 8px', borderRadius: 6 }}>
-                                    Saldo: {sem.saldo > 0 ? '+' : ''}{sem.saldo}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
+                    {/* Tabela com semanas */}
+                    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#EA1D2C' }}>
+                            <th style={{ padding: '10px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#fff', width: 140 }}>Semana</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#fff' }}>Marca</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#fff', width: 80 }}># Lojas</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#fff', width: 110 }}>Status</th>
+                            <th style={{ padding: '10px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#fff' }}>Observação</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {/* Linha de Início */}
+                          <tr style={{ background: '#fef2f2' }}>
+                            <td style={{ padding: '10px 20px', fontWeight: 800, fontSize: 13, color: '#1e293b', borderBottom: '2px solid #e2e8f0' }}>Início</td>
+                            <td style={{ borderBottom: '2px solid #e2e8f0' }}></td>
+                            <td style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>
+                              <span style={{ background: '#22c55e', color: '#fff', fontWeight: 800, fontSize: 13, padding: '4px 14px', borderRadius: 6 }}>{saldoInicial}</span>
+                            </td>
+                            <td style={{ borderBottom: '2px solid #e2e8f0' }}></td>
+                            <td style={{ borderBottom: '2px solid #e2e8f0' }}></td>
+                          </tr>
 
-                            {/* Início (saldo) */}
-                            {sem.movs.length > 0 ? (
-                              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                <thead>
-                                  <tr style={{ background: '#f8fafc' }}>
-                                    <th style={{ padding: '8px 20px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Marca</th>
-                                    <th style={{ padding: '8px 16px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0', width: 80 }}># Lojas</th>
-                                    <th style={{ padding: '8px 16px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0', width: 100 }}>Status</th>
-                                    <th style={{ padding: '8px 20px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Observação</th>
+                          {semanasData.map((sem, idx) => {
+                            const semLabel = `Semana ${sem.numSemana}`;
+                            const isAtual = hoje >= sem.ini && hoje <= sem.fim;
+                            return (
+                              <Fragment key={idx}>
+                                {/* Linha do saldo da semana */}
+                                <tr style={{ background: isAtual ? '#fef2f2' : '#f8fafc' }}>
+                                  <td style={{ padding: '10px 20px', fontWeight: 800, fontSize: 13, color: '#1e293b', borderBottom: '1px solid #e2e8f0', borderTop: '2px solid #e2e8f0' }}>
+                                    {isAtual ? `${semLabel} (atual)` : semLabel}
+                                    <div style={{ fontSize: 10, fontWeight: 600, color: '#64748b', marginTop: 2 }}>{sem.label}</div>
+                                  </td>
+                                  <td style={{ borderBottom: '1px solid #e2e8f0', borderTop: '2px solid #e2e8f0' }}></td>
+                                  <td style={{ padding: '10px 16px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', borderTop: '2px solid #e2e8f0' }}>
+                                    <span style={{ background: '#f59e0b', color: '#fff', fontWeight: 800, fontSize: 13, padding: '4px 14px', borderRadius: 6 }}>{saldos[idx]}</span>
+                                  </td>
+                                  <td style={{ borderBottom: '1px solid #e2e8f0', borderTop: '2px solid #e2e8f0' }}></td>
+                                  <td style={{ borderBottom: '1px solid #e2e8f0', borderTop: '2px solid #e2e8f0' }}></td>
+                                </tr>
+
+                                {/* Linhas de movimentações */}
+                                {sem.rows.length > 0 ? sem.rows.map((row, ri) => (
+                                  <tr key={ri}>
+                                    <td style={{ padding: '8px 20px', borderBottom: '1px solid #f1f5f9' }}></td>
+                                    <td style={{ padding: '8px 16px', borderBottom: '1px solid #f1f5f9', fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{row.marca}</td>
+                                    <td style={{ padding: '8px 16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontSize: 13, fontWeight: 700, color: row.lojas > 0 ? '#22c55e' : row.lojas < 0 ? '#ef4444' : '#64748b' }}>
+                                      {row.lojas > 0 ? `+${row.lojasCount}` : row.lojas < 0 ? `-${row.lojasCount}` : `${row.lojasCount}`}
+                                    </td>
+                                    <td style={{ padding: '8px 16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                                      <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 6, background: row.color + '18', color: row.color }}>{row.status}</span>
+                                    </td>
+                                    <td style={{ padding: '8px 20px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{row.obs}</td>
                                   </tr>
-                                </thead>
-                                <tbody>
-                                  {sem.movs.map((mov, mi) => (
-                                    <tr key={mi}>
-                                      <td style={{ padding: '10px 20px', borderBottom: '1px solid #f1f5f9', fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{mov.marca}</td>
-                                      <td style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontSize: 13, fontWeight: 700, color: mov.lojas > 0 ? '#22c55e' : mov.lojas < 0 ? '#ef4444' : '#64748b' }}>
-                                        {mov.lojas > 0 ? `+${mov.count > 1 ? mov.count : mov.lojas}` : mov.lojas < 0 ? `${mov.count > 1 ? -mov.count : mov.lojas}` : '—'}
-                                      </td>
-                                      <td style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                                        <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 6, background: (mov.color || '#94a3b8') + '18', color: mov.color || '#94a3b8' }}>{mov.status}</span>
-                                      </td>
-                                      <td style={{ padding: '10px 20px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{mov.obs}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            ) : (
-                              <div style={{ padding: '16px 20px', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>Nenhuma movimentação nesta semana</div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                                )) : (
+                                  <tr>
+                                    <td style={{ padding: '8px 20px', borderBottom: '1px solid #f1f5f9' }}></td>
+                                    <td colSpan={4} style={{ padding: '8px 16px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>Nenhuma movimentação</td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 );
               })()}
