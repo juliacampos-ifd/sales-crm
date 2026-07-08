@@ -20,7 +20,7 @@ export async function GET(request) {
 
   const { data, error } = await supabase
     .from('projetos_log')
-    .select('*, projetos(marca, loja, mes_golive, mes_golive_ajustado, status)')
+    .select('*, projetos(marca, loja, mes_golive, mes_golive_ajustado, data_golive, status)')
     .gte('created_at', desde.toISOString())
     .order('created_at', { ascending: false });
 
