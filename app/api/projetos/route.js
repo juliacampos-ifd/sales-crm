@@ -51,13 +51,13 @@ export async function POST(request) {
   return NextResponse.json(data, { status: 201 });
 }
 
-// PATCH /api/projetos - Update a project
+// PATCH /api/projetos - Update a project (com log de alterações)
 export async function PATCH(request) {
   const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerClient();
   const body = await request.json();
-  const { id, ...fields } = body;
+  const { id, _user_email, _user_name, ...fields } = body;
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
   const ALLOWED = ['marca', 'loja', 'etapa_projeto', 'classificacao_forecast', 'status', 'mes_golive', 'mes_golive_ajustado',
@@ -71,8 +71,36 @@ export async function PATCH(request) {
     if (fields[k] !== undefined) update[k] = fields[k];
   });
 
+  // Buscar registro atual para comparar e gerar log
+  const { data: current } = await supabase.from('projetos').select('*').eq('id', id).single();
+
   const { error } = await supabase.from('projetos').update(update).eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Gravar log das alterações (campos que realmente mudaram)
+  if (current) {
+    const logs = [];
+    ALLOWED.forEach(k => {
+      if (fields[k] !== undefined) {
+        const anterior = String(current[k] ?? '');
+        const novo = String(fields[k] ?? '');
+        if (anterior !== novo) {
+          logs.push({
+            projeto_id: id,
+            campo: k,
+            valor_anterior: anterior,
+            valor_novo: novo,
+            usuario_email: _user_email || '',
+            usuario_nome: _user_name || '',
+          });
+        }
+      }
+    });
+    if (logs.length > 0) {
+      await supabase.from('projetos_log').insert(logs).then(() => {});
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }
 
