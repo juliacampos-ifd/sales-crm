@@ -162,7 +162,9 @@ export default function CRMPage() {
   const [projetosFilterResp, setProjetosFilterResp] = useState([]);
   const [projetoModalDirty, setProjetoModalDirty] = useState({});
   const [projetosSort, setProjetosSort] = useState({ col: null, dir: 'asc' });
-  const [projetosTab, setProjetosTab] = useState('projetos'); // 'projetos' | 'dashboard'
+  const [projetosTab, setProjetosTab] = useState('projetos'); // 'projetos' | 'dashboard' | 'acompanhamento'
+  const [projetosLogs, setProjetosLogs] = useState([]);
+  const [projetosLogsLoading, setProjetosLogsLoading] = useState(false);
   const [novaLojaModal, setNovaLojaModal] = useState(false);
   const [novaLojaMarca, setNovaLojaMarca] = useState('');
   const [novaLojaMarcaNova, setNovaLojaMarcaNova] = useState('');
@@ -636,10 +638,19 @@ export default function CRMPage() {
     } catch (err) { console.error('Error loading projetos:', err); }
     setProjetosLoading(false);
   };
+  const loadProjetosLogs = async () => {
+    setProjetosLogsLoading(true);
+    try {
+      const res = await apiFetch('/api/projetos/log?days=60');
+      const data = await res.json();
+      setProjetosLogs(data.logs || []);
+    } catch (err) { console.error('Error loading projetos logs:', err); }
+    setProjetosLogsLoading(false);
+  };
   const updateProjeto = async (id, fields) => {
     try {
       await apiFetch('/api/projetos', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...fields }) });
+        body: JSON.stringify({ id, ...fields, _user_email: profile?.email || '', _user_name: profile?.name || '' }) });
       setProjetos(prev => prev.map(p => p.id === id ? { ...p, ...fields } : p));
     } catch (err) { console.error('Error updating projeto:', err); }
   };
@@ -1436,6 +1447,7 @@ export default function CRMPage() {
               <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#f1f5f9', borderRadius: 10, padding: 3, width: 'fit-content' }}>
                 <button onClick={() => setProjetosTab('projetos')} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: projetosTab === 'projetos' ? '#EA1D2C' : 'transparent', color: projetosTab === 'projetos' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Projetos</button>
                 <button onClick={() => setProjetosTab('dashboard')} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: projetosTab === 'dashboard' ? '#EA1D2C' : 'transparent', color: projetosTab === 'dashboard' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Dashboard</button>
+                <button onClick={() => { setProjetosTab('acompanhamento'); if (projetosLogs.length === 0) loadProjetosLogs(); }} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: projetosTab === 'acompanhamento' ? '#EA1D2C' : 'transparent', color: projetosTab === 'acompanhamento' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Acompanhamento</button>
               </div>
 
               {projetosTab === 'dashboard' && (() => {
@@ -1619,6 +1631,209 @@ export default function CRMPage() {
                             ))}
                           </tbody>
                         </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ABA ACOMPANHAMENTO SEMANAL */}
+              {projetosTab === 'acompanhamento' && (() => {
+                if (projetosLogsLoading) return <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Carregando logs...</div>;
+
+                // Lógica inspirada no script: agrupar movimentações por semana
+                // Foco: mudanças de mes_golive, mes_golive_ajustado e status
+                const CAMPOS_ACOMP = ['status', 'mes_golive', 'mes_golive_ajustado'];
+                const logsRelevantes = projetosLogs.filter(l => CAMPOS_ACOMP.includes(l.campo));
+
+                // Calcular semanas (segunda a domingo) retroativas
+                const hoje = new Date();
+                const diaSemana = hoje.getDay();
+                const diffSeg = diaSemana === 0 ? -6 : 1 - diaSemana;
+                const segundaAtual = new Date(hoje);
+                segundaAtual.setDate(hoje.getDate() + diffSeg);
+                segundaAtual.setHours(0,0,0,0);
+
+                const semanas = [];
+                for (let i = 0; i < 6; i++) {
+                  const ini = new Date(segundaAtual);
+                  ini.setDate(segundaAtual.getDate() - (i * 7));
+                  const fim = new Date(ini);
+                  fim.setDate(ini.getDate() + 6);
+                  fim.setHours(23,59,59,999);
+                  semanas.push({ ini, fim, label: `${ini.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} - ${fim.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}` });
+                }
+
+                // Status colors para badges
+                const STATUS_COLORS_ACOMP = {
+                  'Nova': '#3b82f6', 'Captação': '#8b5cf6', 'Churn': '#ef4444',
+                  'Setup': '#f59e0b', 'Inventário': '#f97316', 'Reversão': '#ef4444',
+                  'Remarcada': '#ec4899', 'Ativada': '#22c55e', 'Agendada': '#3b82f6',
+                };
+
+                // Construir dados por semana
+                const semanasData = semanas.map(sem => {
+                  const logsSemana = logsRelevantes.filter(l => {
+                    const dt = new Date(l.created_at);
+                    return dt >= sem.ini && dt <= sem.fim;
+                  });
+
+                  // Agrupar por projeto (deduplicar: manter origem inicial e destino final)
+                  const porProjeto = {};
+                  logsSemana.forEach(l => {
+                    const pid = l.projeto_id;
+                    if (!porProjeto[pid]) {
+                      porProjeto[pid] = {
+                        marca: l.projetos?.marca || '—',
+                        loja: l.projetos?.loja || '—',
+                        mesAtual: getMes(l.projetos || {}),
+                        changes: {}
+                      };
+                    }
+                    const campo = l.campo;
+                    if (!porProjeto[pid].changes[campo]) {
+                      porProjeto[pid].changes[campo] = { de: l.valor_anterior, para: l.valor_novo };
+                    } else {
+                      porProjeto[pid].changes[campo].para = l.valor_novo;
+                    }
+                  });
+
+                  // Classificar movimentações
+                  const movs = [];
+                  let entradas = 0, saidas = 0;
+
+                  Object.entries(porProjeto).forEach(([pid, info]) => {
+                    // Mudança de status
+                    if (info.changes.status) {
+                      const { de, para } = info.changes.status;
+                      if (de === para) return;
+                      const deLower = (de||'').toLowerCase();
+                      const paraLower = (para||'').toLowerCase();
+
+                      if (paraLower === 'churn') {
+                        movs.push({ marca: info.marca, lojas: -1, status: 'Churn', obs: 'Churn', color: '#ef4444' });
+                        saidas++;
+                      } else if (paraLower === 'ativada' && deLower !== 'ativada') {
+                        movs.push({ marca: info.marca, lojas: 0, status: 'Ativada', obs: `Ativada (era ${de || 'pendente'})`, color: '#22c55e' });
+                      } else if (deLower === '' && paraLower) {
+                        movs.push({ marca: info.marca, lojas: 1, status: 'Nova', obs: 'Loja nova', color: '#3b82f6' });
+                        entradas++;
+                      }
+                    }
+
+                    // Mudança de mês go-live (remarcação)
+                    const mesChange = info.changes.mes_golive_ajustado || info.changes.mes_golive;
+                    if (mesChange && mesChange.de !== mesChange.para) {
+                      const deMes = (mesChange.de || '').trim();
+                      const paraMes = (mesChange.para || '').trim();
+                      if (deMes && paraMes && deMes !== paraMes) {
+                        movs.push({ marca: info.marca, lojas: 0, status: 'Remarcada', obs: `${deMes} → ${paraMes}`, color: '#ec4899' });
+                      }
+                    }
+                  });
+
+                  // Agrupar movimentações por marca
+                  const porMarcaMovs = {};
+                  movs.forEach(m => {
+                    const key = `${m.marca}__${m.status}__${m.obs}`;
+                    if (!porMarcaMovs[key]) {
+                      porMarcaMovs[key] = { ...m, count: 1 };
+                    } else {
+                      porMarcaMovs[key].count++;
+                      porMarcaMovs[key].lojas += m.lojas;
+                    }
+                  });
+
+                  const movsAgrupadas = Object.values(porMarcaMovs);
+                  const saldo = entradas - saidas;
+
+                  return { ...sem, movs: movsAgrupadas, entradas, saidas, saldo, totalMovs: logsSemana.length };
+                });
+
+                // Saldo total acumulado baseado nos projetos atuais do mês vigente
+                const mesAtual = (() => {
+                  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+                  const m = hoje.getMonth();
+                  const a = String(hoje.getFullYear()).slice(-2);
+                  return `${meses[m]}-${a}`;
+                })();
+                const totalMesAtual = fp.filter(p => getMes(p).toLowerCase() === mesAtual).length;
+
+                return (
+                  <div>
+                    {/* Header com total do mês */}
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
+                      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: '16px 24px', flex: 1 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Mês vigente ({mesAtual})</div>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#1e293b' }}>{totalMesAtual} <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>lojas</span></div>
+                      </div>
+                      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: '16px 24px', flex: 1 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Registros no período</div>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#1e293b' }}>{logsRelevantes.length} <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>movimentações</span></div>
+                      </div>
+                      <button onClick={loadProjetosLogs} style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: '16px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#64748b' }}>
+                        <History size={16} /> Atualizar
+                      </button>
+                    </div>
+
+                    {logsRelevantes.length === 0 ? (
+                      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: 40, textAlign: 'center', color: '#94a3b8' }}>
+                        <History size={32} style={{ marginBottom: 12, opacity: 0.4 }} />
+                        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Nenhuma movimentação registrada</div>
+                        <div style={{ fontSize: 12 }}>As movimentações aparecerão aqui conforme os projetos forem editados pelo time.</div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                        {semanasData.map((sem, idx) => (
+                          <div key={idx} style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                            {/* Header da semana */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: idx === 0 ? '#fef2f2' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, color: '#1e293b' }}>{idx === 0 ? 'Semana atual' : `Semana ${idx + 1}`}</span>
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{sem.label}</span>
+                              </div>
+                              {sem.movs.length > 0 && (
+                                <div style={{ display: 'flex', gap: 12, fontSize: 11, fontWeight: 600 }}>
+                                  <span style={{ color: '#22c55e' }}>+{sem.entradas}</span>
+                                  <span style={{ color: '#ef4444' }}>-{sem.saidas}</span>
+                                  <span style={{ color: sem.saldo >= 0 ? '#22c55e' : '#ef4444', background: sem.saldo >= 0 ? '#f0fdf4' : '#fef2f2', padding: '2px 8px', borderRadius: 6 }}>
+                                    Saldo: {sem.saldo > 0 ? '+' : ''}{sem.saldo}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Início (saldo) */}
+                            {sem.movs.length > 0 ? (
+                              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                  <tr style={{ background: '#f8fafc' }}>
+                                    <th style={{ padding: '8px 20px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Marca</th>
+                                    <th style={{ padding: '8px 16px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0', width: 80 }}># Lojas</th>
+                                    <th style={{ padding: '8px 16px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0', width: 100 }}>Status</th>
+                                    <th style={{ padding: '8px 20px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Observação</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {sem.movs.map((mov, mi) => (
+                                    <tr key={mi}>
+                                      <td style={{ padding: '10px 20px', borderBottom: '1px solid #f1f5f9', fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{mov.marca}</td>
+                                      <td style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontSize: 13, fontWeight: 700, color: mov.lojas > 0 ? '#22c55e' : mov.lojas < 0 ? '#ef4444' : '#64748b' }}>
+                                        {mov.lojas > 0 ? `+${mov.count > 1 ? mov.count : mov.lojas}` : mov.lojas < 0 ? `${mov.count > 1 ? -mov.count : mov.lojas}` : '—'}
+                                      </td>
+                                      <td style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                                        <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 6, background: (mov.color || '#94a3b8') + '18', color: mov.color || '#94a3b8' }}>{mov.status}</span>
+                                      </td>
+                                      <td style={{ padding: '10px 20px', borderBottom: '1px solid #f1f5f9', fontSize: 12, color: '#64748b' }}>{mov.obs}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : (
+                              <div style={{ padding: '16px 20px', fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>Nenhuma movimentação nesta semana</div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
