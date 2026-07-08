@@ -1809,6 +1809,15 @@ export default function CRMPage() {
                 }
                 const saldoInicial = saldoAcumulado;
 
+                // Saldo real da semana atual (ou última semana se nenhuma bater)
+                let saldoRealAtual = totalAtualMes;
+                for (let i = 0; i < semanasData.length; i++) {
+                  if (hoje >= semanasData[i].ini && hoje <= semanasData[i].fim) {
+                    saldoRealAtual = saldos[i];
+                    break;
+                  }
+                }
+
                 return (
                   <div>
                     {/* Header */}
@@ -1820,6 +1829,10 @@ export default function CRMPage() {
                       <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: '16px 24px', flex: 1 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Lojas planejadas (atual)</div>
                         <div style={{ fontSize: 28, fontWeight: 800, color: '#1e293b' }}>{totalAtualMes}</div>
+                      </div>
+                      <div style={{ background: '#f0fdf4', borderRadius: 14, border: '1px solid #bbf7d0', padding: '16px 24px', flex: 1 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#15803d', marginBottom: 4 }}>Lojas real atualizadas</div>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#15803d' }}>{saldoRealAtual}</div>
                       </div>
                       <button onClick={loadProjetosLogs} style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: '16px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#64748b' }}>
                         <History size={16} /> Atualizar
@@ -2189,10 +2202,18 @@ export default function CRMPage() {
                 <select value={projetoModal.motivo_pendencias || ''} onChange={e => { const v = e.target.value; setProjetoModal(prev => ({ ...prev, motivo_pendencias: v })); setProjetoModalDirty(prev => ({ ...prev, motivo_pendencias: v })); }}
                   disabled={!canEdit} style={{ width: '100%', padding: '8px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, outline: 'none' }}>
                   <option value="">— Sem pendência</option>
-                  <option value="Cadastro: Aguardando cliente">Cadastro: Aguardando cliente</option>
-                  <option value="Cliente (Operacional): Indisponibilidade de agenda para treinamento, etc.">Cliente (Operacional)</option>
-                  <option value="Cliente: Dados/Documentação (Falta de CNPJ, CSC, Certificado Digital).">Cliente: Dados/Documentação</option>
-                  <option value="Hardware: Terceiros (A impressora não chegou, o SAT/MFE não foi ativado).">Hardware: Terceiros</option>
+                  <option value="Cliente: Homologação de cardápio pendente">Cliente: Homologação de cardápio pendente</option>
+                  <option value="Cliente: Indisponibilidade de agendamento">Cliente: Indisponibilidade de agendamento</option>
+                  <option value="Cliente: Hardware e infraestrutura pendente">Cliente: Hardware e infraestrutura pendente</option>
+                  <option value="Cliente: Dados cadastrais pendentes (CNPJ / Outros)">Cliente: Dados cadastrais pendentes (CNPJ / Outros)</option>
+                  <option value="Cliente: Dados fiscais pendentes (Cert. Digital / CSC / Cat. Fiscais / Outros)">Cliente: Dados fiscais pendentes (Cert. Digital / CSC / Cat. Fiscais / Outros)</option>
+                  <option value="Cliente: Cardápio (Produtos / Combos / Precificação / Outros)">Cliente: Cardápio (Produtos / Combos / Precificação / Outros)</option>
+                  <option value="Cliente: Treinamentos pendentes">Cliente: Treinamentos pendentes</option>
+                  <option value="Cliente: Integrações pendentes (Aguardando dados)">Cliente: Integrações pendentes (Aguardando dados)</option>
+                  <option value="Produto: Bug do sistema (Ajuste pendente)">Produto: Bug do sistema (Ajuste pendente)</option>
+                  <option value="Produto: Feature/desenvolvimento pendente">Produto: Feature/desenvolvimento pendente</option>
+                  <option value="Implantação: Pendencias internas de implantação">Implantação: Pendencias internas de implantação</option>
+                  <option value="Cadastro: Pendencias internas de setup/cadastro">Cadastro: Pendencias internas de setup/cadastro</option>
                 </select>
               </div>
               <div style={{ marginBottom: 16 }}>
