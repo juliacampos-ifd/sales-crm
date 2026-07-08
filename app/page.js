@@ -162,7 +162,7 @@ export default function CRMPage() {
   const [projetosFilterResp, setProjetosFilterResp] = useState([]);
   const [projetoModalDirty, setProjetoModalDirty] = useState({});
   const [projetosSort, setProjetosSort] = useState({ col: null, dir: 'asc' });
-  const [projetosTab, setProjetosTab] = useState('projetos'); // 'projetos' | 'dashboard' | 'acompanhamento'
+  const [projetosTab, setProjetosTab] = useState('projetos'); // 'projetos' | 'dashboard' | 'acompanhamento' | 'log'
   const [projetosLogs, setProjetosLogs] = useState([]);
   const [projetosLogsLoading, setProjetosLogsLoading] = useState(false);
   const [novaLojaModal, setNovaLojaModal] = useState(false);
@@ -1448,6 +1448,7 @@ export default function CRMPage() {
                 <button onClick={() => setProjetosTab('projetos')} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: projetosTab === 'projetos' ? '#EA1D2C' : 'transparent', color: projetosTab === 'projetos' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Projetos</button>
                 <button onClick={() => setProjetosTab('dashboard')} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: projetosTab === 'dashboard' ? '#EA1D2C' : 'transparent', color: projetosTab === 'dashboard' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Dashboard</button>
                 <button onClick={() => { setProjetosTab('acompanhamento'); if (projetosLogs.length === 0) loadProjetosLogs(); }} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: projetosTab === 'acompanhamento' ? '#EA1D2C' : 'transparent', color: projetosTab === 'acompanhamento' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Acompanhamento</button>
+                <button onClick={() => { setProjetosTab('log'); if (projetosLogs.length === 0) loadProjetosLogs(); }} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: projetosTab === 'log' ? '#EA1D2C' : 'transparent', color: projetosTab === 'log' ? '#fff' : '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Log</button>
               </div>
 
               {projetosTab === 'dashboard' && (() => {
@@ -1902,6 +1903,72 @@ export default function CRMPage() {
                                   </tr>
                                 )}
                               </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ABA LOG DE ALTERAÇÕES */}
+              {projetosTab === 'log' && (() => {
+                if (projetosLogsLoading) return <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Carregando logs...</div>;
+                if (projetosLogs.length === 0) return <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Nenhum log encontrado. Clique em Atualizar.</div>;
+
+                const CAMPO_LABELS = {
+                  status: 'Status', etapa_projeto: 'Etapa', classificacao_forecast: 'Forecast',
+                  mes_golive: 'Mês Go-live', mes_golive_ajustado: 'Mês Ajustado', data_golive: 'Data Go-live',
+                  data_migracao: 'Data Migração', motivo_pendencias: 'Motivo Pend.', detalhamento_pendencias: 'Detalhamento',
+                  semana_mes: 'Semana', responsavel_projetos: 'Resp. Projetos', executivo_responsavel: 'Executivo',
+                  marca: 'Marca', loja: 'Loja', modelo_operacao: 'Modelo Op.', cnpj: 'CNPJ', uf: 'UF',
+                  possui_totem: 'Totem', qtd_lojas_contrato: 'Lojas Contrato', mensalidade: 'Mensalidade',
+                  valor_setup: 'Valor Setup', valor_implantacao: 'Valor Implant.', duracao_contrato: 'Duração Contrato',
+                };
+
+                return (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#1e293b' }}>Log de Alterações</h2>
+                      <button onClick={loadProjetosLogs} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <History size={14} /> Atualizar
+                      </button>
+                    </div>
+                    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: '#f8fafc' }}>
+                            <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', borderBottom: '2px solid #e2e8f0' }}>Data/Hora</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', borderBottom: '2px solid #e2e8f0' }}>Marca / Loja</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', borderBottom: '2px solid #e2e8f0' }}>Campo</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', borderBottom: '2px solid #e2e8f0' }}>De</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', borderBottom: '2px solid #e2e8f0' }}>Para</th>
+                            <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', borderBottom: '2px solid #e2e8f0' }}>Usuário</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {projetosLogs.map((log, idx) => {
+                            const dt = new Date(log.created_at);
+                            const dataStr = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                            const horaStr = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                            const marca = log.projetos?.marca || '—';
+                            const loja = log.projetos?.loja || '';
+                            return (
+                              <tr key={log.id || idx} style={{ background: idx % 2 === 0 ? '#fff' : '#fafbfc' }}>
+                                <td style={{ padding: '8px 16px', fontSize: 12, color: '#1e293b', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap' }}>
+                                  <span style={{ fontWeight: 600 }}>{dataStr}</span> <span style={{ color: '#94a3b8' }}>{horaStr}</span>
+                                </td>
+                                <td style={{ padding: '8px 16px', fontSize: 12, color: '#1e293b', borderBottom: '1px solid #f1f5f9' }}>
+                                  <span style={{ fontWeight: 600 }}>{marca}</span>{loja ? ` — ${loja}` : ''}
+                                </td>
+                                <td style={{ padding: '8px 16px', fontSize: 12, borderBottom: '1px solid #f1f5f9' }}>
+                                  <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: '#475569' }}>{CAMPO_LABELS[log.campo] || log.campo}</span>
+                                </td>
+                                <td style={{ padding: '8px 16px', fontSize: 12, color: '#ef4444', borderBottom: '1px solid #f1f5f9' }}>{log.valor_anterior || '—'}</td>
+                                <td style={{ padding: '8px 16px', fontSize: 12, color: '#22c55e', fontWeight: 600, borderBottom: '1px solid #f1f5f9' }}>{log.valor_novo || '—'}</td>
+                                <td style={{ padding: '8px 16px', fontSize: 12, color: '#64748b', borderBottom: '1px solid #f1f5f9' }}>{log.usuario_nome || log.usuario_email || '—'}</td>
+                              </tr>
                             );
                           })}
                         </tbody>
