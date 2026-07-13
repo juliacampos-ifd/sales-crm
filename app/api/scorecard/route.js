@@ -146,6 +146,39 @@ function computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand,
   return result;
 }
 
+// Compute realized between two arbitrary dates (for Last 30, etc.)
+function computeRealizedBetweenDates(allHistRaw, brandLk, activeBrand, pipeByBrand, startDate, endDate, classFilter) {
+  const DUPLA_KEYS = ['lidia_gabi', 'marcos_joao', 'michel_emerson'];
+  const start = new Date(startDate); start.setHours(0, 0, 0, 0);
+  const end = new Date(endDate); end.setHours(23, 59, 59, 999);
+  const result = { total: {} };
+  DUPLA_KEYS.forEach(k => { result[k] = {}; });
+  const seen = new Set();
+  allHistRaw.forEach(entry => {
+    const metric = stageToMetric(entry.to_stage);
+    if (!metric) return;
+    const brand = brandLk[entry.brand_id];
+    if (!brand) return;
+    const marcaKey = (brand.marca || '').trim().toLowerCase();
+    const active = activeBrand[marcaKey];
+    if (!active) return;
+    if (!matchesClass(active, classFilter)) return;
+    const dt = new Date(entry.created_at);
+    if (dt < start || dt > end) return;
+    const dedupKey = marcaKey + '|' + metric;
+    if (seen.has(dedupKey)) return;
+    seen.add(dedupKey);
+    const dupla = getDupla(active, pipeByBrand);
+    result.total[metric] = (result.total[metric] || 0) + 1;
+    result[dupla][metric] = (result[dupla][metric] || 0) + 1;
+    if (metric === 'contrato_assinado' && active.qtd_lojas_fisicas) {
+      result.total.lojas = (result.total.lojas || 0) + active.qtd_lojas_fisicas;
+      result[dupla].lojas = (result[dupla].lojas || 0) + active.qtd_lojas_fisicas;
+    }
+  });
+  return result;
+}
+
 export async function GET(request) {
   const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -349,6 +382,44 @@ export async function GET(request) {
       });
     }
 
+    // ── Daily comparative data ──
+    const now = new Date();
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+
+    // D-1: realized up to yesterday in current month
+    const yesterday = new Date(todayDate); yesterday.setDate(yesterday.getDate() - 1);
+    const realD1 = yesterday.getMonth() + 1 === curMonth && yesterday.getFullYear() === curYear
+      ? computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, yesterday, curYear, curMonth, classFilter)
+      : { total: {}, lidia_gabi: {}, marcos_joao: {}, michel_emerson: {} };
+
+    // D-7: realized up to 7 days ago in current month
+    const sevenAgo = new Date(todayDate); sevenAgo.setDate(sevenAgo.getDate() - 7);
+    const realD7 = sevenAgo.getMonth() + 1 === curMonth && sevenAgo.getFullYear() === curYear
+      ? computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, sevenAgo, curYear, curMonth, classFilter)
+      : { total: {}, lidia_gabi: {}, marcos_joao: {}, michel_emerson: {} };
+
+    // MTD: realized up to today in current month (already exists in realized[curYM], but compute explicitly)
+    const realMTD = computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, todayDate, curYear, curMonth, classFilter);
+
+    // M-1: realized for last month (full month)
+    const m1Year = curMonth === 1 ? curYear - 1 : curYear;
+    const m1Month = curMonth === 1 ? 12 : curMonth - 1;
+    const m1LastDay = new Date(m1Year, m1Month, 0); // last day of prev month
+    const realM1 = computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand, m1LastDay, m1Year, m1Month, classFilter);
+
+    // Last 30: realized from 30 days ago to today (crosses months)
+    const thirtyAgo = new Date(todayDate); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
+    const realLast30 = computeRealizedBetweenDates(allHistRaw, brandLk, activeBrand, pipeByBrand, thirtyAgo, todayDate, classFilter);
+
+    // Previous 30 (30-60 days ago) for comparison
+    const sixtyAgo = new Date(todayDate); sixtyAgo.setDate(sixtyAgo.getDate() - 60);
+    const prevThirtyAgo = new Date(todayDate); prevThirtyAgo.setDate(prevThirtyAgo.getDate() - 31);
+    const realPrev30 = computeRealizedBetweenDates(allHistRaw, brandLk, activeBrand, pipeByBrand, sixtyAgo, prevThirtyAgo, classFilter);
+
+    const dailyComparative = { realD1, realD7, realMTD, realM1, realLast30, realPrev30 };
+
     const res = NextResponse.json({
       metas,
       realized,
@@ -358,6 +429,7 @@ export async function GET(request) {
       eligBrands,
       wow,
       classFilter,
+      dailyComparative,
       _ts: new Date().toISOString(),
     });
     res.headers.set('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0, s-maxage=0');
