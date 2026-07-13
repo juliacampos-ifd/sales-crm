@@ -2945,6 +2945,73 @@ export default function CRMPage() {
                   <div style={{background:'#fef2f2',borderRadius:8,padding:'6px 12px',fontSize:12,color:'#EA1D2C',fontWeight:600}}>{scMtdBD}/{scTotalBD} dias uteis</div>
                 </div>
               </div>
+              {/* Comparativo Diário */}
+              {scData?.dailyComparative && (() => {
+                const dc = scData.dailyComparative;
+                const getLojas = (obj, dupla) => {
+                  if (!obj) return 0;
+                  if (dupla && dupla !== 'all') return obj[dupla]?.lojas || 0;
+                  return obj.total?.lojas || 0;
+                };
+                const curDupla = 'all';
+                const mtdReal = getLojas(dc.realMTD, curDupla);
+                const d1Real = getLojas(dc.realD1, curDupla);
+                const d7Real = getLojas(dc.realD7, curDupla);
+                const m1Real = getLojas(dc.realM1, curDupla);
+                const last30Real = getLojas(dc.realLast30, curDupla);
+                const prev30Real = getLojas(dc.realPrev30, curDupla);
+
+                // Forecast = forecast lojas for current month
+                const curYM = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0');
+                const fcstLojas = scGf('total', curYM, 'lojas') || scGm('total', new Date().getFullYear(), new Date().getMonth() + 1, 'lojas');
+
+                // BP = meta lojas for current month
+                const bpLojas = scGm('total', new Date().getFullYear(), new Date().getMonth() + 1, 'lojas');
+
+                const pctDiff = (real, ref) => ref > 0 ? ((real - ref) / ref * 100) : 0;
+                const fmtPct = (p) => (p > 0 ? '+' : '') + p.toFixed(1) + '%';
+                const diffD1 = mtdReal - d1Real;
+                const diffD7 = mtdReal - d7Real;
+
+                const rows = [
+                  { label: 'Real D-1 (Dia anterior)', value: d1Real + ' lojas', diff: diffD1 === 0 ? '— vs. D-1' : (diffD1 > 0 ? '+' : '') + diffD1 + ' vs. D-1', pct: diffD1, right: 'D-1: ' + d1Real + ' Lojas' },
+                  { label: 'Real D-7 (7 dias atrás)', value: d7Real + ' lojas', diff: diffD7 === 0 ? '— vs. D-7' : (diffD7 > 0 ? '+' : '') + diffD7 + ' vs. D-7', pct: diffD7, right: 'D-7: ' + d7Real + ' Lojas' },
+                  { label: 'MTD · Real acumulado vs M-1', value: mtdReal + ' lojas', diff: fmtPct(pctDiff(mtdReal, m1Real)) + ' vs. M-1', pct: mtdReal - m1Real, right: 'M-1: ' + m1Real },
+                  { label: 'Last 30 · M-1 + Real', value: last30Real + ' lojas', diff: fmtPct(pctDiff(last30Real, prev30Real)) + ' vs. per. anterior', pct: last30Real - prev30Real, right: 'Per. anterior: ' + prev30Real },
+                  { label: 'Fcst (Plano) vs Real', value: fcstLojas + ' (Plano)', diff: fmtPct(pctDiff(mtdReal, fcstLojas)) + ' vs. Plano', pct: mtdReal - fcstLojas, right: 'Real: ' + mtdReal },
+                  { label: 'BP vs Real', value: bpLojas + (bpLojas % 1 !== 0 ? '' : '.0') + ' (BP)', diff: fmtPct(pctDiff(mtdReal, bpLojas)) + ' vs. BP', pct: mtdReal - bpLojas, right: 'Real: ' + mtdReal },
+                ];
+
+                return (
+                  <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', padding: '20px 24px', marginBottom: 16 }}>
+                    <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Comparativo Diário — Lojas Fechadas</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {rows.map((r, i) => {
+                        const isUp = r.pct > 0;
+                        const isDown = r.pct < 0;
+                        const dotColor = isUp ? '#22c55e' : isDown ? '#ef4444' : '#94a3b8';
+                        const arrowColor = isUp ? '#22c55e' : isDown ? '#ef4444' : '#94a3b8';
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: '#f8fafc', borderRadius: 10, borderLeft: '4px solid ' + dotColor }}>
+                            <div style={{ flex: '0 0 280px' }}>
+                              <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{r.label}: </span>
+                              <span style={{ fontWeight: 800, fontSize: 15, color: '#1e293b' }}>{r.value}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                              <span style={{ width: 10, height: 10, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
+                              <span style={{ color: arrowColor, fontWeight: 700, fontSize: 13 }}>
+                                {isUp ? '▲' : isDown ? '▼' : '='} {r.diff}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, textAlign: 'right', minWidth: 120 }}>{r.right}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Movimentacoes por Stage (all stages) - collapsible */}
               <div style={{background:'#fff',borderRadius:14,border:'1px solid #e2e8f0',overflow:'hidden',marginBottom:16}}>
                 <div onClick={()=>setScStagesOpen(!scStagesOpen)} style={{padding:'14px 20px',borderBottom:scStagesOpen?'2px solid #EA1D2C':'none',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',background:scStagesOpen?'#EA1D2C08':'#fff'}}>
