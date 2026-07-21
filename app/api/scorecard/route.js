@@ -251,6 +251,7 @@ export async function GET(request) {
     DUPLA_KEYS.forEach(k => { eligSets[k] = new Set(); });
     allBrands.forEach(b => {
       if (!matchesClass(b, classFilter)) return;
+      if (!pipeByBrand[b.id]) return;
       if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
       if ((pipeLk[b.id] || '').startsWith('13.')) return;
       const d = getDupla(b, pipeByBrand);
@@ -322,6 +323,7 @@ export async function GET(request) {
     const seenElig = new Set();
     allBrands.forEach(b => {
       if (!matchesClass(b, classFilter)) return;
+      if (!pipeByBrand[b.id]) return;
       if (!b.base_elegivel || !b.base_elegivel.includes('FY27')) return;
       if ((pipeLk[b.id] || '').startsWith('13.')) return;
       const key = (b.marca || '').trim().toLowerCase();
