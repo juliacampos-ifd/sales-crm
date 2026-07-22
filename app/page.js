@@ -31,6 +31,7 @@ export default function CRMPage() {
   // Data
   const [brands, setBrands] = useState([]);
   const [view, setView] = useState('pipeline');
+  const [showLegend, setShowLegend] = useState(true);
   const [activeProduct, setActiveProduct] = useState('3s');
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState([]);
@@ -1302,15 +1303,23 @@ export default function CRMPage() {
         {/* PIPELINE */}
         {view === 'pipeline' && (
           <>
-            <div style={{ marginBottom: 16, padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, display: 'flex', flexWrap: 'wrap', gap: '8px 20px' }}>
-              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, width: '100%', marginBottom: -4 }}>Legenda das Etapas</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>Não Iniciado — Sem nenhuma atuação</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>Iniciado — BDR está em contato com delivery e/ou marca</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>Apresentação — Reunião de ecossistema agendada</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>Pré-vendas — Abertura chamado com pré-vendas para agendamento de demo</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>Negociação — Proposta enviada</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>Piloto — Etapa opcional. Casos em que o parceiro der ok comercial mas está em etapa de piloto, mesmo com o contrato (nível marca) assinado</span>
-              <span style={{ fontSize: 11, color: '#475569' }}>Contrato assinado — Parceiros que assinaram o contrato (mas não possuem piloto em andamento)</span>
+            <div style={{ marginBottom: 16, padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <button onClick={() => setShowLegend(!showLegend)} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, border: '1px solid #cbd5e1', background: showLegend ? '#fff' : '#f1f5f9', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <Eye size={12} />
+                {showLegend ? 'Ocultar' : 'Mostrar'} Legenda
+              </button>
+              {showLegend && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: 10, color: '#475569' }}>
+                  <span style={{ color: '#64748b', fontWeight: 600, width: '100%', marginBottom: 2 }}>Legenda das Etapas</span>
+                  <span>• Não Iniciado — Sem nenhuma atuação</span>
+                  <span>• Iniciado — BDR está em contato com delivery e/ou marca</span>
+                  <span>• Apresentação — Reunião de ecossistema agendada</span>
+                  <span>• Pré-vendas — Abertura chamado com pré-vendas para agendamento de demo</span>
+                  <span>• Negociação — Proposta enviada</span>
+                  <span>• Piloto — Etapa opcional. Casos em que o parceiro der ok comercial mas está em etapa de piloto, mesmo com o contrato (nível marca) assinado</span>
+                  <span>• Contrato assinado — Parceiros que assinaram o contrato (mas não possuem piloto em andamento)</span>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
             {pipelineStages.map(stage => {
