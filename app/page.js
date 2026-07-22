@@ -1301,7 +1301,18 @@ export default function CRMPage() {
       <div style={{ padding: '16px 28px 40px' }}>
         {/* PIPELINE */}
         {view === 'pipeline' && (
-          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
+          <>
+            <div style={{ marginBottom: 16, padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, display: 'flex', flexWrap: 'wrap', gap: '8px 20px' }}>
+              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, width: '100%', marginBottom: -4 }}>Legenda das Etapas</span>
+              <span style={{ fontSize: 11, color: '#475569' }}>Não Iniciado — Sem nenhuma atuação</span>
+              <span style={{ fontSize: 11, color: '#475569' }}>Iniciado — BDR está em contato com delivery e/ou marca</span>
+              <span style={{ fontSize: 11, color: '#475569' }}>Apresentação — Reunião de ecossistema agendada</span>
+              <span style={{ fontSize: 11, color: '#475569' }}>Pré-vendas — Abertura chamado com pré-vendas para agendamento de demo</span>
+              <span style={{ fontSize: 11, color: '#475569' }}>Negociação — Proposta enviada</span>
+              <span style={{ fontSize: 11, color: '#475569' }}>Piloto — Etapa opcional. Casos em que o parceiro der ok comercial mas está em etapa de piloto, mesmo com o contrato (nível marca) assinado</span>
+              <span style={{ fontSize: 11, color: '#475569' }}>Contrato assinado — Parceiros que assinaram o contrato (mas não possuem piloto em andamento)</span>
+            </div>
+            <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}>
             {pipelineStages.map(stage => {
               const stageB = getBrandsInStage(stage);
               const isClosed = product?.closedStages?.includes(stage);
@@ -1358,6 +1369,7 @@ export default function CRMPage() {
               );
             })}
           </div>
+          </>
         )}
         {/* CONTACTS TABLE - REMOVIDO */}
         {/* PROJETOS */}
