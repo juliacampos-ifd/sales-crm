@@ -24,23 +24,25 @@ function getDupla(activeBrand, pipeByBrand) {
   return closerToDupla(closerFromPipe || activeBrand.responsavel_closer);
 }
 
-function stageToMetric(stage) {
-  const s = (stage || '').trim().toLowerCase();
-  if (s.startsWith('0.')) return 'nao_iniciado';
-  if (s.startsWith('1.')) return 'iniciado';
-  if (s.startsWith('2.')) return 'primeiro_contato';
-  if (s.startsWith('3.')) return 'apresentacao';
-  if (s.startsWith('4.')) return 'diagnostico';
-  if (s.startsWith('5.')) return 'demo_showroom';
-  if (s.startsWith('6.')) return 'negociacao';
-  if (s.startsWith('7.')) return 'piloto';
-  if (s.startsWith('8.')) return 'contrato_enviado';
-  if (s.startsWith('9.')) return 'contrato_assinado';
-  if (s.startsWith('10.')) return 'perdido';
-  if (s.startsWith('11.')) return 'stand_by';
-  if (s.startsWith('12.')) return 'organico';
-  if (s.startsWith('13.')) return 'reativado';
-  if (s.startsWith('14.')) return 'desativado';
+function transitionToMetric(fromStage, toStage) {
+  const from = (fromStage || '').trim().toLowerCase();
+  const to = (toStage || '').trim().toLowerCase();
+  // PRIMEIRO CONTATO: transition from "Não Iniciado" to "Iniciado"
+  if (from.startsWith('0.') && to.startsWith('1.')) return 'primeiro_contato';
+  // Remaining metrics still based on to_stage
+  if (to.startsWith('2.')) return null; // No longer maps to primeiro_contato
+  if (to.startsWith('3.')) return 'apresentacao';
+  if (to.startsWith('4.')) return 'diagnostico';
+  if (to.startsWith('5.')) return 'demo_showroom';
+  if (to.startsWith('6.')) return 'negociacao';
+  if (to.startsWith('7.')) return 'piloto';
+  if (to.startsWith('8.')) return 'contrato_enviado';
+  if (to.startsWith('9.')) return 'contrato_assinado';
+  if (to.startsWith('10.')) return 'perdido';
+  if (to.startsWith('11.')) return 'stand_by';
+  if (to.startsWith('12.')) return 'organico';
+  if (to.startsWith('13.')) return 'reativado';
+  if (to.startsWith('14.')) return 'desativado';
   return null;
 }
 
@@ -122,7 +124,7 @@ function computeRealizedUntilDate(allHistRaw, brandLk, activeBrand, pipeByBrand,
 
   const seen = new Set();
   allHistRaw.forEach(entry => {
-    const metric = stageToMetric(entry.to_stage);
+    const metric = transitionToMetric(entry.from_stage, entry.to_stage);
     if (!metric) return;
     const brand = brandLk[entry.brand_id];
     if (!brand) return;
@@ -155,7 +157,7 @@ function computeRealizedBetweenDates(allHistRaw, brandLk, activeBrand, pipeByBra
   DUPLA_KEYS.forEach(k => { result[k] = {}; });
   const seen = new Set();
   allHistRaw.forEach(entry => {
-    const metric = stageToMetric(entry.to_stage);
+    const metric = transitionToMetric(entry.from_stage, entry.to_stage);
     if (!metric) return;
     const brand = brandLk[entry.brand_id];
     if (!brand) return;
@@ -190,7 +192,7 @@ export async function GET(request) {
     const [allBrands, allPipes, allHistRaw, metasResult, fcstResult] = await Promise.all([
       paginate(sb, 'brands', 'id,marca,classificacao,responsavel_closer,qtd_lojas_fisicas,base_elegivel'),
       paginate(sb, 'pipelines', 'brand_id,stage,responsavel,updated_at', [['product', '3s']]),
-      paginate(sb, 'pipeline_history', 'brand_id,to_stage,created_at,changed_by_name', [['product', '3s']]),
+      paginate(sb, 'pipeline_history', 'brand_id,to_stage,from_stage,created_at,changed_by_name', [['product', '3s']]),
       sb.from('funnel_metas').select('*').order('year').order('month'),
       sb.from('forecast_entries').select('*').eq('section', classFilter === 'g' ? '3s_g' : '3s_pm'),
     ]);
@@ -265,7 +267,7 @@ export async function GET(request) {
     const realized = {};
     const seen = new Set();
     allHistRaw.forEach(entry => {
-      const metric = stageToMetric(entry.to_stage);
+      const metric = transitionToMetric(entry.from_stage, entry.to_stage);
       if (!metric) return;
       const brand = brandLk[entry.brand_id];
       if (!brand) return;
@@ -294,7 +296,7 @@ export async function GET(request) {
     const brandLists = {};
     const seen2 = new Set();
     allHistRaw.forEach(entry => {
-      const metric = stageToMetric(entry.to_stage);
+      const metric = transitionToMetric(entry.from_stage, entry.to_stage);
       if (!metric) return;
       const brand = brandLk[entry.brand_id];
       if (!brand) return;
