@@ -1231,11 +1231,7 @@ export default function CRMPage() {
       {/* PRODUCT TABS */}
       {(view === 'pipeline' || view === 'contacts') && (
         <div style={{ padding: '14px 28px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {Object.keys(PRODUCTS).filter(pk => {
-            if (profile?.team === 'emilia_vision') return pk === 'emilia_vision';
-            if (profile?.team === 'comer_fora') return pk === 'comer_fora';
-            return true;
-          }).map(pk => <ProductTab key={pk} pkey={pk} />)}
+          {Object.keys(PRODUCTS).filter(pk => pk === '3s').map(pk => <ProductTab key={pk} pkey={pk} />)}
         </div>
       )}
       {/* FILTERS */}
