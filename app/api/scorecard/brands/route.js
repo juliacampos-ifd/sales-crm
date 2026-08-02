@@ -14,17 +14,14 @@ const getCloserFromPipeResp = (pipeResp) => {
   return parts.length > 1 ? parts[parts.length - 1].trim() : pipeResp.trim();
 };
 
-const stageToMetric = (stage) => {
-  const map = {
-    '2. Primeiro Contato': 'primeiro_contato',
-    '2. Primeiro Contato com a marca': 'primeiro_contato',
-    '2. Primeiro Contato Marca': 'primeiro_contato',
-    '3. Apresentacao': 'apresentacao',
-    '6. Negociacao': 'negociacao',
-    '9. Contrato Assinado': 'fechadas',
-    '9. Contrato assinado': 'fechadas',
-  };
-  return map[stage] || null;
+const transitionToMetric = (fromStage, toStage) => {
+  const from = (fromStage || '').trim().toLowerCase();
+  const to = (toStage || '').trim().toLowerCase();
+  if (from.startsWith('0.') && to.startsWith('1.')) return 'primeiro_contato';
+  if (to === '3. apresentacao') return 'apresentacao';
+  if (to === '6. negociacao') return 'negociacao';
+  if (to === '9. contrato assinado') return 'fechadas';
+  return null;
 };
 
 async function paginate(sb, table, cols, filters) {
@@ -109,10 +106,9 @@ export async function GET(request) {
     }
 
     // Fetch pipeline_history for funnel metrics
-    const tgtStages = ['2. Primeiro Contato', '2. Primeiro Contato com a marca', '2. Primeiro Contato Marca', '3. Apresentacao', '6. Negociacao', '9. Contrato Assinado', '9. Contrato assinado'];
     let allHist = [], from = 0;
     while (true) {
-      const { data: batch, error: hE } = await sb.from('pipeline_history').select('brand_id,to_stage,created_at').eq('product','3s').in('to_stage', tgtStages).range(from, from+999);
+      const { data: batch, error: hE } = await sb.from('pipeline_history').select('brand_id,to_stage,from_stage,created_at').eq('product','3s').range(from, from+999);
       if (hE) throw hE;
       if (!batch || batch.length === 0) break;
       allHist = allHist.concat(batch);
@@ -134,7 +130,7 @@ export async function GET(request) {
       const dt = new Date(e.created_at);
       const eYm = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
       if (eYm !== ym) return;
-      const m = stageToMetric(e.to_stage);
+      const m = transitionToMetric(e.from_stage, e.to_stage);
       if (m !== metric) return;
       // Dedup by marca+ym+metric (identical to main scorecard API)
       const dedupKey = `${marcaKey}|${eYm}|${m}`;
